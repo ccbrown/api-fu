@@ -3,7 +3,7 @@ package token
 type Token int
 
 const (
-	ILLEGAL Token = iota
+	INVALID Token = iota
 
 	PUNCTUATOR
 	NAME

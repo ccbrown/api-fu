@@ -46,5 +46,18 @@ func TestScanner(t *testing.T) {
 		"}",
 		"}",
 	}, literals)
-	assert.Nil(t, s.Error())
+	assert.Empty(t, s.Errors())
+}
+
+func TestScanner_IllegalCharacter(t *testing.T) {
+	s := New([]byte(`{😃}`))
+	var tokens []token.Token
+	var literals []string
+	for s.Scan() {
+		tokens = append(tokens, s.Token())
+		literals = append(literals, s.Literal())
+	}
+	assert.Equal(t, []token.Token{token.PUNCTUATOR, token.PUNCTUATOR}, tokens)
+	assert.Equal(t, []string{"{", "}"}, literals)
+	assert.Len(t, s.Errors(), 1)
 }

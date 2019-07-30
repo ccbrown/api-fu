@@ -14,16 +14,10 @@ func (err *Error) Error() string {
 	return err.message
 }
 
-func newError(message string) *Error {
-	return &Error{
-		message: message,
-	}
-}
-
 type Scanner struct {
 	src    []byte
 	offset int
-	err    *Error
+	errors []*Error
 
 	nextRune     rune
 	nextRuneSize int
@@ -41,24 +35,33 @@ func New(src []byte) *Scanner {
 	return s
 }
 
-func (s *Scanner) Error() *Error {
-	return s.err
+func (s *Scanner) Errors() []*Error {
+	return s.errors
+}
+
+func (s *Scanner) error(message string) {
+	s.errors = append(s.errors, &Error{
+		message: message,
+	})
 }
 
 func (s *Scanner) readNextRune() {
-	if r, size := utf8.DecodeRune(s.src[s.offset:]); r == utf8.RuneError && size != 0 {
-		s.nextRune = r
+	if s.isDone() {
+		s.nextRune = -1
 		s.nextRuneSize = 0
-		s.err = newError("invalid utf8 sequence")
+	} else if r, size := utf8.DecodeRune(s.src[s.offset:]); r == utf8.RuneError && size != 0 {
+		s.error("invalid utf8 sequence")
+		s.nextRune = r
+		s.nextRuneSize = 1
 	} else {
 		s.nextRune = r
 		s.nextRuneSize = size
 	}
 }
 
-func (s *Scanner) clone() *Scanner {
-	ret := *s
-	return &ret
+func (s *Scanner) peek() rune {
+	r, _ := utf8.DecodeRune(s.src[s.offset:])
+	return r
 }
 
 func (s *Scanner) consumeRune() {
@@ -95,56 +98,61 @@ func (s *Scanner) consumeString() bool {
 		}
 		s.consumeRune()
 	}
-	if !terminated && s.err == nil {
-		s.err = newError("unterminated string")
+	if !terminated {
+		s.error("unterminated string")
 	}
 	return true
 }
 
+const maxErrors = 10
+
 func (s *Scanner) isDone() bool {
-	return s.err != nil || len(s.src) == s.offset
+	return len(s.errors) >= maxErrors || len(s.src) == s.offset
 }
 
 func (s *Scanner) Scan() bool {
-	if s.isDone() {
-		return false
-	}
+	s.token = token.INVALID
 
-	s.tokenOffset = s.offset
+	for {
+		if s.isDone() {
+			return false
+		}
 
-	switch s.nextRune {
-	case '\t', ' ':
-		s.consumeRune()
-		s.token = token.WHITE_SPACE
-	case '!', '$', '(', ')', ':', '=', '@', '[', ']', '{', '|', '}':
-		s.consumeRune()
-		s.token = token.PUNCTUATOR
-	case '.':
-		s.consumeRune()
-		s.token = token.ILLEGAL
-		if s.nextRune == '.' {
-			temp := s.clone()
-			temp.consumeRune()
-			if temp.nextRune == '.' {
+		s.tokenOffset = s.offset
+
+		switch s.nextRune {
+		case '\t', ' ':
+			s.consumeRune()
+			s.token = token.WHITE_SPACE
+		case '!', '$', '(', ')', ':', '=', '@', '[', ']', '{', '|', '}':
+			s.consumeRune()
+			s.token = token.PUNCTUATOR
+		case '.':
+			s.consumeRune()
+			if s.nextRune == '.' && s.peek() == '.' {
 				s.consumeRune()
 				s.consumeRune()
 				s.token = token.PUNCTUATOR
+			} else {
+				s.error("illegal character")
+			}
+		case '"':
+			s.consumeString()
+			s.token = token.STRING_VALUE
+		default:
+			if s.consumeName() {
+				s.token = token.NAME
+			} else {
+				s.consumeRune()
+				s.error("illegal character")
 			}
 		}
-	case '"':
-		s.consumeString()
-		s.token = token.STRING_VALUE
-	default:
-		if s.consumeName() {
-			s.token = token.NAME
-		} else {
-			s.consumeRune()
-			s.token = token.ILLEGAL
+
+		if s.token != token.INVALID {
+			s.tokenLength = s.offset - s.tokenOffset
+			return true
 		}
 	}
-
-	s.tokenLength = s.offset - s.tokenOffset
-	return s.err == nil
 }
 
 func (s *Scanner) Token() token.Token {
