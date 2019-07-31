@@ -69,7 +69,7 @@ func (s *Scanner) readNextRune() {
 }
 
 func (s *Scanner) peek() rune {
-	r, _ := utf8.DecodeRune(s.src[s.offset:])
+	r, _ := utf8.DecodeRune(s.src[s.offset+s.nextRuneSize:])
 	return r
 }
 
@@ -112,7 +112,6 @@ func (s *Scanner) Scan() bool {
 		}
 
 		s.token = token.INVALID
-		s.tokenStringValue = ""
 		s.tokenOffset = s.offset
 
 		switch s.nextRune {
@@ -158,7 +157,16 @@ func (s *Scanner) Scan() bool {
 			}
 			s.consumeRune()
 		default:
-			if s.consumeName() {
+			if s.consumeIntegerPart() {
+				if s.consumeFractionalPart() {
+					s.consumeExponentPart()
+					s.token = token.FLOAT_VALUE
+				} else if s.consumeExponentPart() {
+					s.token = token.FLOAT_VALUE
+				} else {
+					s.token = token.INT_VALUE
+				}
+			} else if s.consumeName() {
 				s.token = token.NAME
 			} else {
 				s.errorf("illegal character %#U", s.nextRune)
@@ -184,5 +192,9 @@ func (s *Scanner) Literal() string {
 }
 
 func (s *Scanner) StringValue() string {
-	return s.tokenStringValue
+	if s.token == token.STRING_VALUE {
+		return s.tokenStringValue
+	} else {
+		return s.Literal()
+	}
 }

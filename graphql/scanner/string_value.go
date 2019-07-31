@@ -113,7 +113,7 @@ func (s *Scanner) consumeStringValue() string {
 
 		if s.nextRune == '\n' || s.nextRune == '\r' {
 			if !isBlock {
-				s.errorf("line terminator in string")
+				break
 			}
 			value += string(s.nextRune)
 			if s.consumeRune() == '\r' && s.nextRune == '\n' {

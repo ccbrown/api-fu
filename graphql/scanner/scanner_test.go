@@ -82,6 +82,43 @@ func TestScanner_Strings(t *testing.T) {
 	}
 }
 
+func TestScanner_Ints(t *testing.T) {
+	for _, src := range []string{
+		"4",
+		"-4",
+		"9",
+		"0",
+	} {
+		s := New([]byte(src), ScanIgnored)
+		assert.True(t, s.Scan())
+		assert.Equal(t, src, s.Literal())
+		assert.False(t, s.Scan())
+		assert.Empty(t, s.Errors())
+	}
+}
+
+func TestScanner_Floats(t *testing.T) {
+	for _, src := range []string{
+		"4.123",
+		"-4.123",
+		"0.123",
+		"123e4",
+		"123E4",
+		"123e-4",
+		"123e+4",
+		"-123E4",
+		"-123e-4",
+		"-123e+4",
+		"-123e4567",
+	} {
+		s := New([]byte(src), ScanIgnored)
+		assert.True(t, s.Scan())
+		assert.Equal(t, src, s.Literal())
+		assert.False(t, s.Scan())
+		assert.Empty(t, s.Errors())
+	}
+}
+
 func TestScanner_BOM(t *testing.T) {
 	s := New([]byte("\ufefffoo"), ScanIgnored)
 	var tokens []token.Token
