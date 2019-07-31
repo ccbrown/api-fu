@@ -1,14 +1,16 @@
 package parser
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ccbrown/go-api/graphql/ast"
 )
 
-func TestParser_ParseValue(t *testing.T) {
+func TestParser_parseValue(t *testing.T) {
 	for src, expected := range map[string]ast.Value{
 		`null`: &ast.NullValue{},
 		`[123 "abc"]`: &ast.ListValue{
@@ -44,9 +46,18 @@ func TestParser_ParseValue(t *testing.T) {
 			},
 		},
 	} {
-		p := New([]byte(src))
-		actual := p.ParseValue()
-		assert.Empty(t, p.Errors())
+		p := newParser([]byte(src))
+		actual := p.parseValue()
+		assert.Empty(t, p.errors)
 		assert.Equal(t, expected, actual)
 	}
+}
+
+func TestParser_ParseDocument_KitchenSink(t *testing.T) {
+	src, err := ioutil.ReadFile("testdata/kitchen-sink.graphql")
+	require.NoError(t, err)
+	doc, errs := ParseDocument(src)
+	assert.Empty(t, errs)
+	require.NotNil(t, doc)
+	assert.NotEmpty(t, doc.Definitions)
 }

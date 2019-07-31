@@ -1,8 +1,11 @@
 package ast
 
 type Document struct {
-	Definitions []interface{}
+	Definitions []Definition
 }
+
+// OperationDefinition or FragmentDefinition
+type Definition interface{}
 
 type OperationType string
 
@@ -12,18 +15,50 @@ const (
 	OperationTypeSubscription OperationType = "subscription"
 )
 
+func (t OperationType) IsValid() bool {
+	switch t {
+	case OperationTypeQuery, OperationTypeMutation, OperationTypeSubscription:
+		return true
+	default:
+		return false
+	}
+}
+
 type OperationDefinition struct {
 	OperationType       *OperationType
 	Name                *Name
-	VariableDefinitions *VariableDefinitions
-	Directives          *Directives
+	VariableDefinitions []*VariableDefinition
+	Directives          []*Directive
 	SelectionSet        *SelectionSet
 }
 
-type VariableDefinitions struct {
+type FragmentDefinition struct {
+	Name          *Name
+	TypeCondition *NamedType
+	Directives    []*Directive
+	SelectionSet  *SelectionSet
 }
 
-type Directives struct {
+type VariableDefinition struct {
+	Variable     *Variable
+	Type         Type
+	DefaultValue Value
+}
+
+// NamedType, ListType, or NonNullType
+type Type interface{}
+
+type ListType struct {
+	Type Type
+}
+
+type NonNullType struct {
+	Type Type
+}
+
+type Directive struct {
+	Name      *Name
+	Arguments []*Argument
 }
 
 type SelectionSet struct {
@@ -37,8 +72,19 @@ type Field struct {
 	Alias        *Name
 	Name         *Name
 	Arguments    []*Argument
-	Directives   *Directives
+	Directives   []*Directive
 	SelectionSet *SelectionSet
+}
+
+type FragmentSpread struct {
+	FragmentName *Name
+	Directives   []*Directive
+}
+
+type InlineFragment struct {
+	TypeCondition *NamedType
+	Directives    []*Directive
+	SelectionSet  *SelectionSet
 }
 
 type Argument struct {
@@ -48,6 +94,10 @@ type Argument struct {
 
 type Name struct {
 	Name string
+}
+
+type NamedType struct {
+	Name *Name
 }
 
 // Variable, IntValue, FloatValue, StringValue, BooleanValue, NullValue, EnumValue, ListValue, or
