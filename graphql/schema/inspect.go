@@ -1,0 +1,59 @@
+package schema
+
+import (
+	"fmt"
+	"reflect"
+)
+
+func Inspect(node interface{}, f func(interface{}) bool) {
+	if node == nil || reflect.ValueOf(node).IsNil() || !f(node) {
+		return
+	}
+
+	switch n := node.(type) {
+	case *SchemaDefinition:
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
+		Inspect(n.Query, f)
+		Inspect(n.Mutation, f)
+		Inspect(n.Subscription, f)
+	case *InterfaceDefinition:
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
+		for _, node := range n.Fields {
+			Inspect(node, f)
+		}
+	case *ObjectDefinition:
+		for _, node := range n.ImplementedInterfaces {
+			Inspect(node, f)
+		}
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
+		for _, node := range n.Fields {
+			Inspect(node, f)
+		}
+	case *FieldDefinition:
+		Inspect(n.Type, f)
+		for _, node := range n.Arguments {
+			Inspect(node, f)
+		}
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
+	case *InputValueDefinition:
+		Inspect(n.Type, f)
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
+	case *ScalarType:
+	case *NonNullType:
+		Inspect(n.Type, f)
+	default:
+		panic(fmt.Errorf("unknown node type: %T", n))
+	}
+
+	f(nil)
+}
