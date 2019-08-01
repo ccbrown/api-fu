@@ -4,6 +4,12 @@ type NonNullType struct {
 	Type Type
 }
 
+func NonNull(t Type) *NonNullType {
+	return &NonNullType{
+		Type: t,
+	}
+}
+
 func (d *NonNullType) String() string {
 	return d.Type.String() + "!"
 }
