@@ -3,9 +3,9 @@ package parser
 import (
 	"fmt"
 
-	"github.com/ccbrown/go-api/graphql/ast"
-	"github.com/ccbrown/go-api/graphql/scanner"
-	"github.com/ccbrown/go-api/graphql/token"
+	"github.com/ccbrown/apifu/graphql/ast"
+	"github.com/ccbrown/apifu/graphql/scanner"
+	"github.com/ccbrown/apifu/graphql/token"
 )
 
 type Error struct {

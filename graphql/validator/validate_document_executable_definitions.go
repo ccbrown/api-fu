@@ -1,8 +1,8 @@
 package validator
 
 import (
-	"github.com/ccbrown/go-api/graphql/ast"
-	"github.com/ccbrown/go-api/graphql/schema"
+	"github.com/ccbrown/apifu/graphql/ast"
+	"github.com/ccbrown/apifu/graphql/schema"
 )
 
 func validateDocumentExecutableDefinitions(doc *ast.Document, schema *schema.Schema) []*Error {

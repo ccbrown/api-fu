@@ -1,8 +1,8 @@
 package validator
 
 import (
-	"github.com/ccbrown/go-api/graphql/ast"
-	"github.com/ccbrown/go-api/graphql/schema"
+	"github.com/ccbrown/apifu/graphql/ast"
+	"github.com/ccbrown/apifu/graphql/schema"
 )
 
 type Error struct {

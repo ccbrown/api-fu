@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ccbrown/go-api/graphql/parser"
-	"github.com/ccbrown/go-api/graphql/schema"
+	"github.com/ccbrown/apifu/graphql/parser"
+	"github.com/ccbrown/apifu/graphql/schema"
 )
 
 func validateSource(t *testing.T, src string) []*Error {
