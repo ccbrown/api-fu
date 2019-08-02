@@ -18,9 +18,8 @@ const (
 )
 
 type DirectiveDefinition struct {
-	Name        string
 	Description string
-	Arguments   map[string]InputValueDefinition
+	Arguments   map[string]*InputValueDefinition
 	Locations   []DirectiveLocation
 }
 
@@ -43,9 +42,6 @@ func referencesDirective(node interface{}, directive *DirectiveDefinition) bool 
 }
 
 func (d *DirectiveDefinition) shallowValidate() error {
-	if name := d.Name; !isName(name) || strings.HasPrefix(name, "__") {
-		return fmt.Errorf("illegal directive name: %v", name)
-	}
 	for name, arg := range d.Arguments {
 		if !isName(name) || strings.HasPrefix(name, "__") {
 			return fmt.Errorf("illegal directive argument name: %v", name)
@@ -59,4 +55,24 @@ func (d *DirectiveDefinition) shallowValidate() error {
 type Directive struct {
 	Definition *DirectiveDefinition
 	Arguments  []*Argument
+}
+
+var SkipDirective = &DirectiveDefinition{
+	Description: "The @skip directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional exclusion during execution as described by the if argument.",
+	Arguments: map[string]*InputValueDefinition{
+		"if": &InputValueDefinition{
+			Type: NewNonNullType(BooleanType),
+		},
+	},
+	Locations: []DirectiveLocation{DirectiveLocationField, DirectiveLocationFragmentSpread, DirectiveLocationInlineFragment},
+}
+
+var IncludeDirective = &DirectiveDefinition{
+	Description: "The @include directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional inclusion during execution as described by the if argument.",
+	Arguments: map[string]*InputValueDefinition{
+		"if": &InputValueDefinition{
+			Type: NewNonNullType(BooleanType),
+		},
+	},
+	Locations: []DirectiveLocation{DirectiveLocationField, DirectiveLocationFragmentSpread, DirectiveLocationInlineFragment},
 }

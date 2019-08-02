@@ -34,7 +34,7 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 	}
 }
 
-func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
+func newTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 	ret := &TypeInfo{
 		SelectionSetTypes:       map[*ast.SelectionSet]schema.Type{},
 		VariableDefinitionTypes: map[*ast.VariableDefinition]schema.Type{},
@@ -79,7 +79,7 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 				}
 			}
 		case *ast.Directive:
-			if directive := s.Directive(node.Name.Name); directive != nil {
+			if directive := s.DirectiveDefinition(node.Name.Name); directive != nil {
 				for _, arg := range node.Arguments {
 					if expected, ok := directive.Arguments[arg.Name.Name]; ok {
 						ret.ExpectedTypes[arg.Value] = expected.Type

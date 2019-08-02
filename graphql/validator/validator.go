@@ -22,12 +22,13 @@ func NewError(message string, args ...interface{}) *Error {
 }
 
 func ValidateDocument(doc *ast.Document, s *schema.Schema) []*Error {
-	typeInfo := NewTypeInfo(doc, s)
+	typeInfo := newTypeInfo(doc, s)
 	var ret []*Error
 	for _, f := range []func(*ast.Document, *schema.Schema, *TypeInfo) []*Error{
 		validateDocument,
 		validateOperations,
 		validateFields,
+		validateDirectives,
 		validateVariables,
 	} {
 		ret = append(ret, f(doc, s, typeInfo)...)

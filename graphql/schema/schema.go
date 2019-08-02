@@ -7,8 +7,8 @@ import (
 )
 
 type Schema struct {
-	directives map[string]*DirectiveDefinition
-	namedTypes map[string]NamedType
+	directiveDefinitions map[string]*DirectiveDefinition
+	namedTypes           map[string]NamedType
 
 	query        *ObjectType
 	mutation     *ObjectType
@@ -27,8 +27,8 @@ func (s *Schema) SubscriptionType() *ObjectType {
 	return s.subscription
 }
 
-func (s *Schema) Directive(name string) *DirectiveDefinition {
-	return s.directives[name]
+func (s *Schema) DirectiveDefinition(name string) *DirectiveDefinition {
+	return s.directiveDefinitions[name]
 }
 
 func (s *Schema) NamedType(name string) NamedType {
@@ -44,15 +44,21 @@ func isName(s string) bool {
 func New(def *SchemaDefinition) (*Schema, error) {
 	var err error
 	schema := &Schema{
-		directives:   map[string]*DirectiveDefinition{},
-		namedTypes:   map[string]NamedType{},
-		query:        def.Query,
-		mutation:     def.Mutation,
-		subscription: def.Subscription,
+		directiveDefinitions: def.DirectiveDefinitions,
+		namedTypes:           map[string]NamedType{},
+		query:                def.Query,
+		mutation:             def.Mutation,
+		subscription:         def.Subscription,
 	}
 
 	if schema.query == nil {
 		return nil, fmt.Errorf("schemas must define the query operation")
+	}
+
+	for name := range def.DirectiveDefinitions {
+		if !isName(name) || strings.HasPrefix(name, "__") {
+			return nil, fmt.Errorf("illegal directive name: %v", name)
+		}
 	}
 
 	Inspect(def, func(node interface{}) bool {
@@ -75,17 +81,6 @@ func New(def *SchemaDefinition) (*Schema, error) {
 			}
 		}
 
-		if d, ok := node.(*DirectiveDefinition); ok {
-			if existing, ok := schema.directives[d.Name]; ok && existing != d {
-				err = fmt.Errorf("multiple definitions for directive: %v", d.Name)
-			} else if existing != nil {
-				// already visited
-				return false
-			} else {
-				schema.directives[d.Name] = d
-			}
-		}
-
 		if err == nil {
 			if n, ok := node.(interface {
 				shallowValidate() error
@@ -104,7 +99,8 @@ func New(def *SchemaDefinition) (*Schema, error) {
 }
 
 type SchemaDefinition struct {
-	Directives []*Directive
+	Directives           []*Directive
+	DirectiveDefinitions map[string]*DirectiveDefinition
 
 	Query        *ObjectType
 	Mutation     *ObjectType
