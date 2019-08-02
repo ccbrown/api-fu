@@ -28,11 +28,30 @@ func ValidateDocument(doc *ast.Document, s *schema.Schema) []*Error {
 		validateDocumentExecutableDefinitions,
 		validateOperationsNameUniqueness,
 		validateOperationsLoneAnonymousOperation,
-		validateVariablesNameUniqueness,
 		validateFieldsSelectionsOnObjectsInterfacesAndUnions,
 		validateFieldsLeafFieldSelections,
+		validateVariablesNameUniqueness,
+		validateVariablesInputTypes,
 	} {
 		ret = append(ret, f(doc, s, typeInfo)...)
 	}
 	return ret
+}
+
+func unwrappedASTType(t ast.Type) *ast.NamedType {
+	for {
+		if t == nil {
+			return nil
+		}
+		switch tt := t.(type) {
+		case *ast.ListType:
+			t = tt.Type
+		case *ast.NonNullType:
+			t = tt.Type
+		case *ast.NamedType:
+			return tt
+		default:
+			panic(fmt.Sprintf("unsupported ast type: %T", t))
+		}
+	}
 }

@@ -63,7 +63,7 @@ func New(def *SchemaDefinition) (*Schema, error) {
 				err = fmt.Errorf("multiple definitions for named type: %v", name)
 			} else if builtin, ok := builtins[name]; ok && namedType != builtin {
 				err = fmt.Errorf("%v builtin may not be overridden", name)
-			} else if ok {
+			} else if existing != nil {
 				// already visited
 				return false
 			} else {
@@ -74,7 +74,7 @@ func New(def *SchemaDefinition) (*Schema, error) {
 		if d, ok := node.(*DirectiveDefinition); ok {
 			if existing, ok := schema.directives[d.Name]; ok && existing != d {
 				err = fmt.Errorf("multiple definitions for directive: %v", d.Name)
-			} else if ok {
+			} else if existing != nil {
 				// already visited
 				return false
 			} else {

@@ -20,4 +20,7 @@ func TestSchema(t *testing.T) {
 	schema, err := New(def)
 	assert.NotNil(t, schema)
 	assert.NoError(t, err)
+
+	assert.NotNil(t, schema.NamedType("Query"))
+	assert.NotNil(t, schema.NamedType("Int"))
 }

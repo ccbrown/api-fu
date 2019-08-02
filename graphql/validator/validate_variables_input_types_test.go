@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestVariablesNameUniqueness(t *testing.T) {
+func TestVariablesInputTypes(t *testing.T) {
 	assert.Empty(t, validateSource(t, `query ($id: ID!) {node(id: $id){id}}`))
-	assert.Len(t, validateSource(t, `query ($id: ID!, $id: ID!) {node(id: $id){id}}`), 1)
+	assert.Len(t, validateSource(t, `query ($id: Object!) {node(id: $id){id}}`), 1)
 }
