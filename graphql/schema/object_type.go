@@ -1,48 +1,58 @@
 package schema
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
-type ObjectDefinition struct {
+type ObjectType struct {
 	Name                  string
 	Description           string
-	ImplementedInterfaces []*InterfaceDefinition
+	ImplementedInterfaces []*InterfaceType
 	Directives            []*Directive
 	Fields                map[string]*FieldDefinition
 }
 
-func (d *ObjectDefinition) String() string {
+func (d *ObjectType) String() string {
 	return d.Name
 }
 
-func (d *ObjectDefinition) IsInputType() bool {
+func (d *ObjectType) IsInputType() bool {
 	return false
 }
 
-func (d *ObjectDefinition) IsOutputType() bool {
+func (d *ObjectType) IsOutputType() bool {
 	return true
 }
 
-func (d *ObjectDefinition) IsSubTypeOf(other Type) bool {
+func (d *ObjectType) IsSubTypeOf(other Type) bool {
 	if d.IsSameType(other) {
 		return true
-	}
-	for _, iface := range d.ImplementedInterfaces {
-		if iface == other {
-			return true
+	} else if union, ok := other.(*UnionType); ok {
+		for _, member := range union.MemberTypes {
+			if d.IsSameType(member) {
+				return true
+			}
+		}
+	} else {
+		for _, iface := range d.ImplementedInterfaces {
+			if iface.IsSameType(other) {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-func (d *ObjectDefinition) IsSameType(other Type) bool {
+func (d *ObjectType) IsSameType(other Type) bool {
 	return d == other
 }
 
-func (d *ObjectDefinition) NamedType() string {
+func (d *ObjectType) NamedType() string {
 	return d.Name
 }
 
-func (d *ObjectDefinition) SatisfyInterface(iface *InterfaceDefinition) error {
+func (d *ObjectType) SatisfyInterface(iface *InterfaceType) error {
 	for name, ifaceField := range iface.Fields {
 		field, ok := d.Fields[name]
 		if !ok {
@@ -59,8 +69,21 @@ func (d *ObjectDefinition) SatisfyInterface(iface *InterfaceDefinition) error {
 			}
 		}
 		for argName, arg := range field.Arguments {
-			if _, ok := ifaceField.Arguments[argName]; !ok && isNonNull(arg.Type) {
+			if _, ok := ifaceField.Arguments[argName]; !ok && IsNonNullType(arg.Type) {
 				return fmt.Errorf("object's %v field %v argument cannot be non-null", name, argName)
+			}
+		}
+	}
+	return nil
+}
+
+func (d *ObjectType) shallowValidate() error {
+	if len(d.Fields) == 0 {
+		return fmt.Errorf("%v must have at least one field", d.Name)
+	} else {
+		for name := range d.Fields {
+			if !isName(name) || strings.HasPrefix(name, "__") {
+				return fmt.Errorf("illegal field name: %v", name)
 			}
 		}
 	}

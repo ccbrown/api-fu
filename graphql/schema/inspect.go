@@ -18,14 +18,21 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 		Inspect(n.Query, f)
 		Inspect(n.Mutation, f)
 		Inspect(n.Subscription, f)
-	case *InterfaceDefinition:
+	case *UnionType:
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
+		for _, node := range n.MemberTypes {
+			Inspect(node, f)
+		}
+	case *InterfaceType:
 		for _, node := range n.Directives {
 			Inspect(node, f)
 		}
 		for _, node := range n.Fields {
 			Inspect(node, f)
 		}
-	case *ObjectDefinition:
+	case *ObjectType:
 		for _, node := range n.ImplementedInterfaces {
 			Inspect(node, f)
 		}

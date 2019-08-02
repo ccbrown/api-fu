@@ -10,33 +10,31 @@ type Schema struct {
 	directives map[string]*DirectiveDefinition
 	namedTypes map[string]NamedType
 
-	query        *ObjectDefinition
-	mutation     *ObjectDefinition
-	subscription *ObjectDefinition
+	query        *ObjectType
+	mutation     *ObjectType
+	subscription *ObjectType
+}
+
+func (s *Schema) QueryType() *ObjectType {
+	return s.query
+}
+
+func (s *Schema) MutationType() *ObjectType {
+	return s.query
+}
+
+func (s *Schema) SubscriptionType() *ObjectType {
+	return s.subscription
+}
+
+func (s *Schema) NamedType(name string) NamedType {
+	return s.namedTypes[name]
 }
 
 var nameRegex = regexp.MustCompile(`^[_A-Za-z][_0-9A-Za-z]*$`)
 
 func isName(s string) bool {
 	return nameRegex.MatchString(s)
-}
-
-func referencesDirective(node interface{}, directive *DirectiveDefinition) bool {
-	visited := map[interface{}]struct{}{}
-	foundReference := false
-
-	Inspect(node, func(node interface{}) bool {
-		if _, ok := visited[node]; ok {
-			return false
-		}
-		visited[node] = struct{}{}
-		if node == directive {
-			foundReference = true
-		}
-		return !foundReference
-	})
-
-	return foundReference
 }
 
 func New(def *SchemaDefinition) (*Schema, error) {
@@ -50,14 +48,12 @@ func New(def *SchemaDefinition) (*Schema, error) {
 	}
 
 	if schema.query == nil {
-		return nil, fmt.Errorf("schemas must support query operations")
+		return nil, fmt.Errorf("schemas must define the query operation")
 	}
 
 	Inspect(def, func(node interface{}) bool {
-		if nonNull, ok := node.(*NonNullType); ok {
-			if isNonNull(nonNull.Type) {
-				err = fmt.Errorf("non-null types cannot wrap other non-null types")
-			}
+		if err != nil {
+			return false
 		}
 
 		if namedType, ok := node.(NamedType); ok {
@@ -69,74 +65,28 @@ func New(def *SchemaDefinition) (*Schema, error) {
 				err = fmt.Errorf("%v builtin may not be overridden", name)
 			} else if ok {
 				// already visited
+				return false
 			} else {
 				schema.namedTypes[name] = namedType
 			}
 		}
 
-		if err != nil {
-			return false
+		if d, ok := node.(*DirectiveDefinition); ok {
+			if existing, ok := schema.directives[d.Name]; ok && existing != d {
+				err = fmt.Errorf("multiple definitions for directive: %v", d.Name)
+			} else if ok {
+				// already visited
+				return false
+			} else {
+				schema.directives[d.Name] = d
+			}
 		}
 
-		switch n := node.(type) {
-		case *DirectiveDefinition:
-			if name := n.Name; !isName(name) || strings.HasPrefix(name, "__") {
-				err = fmt.Errorf("illegal directive name: %v", name)
-			} else if existing, ok := schema.directives[name]; ok && existing != n {
-				err = fmt.Errorf("multiple definitions for directive: %v", name)
-			} else if !ok {
-				schema.directives[name] = n
-
-				for name, arg := range n.Arguments {
-					if !isName(name) || strings.HasPrefix(name, "__") {
-						err = fmt.Errorf("illegal directive argument name: %v", name)
-						return false
-					} else if referencesDirective(arg, n) {
-						err = fmt.Errorf("directive is self-referencing via %v argument", name)
-						return false
-					}
-				}
-			}
-		case *InterfaceDefinition:
-			if len(n.Fields) == 0 {
-				err = fmt.Errorf("%v must have at least one field", n.Name)
-			} else {
-				for name := range n.Fields {
-					if !isName(name) || strings.HasPrefix(name, "__") {
-						err = fmt.Errorf("illegal field name: %v", name)
-						break
-					}
-				}
-			}
-		case *ObjectDefinition:
-			if len(n.Fields) == 0 {
-				err = fmt.Errorf("%v must have at least one field", n.Name)
-			} else {
-				for name := range n.Fields {
-					if !isName(name) || strings.HasPrefix(name, "__") {
-						err = fmt.Errorf("illegal field name: %v", name)
-						break
-					}
-				}
-			}
-		case *InputValueDefinition:
-			if n.Type == nil {
-				err = fmt.Errorf("input value is missing type")
-			} else if !n.Type.IsInputType() {
-				err = fmt.Errorf("%v cannot be used as an input value type", n.Type)
-			}
-		case *FieldDefinition:
-			if n.Type == nil {
-				err = fmt.Errorf("field is missing type")
-			} else if !n.Type.IsOutputType() {
-				err = fmt.Errorf("%v cannot be used as a field type", n.Type)
-			} else {
-				for name := range n.Arguments {
-					if !isName(name) || strings.HasPrefix(name, "__") {
-						err = fmt.Errorf("illegal field argument name: %v", name)
-						break
-					}
-				}
+		if err == nil {
+			if n, ok := node.(interface {
+				shallowValidate() error
+			}); ok {
+				err = n.shallowValidate()
 			}
 		}
 
@@ -152,21 +102,14 @@ func New(def *SchemaDefinition) (*Schema, error) {
 type SchemaDefinition struct {
 	Directives []*Directive
 
-	Query        *ObjectDefinition
-	Mutation     *ObjectDefinition
-	Subscription *ObjectDefinition
+	Query        *ObjectType
+	Mutation     *ObjectType
+	Subscription *ObjectType
 }
 
 type Argument struct {
 	Name  string
 	Value interface{}
-}
-
-type InputValueDefinition struct {
-	Description  string
-	Type         Type
-	DefaultValue interface{}
-	Directives   []*Directive
 }
 
 type Type interface {
@@ -182,9 +125,18 @@ type NamedType interface {
 	NamedType() string
 }
 
-type FieldDefinition struct {
-	Description string
-	Arguments   map[string]*InputValueDefinition
-	Type        Type
-	Directives  []*Directive
+type WrappedType interface {
+	Type
+	Unwrap() Type
+}
+
+func UnwrapType(t Type) Type {
+	for {
+		if wrapped, ok := t.(WrappedType); ok {
+			t = wrapped.Unwrap()
+		} else {
+			break
+		}
+	}
+	return t
 }

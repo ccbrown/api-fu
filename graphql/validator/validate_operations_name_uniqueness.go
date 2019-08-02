@@ -5,7 +5,7 @@ import (
 	"github.com/ccbrown/apifu/graphql/schema"
 )
 
-func validateOperationsNameUniqueness(doc *ast.Document, schema *schema.Schema) []*Error {
+func validateOperationsNameUniqueness(doc *ast.Document, schema *schema.Schema, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 	operationNames := map[string]struct{}{}
 	for _, def := range doc.Definitions {

@@ -8,5 +8,5 @@ import (
 
 func TestOperationsLoneAnonymousOperation(t *testing.T) {
 	assert.Empty(t, validateSource(t, `{scalar}`))
-	assert.NotEmpty(t, validateSource(t, `{scalar} {scalar}`))
+	assert.Len(t, validateSource(t, `{scalar} {scalar}`), 1)
 }

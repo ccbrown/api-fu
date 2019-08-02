@@ -1,39 +1,52 @@
 package schema
 
+import "fmt"
+
 type NonNullType struct {
 	Type Type
 }
 
-func NonNull(t Type) *NonNullType {
+func NewNonNullType(t Type) *NonNullType {
 	return &NonNullType{
 		Type: t,
 	}
 }
 
-func (d *NonNullType) String() string {
-	return d.Type.String() + "!"
+func (t *NonNullType) String() string {
+	return t.Type.String() + "!"
 }
 
-func (d *NonNullType) IsInputType() bool {
-	return d.Type.IsInputType()
+func (t *NonNullType) IsInputType() bool {
+	return t.Type.IsInputType()
 }
 
-func (d *NonNullType) IsOutputType() bool {
-	return d.Type.IsOutputType()
+func (t *NonNullType) IsOutputType() bool {
+	return t.Type.IsOutputType()
 }
 
-func (d *NonNullType) IsSubTypeOf(other Type) bool {
-	return d.IsSameType(other) || d.Type.IsSubTypeOf(other)
+func (t *NonNullType) IsSubTypeOf(other Type) bool {
+	return t.IsSameType(other) || t.Type.IsSubTypeOf(other)
 }
 
-func (d *NonNullType) IsSameType(other Type) bool {
+func (t *NonNullType) IsSameType(other Type) bool {
 	if nn, ok := other.(*NonNullType); ok {
-		return d.Type.IsSameType(nn.Type)
+		return t.Type.IsSameType(nn.Type)
 	}
 	return false
 }
 
-func isNonNull(t Type) bool {
+func (t *NonNullType) WrappedType() Type {
+	return t.Type
+}
+
+func (t *NonNullType) shallowValidate() error {
+	if IsNonNullType(t.Type) {
+		return fmt.Errorf("non-null types cannot wrap other non-null types")
+	}
+	return nil
+}
+
+func IsNonNullType(t Type) bool {
 	_, ok := t.(*NonNullType)
 	return ok
 }

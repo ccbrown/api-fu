@@ -8,7 +8,7 @@ import (
 
 func TestSchema(t *testing.T) {
 	def := &SchemaDefinition{
-		Query: &ObjectDefinition{
+		Query: &ObjectType{
 			Name: "Query",
 			Fields: map[string]*FieldDefinition{
 				"foo": &FieldDefinition{

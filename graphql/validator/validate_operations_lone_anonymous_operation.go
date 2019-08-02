@@ -5,7 +5,7 @@ import (
 	"github.com/ccbrown/apifu/graphql/schema"
 )
 
-func validateOperationsLoneAnonymousOperation(doc *ast.Document, schema *schema.Schema) []*Error {
+func validateOperationsLoneAnonymousOperation(doc *ast.Document, schema *schema.Schema, typeInfo *TypeInfo) []*Error {
 	operationCount := 0
 	anonymousOperationCount := 0
 	for _, def := range doc.Definitions {
