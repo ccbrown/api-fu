@@ -18,16 +18,18 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 
 		switch node := node.(type) {
 		case *ast.SelectionSet:
-			selectionSetType = schema.UnwrapType(typeInfo.SelectionSetTypes[node])
+			selectionSetType = schema.UnwrappedType(typeInfo.SelectionSetTypes[node])
 		case *ast.Field:
-			switch schema.UnwrapType(typeInfo.FieldTypes[node]).(type) {
-			case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
-				if node.SelectionSet == nil {
-					ret = append(ret, NewError("%v field must have a subselection", node.Name.Name))
-				}
-			default:
-				if node.SelectionSet != nil {
-					ret = append(ret, NewError("%v field cannot have a subselection", node.Name.Name))
+			if def := typeInfo.FieldDefinitions[node]; def != nil {
+				switch schema.UnwrappedType(def.Type).(type) {
+				case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
+					if node.SelectionSet == nil {
+						ret = append(ret, NewError("%v field must have a subselection", node.Name.Name))
+					}
+				default:
+					if node.SelectionSet != nil {
+						ret = append(ret, NewError("%v field cannot have a subselection", node.Name.Name))
+					}
 				}
 			}
 

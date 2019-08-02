@@ -130,7 +130,7 @@ type WrappedType interface {
 	Unwrap() Type
 }
 
-func UnwrapType(t Type) Type {
+func UnwrappedType(t Type) Type {
 	for {
 		if wrapped, ok := t.(WrappedType); ok {
 			t = wrapped.Unwrap()

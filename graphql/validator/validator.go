@@ -28,6 +28,7 @@ func ValidateDocument(doc *ast.Document, s *schema.Schema) []*Error {
 		validateDocument,
 		validateOperations,
 		validateFields,
+		validateArguments,
 		validateDirectives,
 		validateVariables,
 	} {

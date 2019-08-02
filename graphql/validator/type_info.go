@@ -10,7 +10,7 @@ import (
 type TypeInfo struct {
 	SelectionSetTypes       map[*ast.SelectionSet]schema.Type
 	VariableDefinitionTypes map[*ast.VariableDefinition]schema.Type
-	FieldTypes              map[*ast.Field]schema.Type
+	FieldDefinitions        map[*ast.Field]*schema.FieldDefinition
 	ExpectedTypes           map[ast.Value]schema.Type
 	DefaultValues           map[ast.Value]interface{}
 }
@@ -38,7 +38,7 @@ func newTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 	ret := &TypeInfo{
 		SelectionSetTypes:       map[*ast.SelectionSet]schema.Type{},
 		VariableDefinitionTypes: map[*ast.VariableDefinition]schema.Type{},
-		FieldTypes:              map[*ast.Field]schema.Type{},
+		FieldDefinitions:        map[*ast.Field]*schema.FieldDefinition{},
 		ExpectedTypes:           map[ast.Value]schema.Type{},
 		DefaultValues:           map[ast.Value]interface{}{},
 	}
@@ -110,7 +110,7 @@ func newTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 				}
 			}
 
-			ret.FieldTypes[node] = field.Type
+			ret.FieldDefinitions[node] = field
 			selectionSetScope = field.Type
 		case *ast.FragmentDefinition:
 			selectionSetScope = s.NamedType(node.TypeCondition.Name.Name)
