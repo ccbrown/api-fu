@@ -32,6 +32,13 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 		for _, node := range n.Fields {
 			Inspect(node, f)
 		}
+	case *InputObjectType:
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
+		for _, node := range n.Fields {
+			Inspect(node, f)
+		}
 	case *ObjectType:
 		for _, node := range n.ImplementedInterfaces {
 			Inspect(node, f)

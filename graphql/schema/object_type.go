@@ -81,9 +81,11 @@ func (d *ObjectType) shallowValidate() error {
 	if len(d.Fields) == 0 {
 		return fmt.Errorf("%v must have at least one field", d.Name)
 	} else {
-		for name := range d.Fields {
+		for name, field := range d.Fields {
 			if !isName(name) || strings.HasPrefix(name, "__") {
 				return fmt.Errorf("illegal field name: %v", name)
+			} else if !field.Type.IsOutputType() {
+				return fmt.Errorf("%v field must be an output type", name)
 			}
 		}
 	}

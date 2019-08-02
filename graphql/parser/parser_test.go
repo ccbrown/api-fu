@@ -48,7 +48,7 @@ func TestParser_parseValue(t *testing.T) {
 		},
 	} {
 		p := newParser([]byte(src))
-		actual := p.parseValue()
+		actual := p.parseValue(false)
 		assert.Empty(t, p.errors)
 		assert.Equal(t, expected, actual)
 		assert.Equal(t, 0, p.recursion)
@@ -70,4 +70,12 @@ func TestParser_ParseDocument_DeepRecursion(t *testing.T) {
 	_, errs := ParseDocument([]byte(src))
 	assert.NotEmpty(t, errs)
 	// most importantly, we shouldn't hang or overflow the stack
+}
+
+func TestParser_ParseDocument_ConstantValues(t *testing.T) {
+	_, errs := ParseDocument([]byte(`query ($n:Int=1) {x}`))
+	assert.Empty(t, errs)
+
+	_, errs = ParseDocument([]byte(`query ($n:Int=$x) {x}`))
+	assert.NotEmpty(t, errs)
 }

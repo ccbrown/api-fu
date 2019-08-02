@@ -116,8 +116,9 @@ func (p *parser) parseDefinition() ast.Definition {
 	var ret ast.Definition
 	if t := p.peek(); t.Token == token.NAME && t.Value == "fragment" {
 		ret = p.parseFragmentDefinition()
+	} else {
+		ret = p.parseOperationDefinition()
 	}
-	ret = p.parseOperationDefinition()
 
 	p.exit()
 	return ret
@@ -322,7 +323,7 @@ func (p *parser) parseVariableDefinition() *ast.VariableDefinition {
 	}
 	if t := p.peek(); t.Token == token.PUNCTUATOR && t.Value == "=" {
 		p.consumeToken()
-		ret.DefaultValue = p.parseValue()
+		ret.DefaultValue = p.parseValue(true)
 	}
 
 	p.exit()
@@ -366,7 +367,7 @@ func (p *parser) parseArgument() *ast.Argument {
 		panic(p.errorf("expected colon"))
 	}
 	p.consumeToken()
-	ret.Value = p.parseValue()
+	ret.Value = p.parseValue(false)
 
 	p.exit()
 	return ret
@@ -432,7 +433,7 @@ func (p *parser) parseVariable() *ast.Variable {
 	return ret
 }
 
-func (p *parser) parseValue() ast.Value {
+func (p *parser) parseValue(constant bool) ast.Value {
 	p.enter()
 
 	var ret ast.Value
@@ -470,6 +471,9 @@ func (p *parser) parseValue() ast.Value {
 	case token.PUNCTUATOR:
 		switch v := t.Value; v {
 		case "$":
+			if constant {
+				panic(p.errorf("expected constant value"))
+			}
 			ret = p.parseVariable()
 		case "[":
 			p.consumeToken()
@@ -479,7 +483,7 @@ func (p *parser) parseValue() ast.Value {
 					p.consumeToken()
 					break
 				}
-				values = append(values, p.parseValue())
+				values = append(values, p.parseValue(constant))
 			}
 			ret = &ast.ListValue{
 				Values: values,
@@ -498,7 +502,7 @@ func (p *parser) parseValue() ast.Value {
 					panic(p.errorf("expected colon"))
 				}
 				p.consumeToken()
-				value := p.parseValue()
+				value := p.parseValue(constant)
 				fields = append(fields, &ast.ObjectField{
 					Name:  name,
 					Value: value,

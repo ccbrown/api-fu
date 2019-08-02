@@ -27,6 +27,10 @@ func (s *Schema) SubscriptionType() *ObjectType {
 	return s.subscription
 }
 
+func (s *Schema) Directive(name string) *DirectiveDefinition {
+	return s.directives[name]
+}
+
 func (s *Schema) NamedType(name string) NamedType {
 	return s.namedTypes[name]
 }

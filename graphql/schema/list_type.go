@@ -13,7 +13,7 @@ func NewListType(t Type) *ListType {
 }
 
 func (t *ListType) String() string {
-	return t.Type.String() + "!"
+	return "[" + t.Type.String() + "]"
 }
 
 func (t *ListType) IsInputType() bool {

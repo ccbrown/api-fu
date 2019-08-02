@@ -25,13 +25,10 @@ func ValidateDocument(doc *ast.Document, s *schema.Schema) []*Error {
 	typeInfo := NewTypeInfo(doc, s)
 	var ret []*Error
 	for _, f := range []func(*ast.Document, *schema.Schema, *TypeInfo) []*Error{
-		validateDocumentExecutableDefinitions,
-		validateOperationsNameUniqueness,
-		validateOperationsLoneAnonymousOperation,
-		validateFieldsSelectionsOnObjectsInterfacesAndUnions,
-		validateFieldsLeafFieldSelections,
-		validateVariablesNameUniqueness,
-		validateVariablesInputTypes,
+		validateDocument,
+		validateOperations,
+		validateFields,
+		validateVariables,
 	} {
 		ret = append(ret, f(doc, s, typeInfo)...)
 	}

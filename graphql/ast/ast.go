@@ -130,6 +130,11 @@ type EnumValue struct {
 
 type NullValue struct{}
 
+func IsNullValue(v Value) bool {
+	_, ok := v.(*NullValue)
+	return ok
+}
+
 type ListValue struct {
 	Values []Value
 }
