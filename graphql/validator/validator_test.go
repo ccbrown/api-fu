@@ -180,7 +180,8 @@ func init() {
 
 func validateSource(t *testing.T, src string) []*Error {
 	s, err := schema.New(&schema.SchemaDefinition{
-		Query: objectType,
+		Query:        objectType,
+		Subscription: objectType,
 		DirectiveDefinitions: map[string]*schema.DirectiveDefinition{
 			"include": schema.IncludeDirective,
 			"skip":    schema.SkipDirective,

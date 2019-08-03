@@ -12,6 +12,13 @@ func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *Type
 	anonymousOperationCount := 0
 	operationNames := map[string]struct{}{}
 
+	fragmentDefinitions := map[string]*ast.FragmentDefinition{}
+	for _, def := range doc.Definitions {
+		if def, ok := def.(*ast.FragmentDefinition); ok {
+			fragmentDefinitions[def.Name.Name] = def
+		}
+	}
+
 	for _, def := range doc.Definitions {
 		if def, ok := def.(*ast.OperationDefinition); ok {
 			operationCount++
@@ -21,6 +28,15 @@ func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *Type
 				ret = append(ret, newError("an operation with this name already exists"))
 			} else {
 				operationNames[def.Name.Name] = struct{}{}
+			}
+
+			if def.OperationType != nil && *def.OperationType == ast.OperationTypeSubscription {
+				fieldsForName := map[string][]fieldAndParent{}
+				if err := addFieldSelections(fieldsForName, def.SelectionSet, fragmentDefinitions); err != nil {
+					ret = append(ret, err)
+				} else if len(fieldsForName) != 1 {
+					ret = append(ret, newError("subscriptions may only have one root field"))
+				}
 			}
 		}
 	}

@@ -73,7 +73,7 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 	ast.Inspect(doc, func(node interface{}) bool {
 		if node, ok := node.(*ast.SelectionSet); ok {
 			set := map[string][]fieldAndParent{}
-			if err := addSelections(set, node, fragmentDefinitions); err != nil {
+			if err := addFieldSelections(set, node, fragmentDefinitions); err != nil {
 				ret = append(ret, err)
 				return false
 			} else if err := validateFieldsInSetCanMerge(set, fragmentDefinitions, typeInfo); err != nil {
@@ -128,9 +128,9 @@ func validateFieldsInSetCanMerge(fieldsForName map[string][]fieldAndParent, frag
 					}
 
 					mergedSet := map[string][]fieldAndParent{}
-					if err := addSelections(mergedSet, fieldA.SelectionSet, fragmentDefinitions); err != nil {
+					if err := addFieldSelections(mergedSet, fieldA.SelectionSet, fragmentDefinitions); err != nil {
 						return err
-					} else if err := addSelections(mergedSet, fieldB.SelectionSet, fragmentDefinitions); err != nil {
+					} else if err := addFieldSelections(mergedSet, fieldB.SelectionSet, fragmentDefinitions); err != nil {
 						return err
 					}
 					if err := validateFieldsInSetCanMerge(mergedSet, fragmentDefinitions, typeInfo); err != nil {
@@ -243,9 +243,9 @@ func validateSameResponseShape(fieldA, fieldB *ast.Field, fragmentDefinitions ma
 	}
 
 	fieldsForName := map[string][]fieldAndParent{}
-	if err := addSelections(fieldsForName, fieldA.SelectionSet, fragmentDefinitions); err != nil {
+	if err := addFieldSelections(fieldsForName, fieldA.SelectionSet, fragmentDefinitions); err != nil {
 		return err
-	} else if err := addSelections(fieldsForName, fieldB.SelectionSet, fragmentDefinitions); err != nil {
+	} else if err := addFieldSelections(fieldsForName, fieldB.SelectionSet, fragmentDefinitions); err != nil {
 		return err
 	}
 
@@ -262,12 +262,12 @@ func validateSameResponseShape(fieldA, fieldB *ast.Field, fragmentDefinitions ma
 	return nil
 }
 
-func addSelections(fieldsForName map[string][]fieldAndParent, selectionSet *ast.SelectionSet, fragmentDefinitions map[string]*ast.FragmentDefinition) *Error {
+func addFieldSelections(fieldsForName map[string][]fieldAndParent, selectionSet *ast.SelectionSet, fragmentDefinitions map[string]*ast.FragmentDefinition) *Error {
 	visited := map[*ast.SelectionSet]struct{}{}
-	return addSelectionsWithCycleDetection(fieldsForName, selectionSet, fragmentDefinitions, visited)
+	return addFieldSelectionsWithCycleDetection(fieldsForName, selectionSet, fragmentDefinitions, visited)
 }
 
-func addSelectionsWithCycleDetection(fieldsForName map[string][]fieldAndParent, selectionSet *ast.SelectionSet, fragmentDefinitions map[string]*ast.FragmentDefinition, visited map[*ast.SelectionSet]struct{}) *Error {
+func addFieldSelectionsWithCycleDetection(fieldsForName map[string][]fieldAndParent, selectionSet *ast.SelectionSet, fragmentDefinitions map[string]*ast.FragmentDefinition, visited map[*ast.SelectionSet]struct{}) *Error {
 	if selectionSet == nil {
 		return nil
 	}
@@ -289,13 +289,13 @@ func addSelectionsWithCycleDetection(fieldsForName map[string][]fieldAndParent, 
 				parent: selectionSet,
 			})
 		case *ast.InlineFragment:
-			if err := addSelectionsWithCycleDetection(fieldsForName, selection.SelectionSet, fragmentDefinitions, visited); err != nil {
+			if err := addFieldSelectionsWithCycleDetection(fieldsForName, selection.SelectionSet, fragmentDefinitions, visited); err != nil {
 				return err
 			}
 		case *ast.FragmentSpread:
 			if def, ok := fragmentDefinitions[selection.FragmentName.Name]; !ok {
 				return newSecondaryError("undefined fragment")
-			} else if err := addSelectionsWithCycleDetection(fieldsForName, def.SelectionSet, fragmentDefinitions, visited); err != nil {
+			} else if err := addFieldSelectionsWithCycleDetection(fieldsForName, def.SelectionSet, fragmentDefinitions, visited); err != nil {
 				return err
 			}
 		}
