@@ -35,7 +35,7 @@ func (t *ListType) IsSameType(other Type) bool {
 	return false
 }
 
-func (t *ListType) WrappedType() Type {
+func (t *ListType) Unwrap() Type {
 	return t.Type
 }
 

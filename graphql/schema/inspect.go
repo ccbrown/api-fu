@@ -63,6 +63,8 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 			Inspect(node, f)
 		}
 	case *ScalarType:
+	case *ListType:
+		Inspect(n.Type, f)
 	case *NonNullType:
 		Inspect(n.Type, f)
 	default:

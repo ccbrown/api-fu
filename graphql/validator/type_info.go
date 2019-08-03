@@ -8,7 +8,7 @@ import (
 )
 
 type TypeInfo struct {
-	SelectionSetTypes       map[*ast.SelectionSet]schema.Type
+	SelectionSetTypes       map[*ast.SelectionSet]schema.NamedType
 	VariableDefinitionTypes map[*ast.VariableDefinition]schema.Type
 	FieldDefinitions        map[*ast.Field]*schema.FieldDefinition
 	ExpectedTypes           map[ast.Value]schema.Type
@@ -36,14 +36,14 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 
 func newTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 	ret := &TypeInfo{
-		SelectionSetTypes:       map[*ast.SelectionSet]schema.Type{},
+		SelectionSetTypes:       map[*ast.SelectionSet]schema.NamedType{},
 		VariableDefinitionTypes: map[*ast.VariableDefinition]schema.Type{},
 		FieldDefinitions:        map[*ast.Field]*schema.FieldDefinition{},
 		ExpectedTypes:           map[ast.Value]schema.Type{},
 		DefaultValues:           map[ast.Value]interface{}{},
 	}
 
-	var selectionSetScopes []schema.Type
+	var selectionSetScopes []schema.NamedType
 
 	ast.Inspect(doc, func(node interface{}) bool {
 		if node == nil {
@@ -51,7 +51,7 @@ func newTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 			return true
 		}
 
-		var selectionSetScope schema.Type
+		var selectionSetScope schema.NamedType
 
 		switch node := node.(type) {
 		case *ast.ListValue:
@@ -111,7 +111,7 @@ func newTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 			}
 
 			ret.FieldDefinitions[node] = field
-			selectionSetScope = field.Type
+			selectionSetScope = schema.UnwrappedType(field.Type)
 		case *ast.FragmentDefinition:
 			selectionSetScope = s.NamedType(node.TypeCondition.Name.Name)
 		case *ast.InlineFragment:

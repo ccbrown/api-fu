@@ -9,6 +9,24 @@ import (
 	"github.com/ccbrown/apifu/graphql/schema"
 )
 
+var nodeType = &schema.InterfaceType{
+	Name: "Node",
+	Fields: map[string]*schema.FieldDefinition{
+		"id": &schema.FieldDefinition{
+			Type: schema.IDType,
+		},
+	},
+}
+
+var unionMemberType = &schema.InterfaceType{
+	Name: "UnionMember",
+	Fields: map[string]*schema.FieldDefinition{
+		"scalar": &schema.FieldDefinition{
+			Type: schema.StringType,
+		},
+	},
+}
+
 var objectType = &schema.ObjectType{
 	Name: "Object",
 }
@@ -16,19 +34,26 @@ var objectType = &schema.ObjectType{
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
 		"node": &schema.FieldDefinition{
-			Type: &schema.InterfaceType{
-				Name: "Node",
-				Fields: map[string]*schema.FieldDefinition{
-					"id": &schema.FieldDefinition{
-						Type: schema.IDType,
-					},
-				},
-			},
+			Type: nodeType,
 			Arguments: map[string]*schema.InputValueDefinition{
 				"id": &schema.InputValueDefinition{
 					Type: schema.NewNonNullType(schema.IDType),
 				},
 			},
+		},
+		"resource": &schema.FieldDefinition{
+			Type: &schema.ObjectType{
+				Name: "Resource",
+				Fields: map[string]*schema.FieldDefinition{
+					"id": &schema.FieldDefinition{
+						Type: schema.IDType,
+					},
+				},
+				ImplementedInterfaces: []*schema.InterfaceType{nodeType},
+			},
+		},
+		"objects": &schema.FieldDefinition{
+			Type: schema.NewListType(objectType),
 		},
 		"object": &schema.FieldDefinition{
 			Type: objectType,
@@ -45,6 +70,16 @@ func init() {
 								Type: schema.NewNonNullType(schema.StringType),
 							},
 						},
+					},
+				},
+			},
+		},
+		"object2": &schema.FieldDefinition{
+			Type: &schema.ObjectType{
+				Name: "Object2",
+				Fields: map[string]*schema.FieldDefinition{
+					"scalar": &schema.FieldDefinition{
+						Type: schema.StringType,
 					},
 				},
 			},
@@ -69,7 +104,11 @@ func init() {
 							"a": &schema.FieldDefinition{
 								Type: schema.StringType,
 							},
+							"scalar": &schema.FieldDefinition{
+								Type: schema.StringType,
+							},
 						},
+						ImplementedInterfaces: []*schema.InterfaceType{unionMemberType},
 					},
 					&schema.ObjectType{
 						Name: "UnionObjectB",
@@ -77,7 +116,11 @@ func init() {
 							"b": &schema.FieldDefinition{
 								Type: schema.StringType,
 							},
+							"scalar": &schema.FieldDefinition{
+								Type: schema.StringType,
+							},
 						},
+						ImplementedInterfaces: []*schema.InterfaceType{unionMemberType},
 					},
 				},
 			},

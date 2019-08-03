@@ -7,8 +7,9 @@ import (
 )
 
 type Schema struct {
-	directiveDefinitions map[string]*DirectiveDefinition
-	namedTypes           map[string]NamedType
+	directiveDefinitions     map[string]*DirectiveDefinition
+	namedTypes               map[string]NamedType
+	interfaceImplementations map[string][]*ObjectType
 
 	query        *ObjectType
 	mutation     *ObjectType
@@ -35,6 +36,10 @@ func (s *Schema) NamedType(name string) NamedType {
 	return s.namedTypes[name]
 }
 
+func (s *Schema) InterfaceImplementations(name string) []*ObjectType {
+	return s.interfaceImplementations[name]
+}
+
 var nameRegex = regexp.MustCompile(`^[_A-Za-z][_0-9A-Za-z]*$`)
 
 func isName(s string) bool {
@@ -44,11 +49,12 @@ func isName(s string) bool {
 func New(def *SchemaDefinition) (*Schema, error) {
 	var err error
 	schema := &Schema{
-		directiveDefinitions: def.DirectiveDefinitions,
-		namedTypes:           map[string]NamedType{},
-		query:                def.Query,
-		mutation:             def.Mutation,
-		subscription:         def.Subscription,
+		directiveDefinitions:     def.DirectiveDefinitions,
+		namedTypes:               map[string]NamedType{},
+		interfaceImplementations: map[string][]*ObjectType{},
+		query:                    def.Query,
+		mutation:                 def.Mutation,
+		subscription:             def.Subscription,
 	}
 
 	if schema.query == nil {
@@ -78,6 +84,12 @@ func New(def *SchemaDefinition) (*Schema, error) {
 				return false
 			} else {
 				schema.namedTypes[name] = namedType
+			}
+		}
+
+		if obj, ok := node.(*ObjectType); ok {
+			for _, iface := range obj.ImplementedInterfaces {
+				schema.interfaceImplementations[iface.Name] = append(schema.interfaceImplementations[iface.Name], obj)
 			}
 		}
 
@@ -130,7 +142,7 @@ type WrappedType interface {
 	Unwrap() Type
 }
 
-func UnwrappedType(t Type) Type {
+func UnwrappedType(t Type) NamedType {
 	for {
 		if wrapped, ok := t.(WrappedType); ok {
 			t = wrapped.Unwrap()
@@ -138,5 +150,8 @@ func UnwrappedType(t Type) Type {
 			break
 		}
 	}
-	return t
+	if t != nil {
+		return t.(NamedType)
+	}
+	return nil
 }

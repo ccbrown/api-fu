@@ -1,16 +1,30 @@
 package validator
 
 import (
+	"fmt"
+
 	"github.com/ccbrown/apifu/graphql/ast"
 	"github.com/ccbrown/apifu/graphql/schema"
 )
 
 func validateFragments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
-	return validateFragmentDeclarations(doc, s, typeInfo)
+	ret := validateFragmentDeclarations(doc, s, typeInfo)
+	ret = append(ret, validateFragmentSpreads(doc, s, typeInfo)...)
+	return ret
 }
 
 func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
+
+	validateTypeCondition := func(tc *ast.NamedType) {
+		switch s.NamedType(tc.Name.Name).(type) {
+		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
+		case nil:
+			ret = append(ret, NewError("undefined type"))
+		default:
+			ret = append(ret, NewError("fragments may only be defined on objects, interfaces, and unions"))
+		}
+	}
 
 	fragmentsByName := map[string]*ast.FragmentDefinition{}
 	for _, def := range doc.Definitions {
@@ -20,14 +34,7 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 			} else {
 				fragmentsByName[def.Name.Name] = def
 			}
-
-			switch s.NamedType(def.TypeCondition.Name.Name).(type) {
-			case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
-			case nil:
-				ret = append(ret, NewError("undefined type"))
-			default:
-				ret = append(ret, NewError("fragments may only be defined on objects, interfaces, and unions"))
-			}
+			validateTypeCondition(def.TypeCondition)
 		}
 	}
 
@@ -35,11 +42,9 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 	ast.Inspect(doc, func(node interface{}) bool {
 		switch node := node.(type) {
 		case *ast.FragmentSpread:
-			name := node.FragmentName.Name
-			if _, ok := fragmentsByName[name]; !ok {
-				ret = append(ret, NewError("undefined fragment"))
-			}
-			usedFragments[name] = struct{}{}
+			usedFragments[node.FragmentName.Name] = struct{}{}
+		case *ast.InlineFragment:
+			validateTypeCondition(node.TypeCondition)
 		}
 		return true
 	})
@@ -50,5 +55,110 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 		}
 	}
 
+	return ret
+}
+
+func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
+	var ret []*Error
+
+	fragmentsByName := map[string]*ast.FragmentDefinition{}
+	directFragmentDependencies := map[string]map[string]struct{}{}
+	for _, def := range doc.Definitions {
+		if def, ok := def.(*ast.FragmentDefinition); ok {
+			fragmentsByName[def.Name.Name] = def
+
+			deps := map[string]struct{}{}
+			ast.Inspect(def, func(node interface{}) bool {
+				if node, ok := node.(*ast.FragmentSpread); ok {
+					deps[node.FragmentName.Name] = struct{}{}
+				}
+				return true
+			})
+			directFragmentDependencies[def.Name.Name] = deps
+		}
+	}
+
+	for name := range fragmentsByName {
+		toVisit := []string{name}
+		encountered := map[string]struct{}{}
+		cycleFound := false
+		for i := 0; i < len(toVisit) && !cycleFound; i++ {
+			for dep := range directFragmentDependencies[toVisit[i]] {
+				if _, ok := encountered[dep]; !ok {
+					if dep == name {
+						cycleFound = true
+						break
+					}
+					toVisit = append(toVisit, dep)
+					encountered[dep] = struct{}{}
+				}
+			}
+		}
+		if cycleFound {
+			ret = append(ret, NewError("fragment cycle detected"))
+		}
+	}
+
+	validateSpread := func(tc *ast.NamedType, parentType schema.NamedType) {
+		if parentType == nil {
+			return
+		}
+		switch fragmentType := s.NamedType(tc.Name.Name).(type) {
+		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
+			a := getPossibleTypes(s, fragmentType)
+			b := getPossibleTypes(s, parentType)
+			hasIntersection := false
+			for k := range a {
+				if _, ok := b[k]; ok {
+					hasIntersection = true
+					break
+				}
+			}
+			if !hasIntersection {
+				ret = append(ret, NewError("impossible fragment spread"))
+			}
+		default:
+		}
+	}
+
+	var selectionSetTypes []schema.NamedType
+	ast.Inspect(doc, func(node interface{}) bool {
+		var selectionSetType schema.NamedType
+		switch node := node.(type) {
+		case *ast.SelectionSet:
+			selectionSetType = typeInfo.SelectionSetTypes[node]
+		case *ast.FragmentSpread:
+			name := node.FragmentName.Name
+			if def, ok := fragmentsByName[name]; !ok {
+				ret = append(ret, NewError("undefined fragment"))
+			} else {
+				validateSpread(def.TypeCondition, selectionSetTypes[len(selectionSetTypes)-1])
+			}
+		case *ast.InlineFragment:
+			validateSpread(node.TypeCondition, selectionSetTypes[len(selectionSetTypes)-1])
+		}
+		selectionSetTypes = append(selectionSetTypes, selectionSetType)
+		return true
+	})
+
+	return ret
+}
+
+func getPossibleTypes(s *schema.Schema, t schema.NamedType) map[string]schema.NamedType {
+	ret := map[string]schema.NamedType{}
+	switch t := t.(type) {
+	case *schema.ObjectType:
+		ret[t.Name] = t
+	case *schema.InterfaceType:
+		for _, obj := range s.InterfaceImplementations(t.Name) {
+			ret[obj.Name] = obj
+		}
+	case *schema.UnionType:
+		for _, t := range t.MemberTypes {
+			ret[t.NamedType()] = t
+		}
+	default:
+		panic(fmt.Sprintf("unexpected type: %T", t))
+	}
 	return ret
 }

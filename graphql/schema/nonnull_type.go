@@ -35,7 +35,7 @@ func (t *NonNullType) IsSameType(other Type) bool {
 	return false
 }
 
-func (t *NonNullType) WrappedType() Type {
+func (t *NonNullType) Unwrap() Type {
 	return t.Type
 }
 

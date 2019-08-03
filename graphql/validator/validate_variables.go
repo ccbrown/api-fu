@@ -60,9 +60,9 @@ func validateVariables(doc *ast.Document, schema *schema.Schema, typeInfo *TypeI
 
 			for len(unvalidatedFragmentSpreads) > 0 {
 				for name := range unvalidatedFragmentSpreads {
+					delete(unvalidatedFragmentSpreads, name)
+					validatedFragmentSpreads[name] = true
 					if def, ok := fragmentDefinitions[name]; ok {
-						delete(unvalidatedFragmentSpreads, def.Name.Name)
-						validatedFragmentSpreads[def.Name.Name] = true
 						validate(def)
 					}
 				}

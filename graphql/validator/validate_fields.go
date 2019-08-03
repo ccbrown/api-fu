@@ -7,18 +7,18 @@ import (
 
 func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
-	var selectionSetTypes []schema.Type
+	var selectionSetTypes []schema.NamedType
 	ast.Inspect(doc, func(node interface{}) bool {
 		if node == nil {
 			selectionSetTypes = selectionSetTypes[:len(selectionSetTypes)-1]
 			return true
 		}
 
-		var selectionSetType schema.Type
+		var selectionSetType schema.NamedType
 
 		switch node := node.(type) {
 		case *ast.SelectionSet:
-			selectionSetType = schema.UnwrappedType(typeInfo.SelectionSetTypes[node])
+			selectionSetType = typeInfo.SelectionSetTypes[node]
 		case *ast.Field:
 			if def := typeInfo.FieldDefinitions[node]; def != nil {
 				switch schema.UnwrappedType(def.Type).(type) {
