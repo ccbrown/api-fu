@@ -9,6 +9,7 @@ import (
 func TestArguments_Names(t *testing.T) {
 	assert.Empty(t, validateSource(t, `{node(id: "foo"){id}}`))
 	assert.Len(t, validateSource(t, `{object(foo: "foo"){scalar}}`), 1)
+	assert.Len(t, validateSource(t, `{__typename(foo: "foo")}`), 1)
 }
 
 func TestArguments_Uniqueness(t *testing.T) {

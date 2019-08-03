@@ -91,3 +91,8 @@ func (d *ObjectType) shallowValidate() error {
 	}
 	return nil
 }
+
+func IsObjectType(t Type) bool {
+	_, ok := t.(*ObjectType)
+	return ok
+}

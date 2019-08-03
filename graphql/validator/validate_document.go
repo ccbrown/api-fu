@@ -11,7 +11,7 @@ func validateDocument(doc *ast.Document, schema *schema.Schema, typeInfo *TypeIn
 		switch def.(type) {
 		case *ast.OperationDefinition, *ast.FragmentDefinition:
 		default:
-			ret = append(ret, NewError("definitions must define an operation or fragment"))
+			ret = append(ret, newError("definitions must define an operation or fragment"))
 		}
 	}
 	return ret

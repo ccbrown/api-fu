@@ -17,17 +17,19 @@ func validateArguments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) 
 				arguments = node.Arguments
 				argumentDefinitions = def.Arguments
 			} else {
+				ret = append(ret, newSecondaryError("undefined directive"))
 				return false
 			}
 		case *ast.Field:
+			arguments = node.Arguments
 			if def := typeInfo.FieldDefinitions[node]; def != nil {
-				arguments = node.Arguments
 				argumentDefinitions = def.Arguments
-			} else {
+			} else if node.Name.Name != "__typename" {
+				ret = append(ret, newSecondaryError("no type info for field"))
 				return false
 			}
 		case *ast.Argument:
-			ret = append(ret, NewError("unsupported argument location"))
+			ret = append(ret, newError("unsupported argument location"))
 		}
 
 		if len(arguments) == 0 && len(argumentDefinitions) == 0 {
@@ -38,9 +40,9 @@ func validateArguments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) 
 		for _, argument := range arguments {
 			name := argument.Name.Name
 			if def := argumentDefinitions[name]; def == nil {
-				ret = append(ret, NewError("undefined argument"))
+				ret = append(ret, newError("undefined argument"))
 			} else if _, ok := argumentsByName[name]; ok {
-				ret = append(ret, NewError("argument already exists at this location"))
+				ret = append(ret, newError("argument already exists at this location"))
 			} else {
 				argumentsByName[name] = argument
 			}
@@ -49,9 +51,9 @@ func validateArguments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) 
 		for name, def := range argumentDefinitions {
 			if schema.IsNonNullType(def.Type) && def.DefaultValue == nil {
 				if arg, ok := argumentsByName[name]; !ok {
-					ret = append(ret, NewError("the %v argument is required", name))
+					ret = append(ret, newError("the %v argument is required", name))
 				} else if _, ok := arg.Value.(*ast.NullValue); ok {
-					ret = append(ret, NewError("the %v argument cannot be null", name))
+					ret = append(ret, newError("the %v argument cannot be null", name))
 				}
 			}
 		}

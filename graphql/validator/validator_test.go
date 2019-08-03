@@ -3,11 +3,21 @@ package validator
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ccbrown/apifu/graphql/parser"
 	"github.com/ccbrown/apifu/graphql/schema"
 )
+
+var petType = &schema.InterfaceType{
+	Name: "Pet",
+	Fields: map[string]*schema.FieldDefinition{
+		"nickname": &schema.FieldDefinition{
+			Type: schema.StringType,
+		},
+	},
+}
 
 var nodeType = &schema.InterfaceType{
 	Name: "Node",
@@ -33,6 +43,37 @@ var objectType = &schema.ObjectType{
 
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
+		"pet": &schema.FieldDefinition{
+			Type: petType,
+		},
+		"dog": &schema.FieldDefinition{
+			Type: &schema.ObjectType{
+				Name: "Dog",
+				Fields: map[string]*schema.FieldDefinition{
+					"nickname": &schema.FieldDefinition{
+						Type: schema.StringType,
+					},
+					"barkVolume": &schema.FieldDefinition{
+						Type: schema.IntType,
+					},
+				},
+				ImplementedInterfaces: []*schema.InterfaceType{petType},
+			},
+		},
+		"cat": &schema.FieldDefinition{
+			Type: &schema.ObjectType{
+				Name: "Cat",
+				Fields: map[string]*schema.FieldDefinition{
+					"nickname": &schema.FieldDefinition{
+						Type: schema.StringType,
+					},
+					"meowVolume": &schema.FieldDefinition{
+						Type: schema.IntType,
+					},
+				},
+				ImplementedInterfaces: []*schema.InterfaceType{petType},
+			},
+		},
 		"node": &schema.FieldDefinition{
 			Type: nodeType,
 			Arguments: map[string]*schema.InputValueDefinition{
@@ -128,6 +169,12 @@ func init() {
 		"scalar": &schema.FieldDefinition{
 			Type: schema.StringType,
 		},
+		"int": &schema.FieldDefinition{
+			Type: schema.IntType,
+		},
+		"int2": &schema.FieldDefinition{
+			Type: schema.IntType,
+		},
 	}
 }
 
@@ -141,8 +188,13 @@ func validateSource(t *testing.T, src string) []*Error {
 	})
 	require.NoError(t, err)
 
-	doc, errs := parser.ParseDocument([]byte(src))
-	require.Empty(t, errs)
+	doc, parseErrs := parser.ParseDocument([]byte(src))
+	require.Empty(t, parseErrs)
 	require.NotNil(t, doc)
-	return ValidateDocument(doc, s)
+
+	errs := ValidateDocument(doc, s)
+	for _, err := range errs {
+		assert.False(t, err.IsSecondary)
+	}
+	return errs
 }

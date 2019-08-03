@@ -18,7 +18,7 @@ func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *Type
 			if def.Name == nil {
 				anonymousOperationCount++
 			} else if _, ok := operationNames[def.Name.Name]; ok {
-				ret = append(ret, NewError("an operation with this name already exists"))
+				ret = append(ret, newError("an operation with this name already exists"))
 			} else {
 				operationNames[def.Name.Name] = struct{}{}
 			}
@@ -26,7 +26,7 @@ func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *Type
 	}
 
 	if operationCount > 1 && anonymousOperationCount > 0 {
-		ret = append(ret, NewError("only one operation is allowed when an anonymous operation is present"))
+		ret = append(ret, newError("only one operation is allowed when an anonymous operation is present"))
 	}
 	return ret
 }

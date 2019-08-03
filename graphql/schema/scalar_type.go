@@ -27,3 +27,8 @@ func (t *ScalarType) IsSameType(other Type) bool {
 func (t *ScalarType) NamedType() string {
 	return t.Name
 }
+
+func IsScalarType(t Type) bool {
+	_, ok := t.(*ScalarType)
+	return ok
+}
