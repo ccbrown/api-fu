@@ -41,24 +41,43 @@ var objectType = &schema.ObjectType{
 	Name: "Object",
 }
 
+var complexInputType = &schema.InputObjectType{
+	Name: "ComplexInput",
+	Fields: map[string]*schema.InputValueDefinition{
+		"name": &schema.InputValueDefinition{
+			Type: schema.StringType,
+		},
+	},
+}
+
+var dogType = &schema.ObjectType{
+	Name: "Dog",
+	Fields: map[string]*schema.FieldDefinition{
+		"nickname": &schema.FieldDefinition{
+			Type: schema.StringType,
+		},
+		"barkVolume": &schema.FieldDefinition{
+			Type: schema.IntType,
+		},
+	},
+	ImplementedInterfaces: []*schema.InterfaceType{petType},
+}
+
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
+		"findDog": &schema.FieldDefinition{
+			Type: dogType,
+			Arguments: map[string]*schema.InputValueDefinition{
+				"complex": &schema.InputValueDefinition{
+					Type: complexInputType,
+				},
+			},
+		},
 		"pet": &schema.FieldDefinition{
 			Type: petType,
 		},
 		"dog": &schema.FieldDefinition{
-			Type: &schema.ObjectType{
-				Name: "Dog",
-				Fields: map[string]*schema.FieldDefinition{
-					"nickname": &schema.FieldDefinition{
-						Type: schema.StringType,
-					},
-					"barkVolume": &schema.FieldDefinition{
-						Type: schema.IntType,
-					},
-				},
-				ImplementedInterfaces: []*schema.InterfaceType{petType},
-			},
+			Type: dogType,
 		},
 		"cat": &schema.FieldDefinition{
 			Type: &schema.ObjectType{
