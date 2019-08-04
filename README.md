@@ -1,4 +1,4 @@
 # api-fu
 
 **api-fu** (noun)
-  1. (informal) Master of APIs.
+  1. (informal) Mastery of APIs.
