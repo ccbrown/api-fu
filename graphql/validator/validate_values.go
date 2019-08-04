@@ -16,7 +16,11 @@ func validateValues(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 		}
 
 		parentType := parentTypes[len(parentTypes)-1]
-		expectedType := typeInfo.ExpectedTypes[node]
+
+		var expectedType schema.Type
+		if value, ok := node.(ast.Value); ok {
+			expectedType = typeInfo.ExpectedTypes[value]
+		}
 
 		switch node := node.(type) {
 		case *ast.ObjectValue:
@@ -31,8 +35,11 @@ func validateValues(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 			if def, ok := expectedType.(*schema.InputObjectType); ok {
 				for name, field := range def.Fields {
 					if schema.IsNonNullType(field.Type) && field.DefaultValue == nil {
-						if given, ok := fieldsByName[name]; !ok || ast.IsNullValue(given.Value) {
+						if given, ok := fieldsByName[name]; !ok {
 							ret = append(ret, newError("the %v field is required", name))
+						} else if ast.IsNullValue(given.Value) {
+							// primarily checked during value coercion validation
+							ret = append(ret, newSecondaryError("the %v field cannot be null", name))
 						}
 					}
 				}
@@ -51,5 +58,63 @@ func validateValues(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 		return true
 	})
 
+	ast.Inspect(doc, func(node interface{}) bool {
+		switch node := node.(type) {
+		case *ast.Variable:
+			// variable types are validated by variable validation rules
+			return false
+		case ast.Value:
+			if expected, ok := typeInfo.ExpectedTypes[node]; ok {
+				if err := validateShallowCoercion(node, expected); err != nil {
+					ret = append(ret, err)
+					return false
+				}
+			} else {
+				ret = append(ret, newSecondaryError("no type info for value"))
+				return false
+			}
+		}
+		return true
+	})
+
 	return ret
+}
+
+func validateShallowCoercion(from ast.Value, to schema.Type) *Error {
+	if ast.IsNullValue(from) {
+		if schema.IsNonNullType(to) {
+			return newError("cannot coerce null to non-null type")
+		}
+		return nil
+	}
+
+	switch to := to.(type) {
+	case *schema.ScalarType:
+		if to.CoerceLiteral(from) != nil {
+			return nil
+		}
+		return newError("cannot coerce to %v", to)
+	case *schema.ListType:
+		if _, ok := from.(*ast.ListValue); ok {
+			return nil
+		}
+		return newError("cannot coerce to %v", to)
+	case *schema.InputObjectType:
+		if _, ok := from.(*ast.ObjectValue); ok {
+			return nil
+		}
+		return newError("cannot coerce to %v", to)
+	case *schema.EnumType:
+		if from, ok := from.(*ast.EnumValue); ok {
+			if _, ok := to.Values[from.Value]; !ok {
+				return newError("undefined enum value for %v", to)
+			}
+			return nil
+		}
+		return newError("cannot coerce to %v", to)
+	case *schema.NonNullType:
+		return validateShallowCoercion(from, to.Type)
+	}
+
+	panic("unsupported input coercion type")
 }

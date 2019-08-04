@@ -65,6 +65,30 @@ var dogType = &schema.ObjectType{
 
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
+		"booleanArgField": &schema.FieldDefinition{
+			Type: schema.BooleanType,
+			Arguments: map[string]*schema.InputValueDefinition{
+				"booleanArg": &schema.InputValueDefinition{
+					Type: schema.BooleanType,
+				},
+			},
+		},
+		"intArgField": &schema.FieldDefinition{
+			Type: schema.IntType,
+			Arguments: map[string]*schema.InputValueDefinition{
+				"intArg": &schema.InputValueDefinition{
+					Type: schema.IntType,
+				},
+			},
+		},
+		"floatArgField": &schema.FieldDefinition{
+			Type: schema.FloatType,
+			Arguments: map[string]*schema.InputValueDefinition{
+				"floatArg": &schema.InputValueDefinition{
+					Type: schema.FloatType,
+				},
+			},
+		},
 		"findDog": &schema.FieldDefinition{
 			Type: dogType,
 			Arguments: map[string]*schema.InputValueDefinition{

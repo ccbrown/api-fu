@@ -102,33 +102,50 @@ type NamedType struct {
 
 // Variable, IntValue, FloatValue, StringValue, BooleanValue, NullValue, EnumValue, ListValue, or
 // ObjectValue
-type Value interface{}
+type Value interface {
+	IsValue() bool
+}
 
 type Variable struct {
 	Name *Name
 }
 
+func (*Variable) IsValue() bool { return true }
+
 type BooleanValue struct {
 	Value bool
 }
+
+func (*BooleanValue) IsValue() bool { return true }
 
 type FloatValue struct {
 	Value string
 }
 
+func (*FloatValue) IsValue() bool { return true }
+
 type IntValue struct {
 	Value string
 }
 
+func (*IntValue) IsValue() bool { return true }
+
 type StringValue struct {
+	// Value is the actual, unquoted value.
 	Value string
 }
+
+func (*StringValue) IsValue() bool { return true }
 
 type EnumValue struct {
 	Value string
 }
 
+func (*EnumValue) IsValue() bool { return true }
+
 type NullValue struct{}
+
+func (*NullValue) IsValue() bool { return true }
 
 func IsNullValue(v Value) bool {
 	_, ok := v.(*NullValue)
@@ -139,9 +156,13 @@ type ListValue struct {
 	Values []Value
 }
 
+func (*ListValue) IsValue() bool { return true }
+
 type ObjectValue struct {
 	Fields []*ObjectField
 }
+
+func (*ObjectValue) IsValue() bool { return true }
 
 type ObjectField struct {
 	Name  *Name

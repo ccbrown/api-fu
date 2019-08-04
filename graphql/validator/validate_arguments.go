@@ -52,8 +52,9 @@ func validateArguments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) 
 			if schema.IsNonNullType(def.Type) && def.DefaultValue == nil {
 				if arg, ok := argumentsByName[name]; !ok {
 					ret = append(ret, newError("the %v argument is required", name))
-				} else if _, ok := arg.Value.(*ast.NullValue); ok {
-					ret = append(ret, newError("the %v argument cannot be null", name))
+				} else if ast.IsNullValue(arg.Value) {
+					// primarily checked during value validation
+					ret = append(ret, newSecondaryError("the %v argument cannot be null", name))
 				}
 			}
 		}

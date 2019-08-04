@@ -1,7 +1,14 @@
 package schema
 
+import "github.com/ccbrown/api-fu/graphql/ast"
+
 type ScalarType struct {
-	Name string
+	Name        string
+	Description string
+	Directives  []*Directive
+
+	// Should return nil if coercion is impossible.
+	CoerceLiteral func(ast.Value) interface{}
 }
 
 func (t *ScalarType) String() string {
