@@ -3,8 +3,8 @@ package validator
 import (
 	"fmt"
 
-	"github.com/ccbrown/apifu/graphql/ast"
-	"github.com/ccbrown/apifu/graphql/schema"
+	"github.com/ccbrown/api-fu/graphql/ast"
+	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
 type Error struct {

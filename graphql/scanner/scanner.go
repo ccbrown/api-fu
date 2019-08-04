@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/ccbrown/apifu/graphql/token"
+	"github.com/ccbrown/api-fu/graphql/token"
 )
 
 type Error struct {

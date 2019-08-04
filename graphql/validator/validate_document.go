@@ -1,8 +1,8 @@
 package validator
 
 import (
-	"github.com/ccbrown/apifu/graphql/ast"
-	"github.com/ccbrown/apifu/graphql/schema"
+	"github.com/ccbrown/api-fu/graphql/ast"
+	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
 func validateDocument(doc *ast.Document, schema *schema.Schema, typeInfo *TypeInfo) []*Error {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ccbrown/apifu/graphql/token"
+	"github.com/ccbrown/api-fu/graphql/token"
 )
 
 func TestScanner(t *testing.T) {

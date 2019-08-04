@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ccbrown/apifu/graphql/ast"
-	"github.com/ccbrown/apifu/graphql/parser"
+	"github.com/ccbrown/api-fu/graphql/ast"
+	"github.com/ccbrown/api-fu/graphql/parser"
 )
 
 func TestInspect_KitchenSink(t *testing.T) {

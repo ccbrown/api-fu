@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ccbrown/apifu/graphql/parser"
-	"github.com/ccbrown/apifu/graphql/schema"
+	"github.com/ccbrown/api-fu/graphql/parser"
+	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
 var petType = &schema.InterfaceType{

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ccbrown/apifu/graphql/ast"
+	"github.com/ccbrown/api-fu/graphql/ast"
 )
 
 func TestParser_parseValue(t *testing.T) {

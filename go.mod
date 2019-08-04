@@ -1,4 +1,4 @@
-module github.com/ccbrown/apifu
+module github.com/ccbrown/api-fu
 
 go 1.12
 
