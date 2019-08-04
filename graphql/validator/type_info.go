@@ -34,7 +34,7 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 	}
 }
 
-func newTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
+func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 	ret := &TypeInfo{
 		SelectionSetTypes:       map[*ast.SelectionSet]schema.NamedType{},
 		VariableDefinitionTypes: map[*ast.VariableDefinition]schema.Type{},

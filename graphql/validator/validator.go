@@ -36,7 +36,7 @@ func newSecondaryError(message string, args ...interface{}) *Error {
 }
 
 func ValidateDocument(doc *ast.Document, s *schema.Schema) []*Error {
-	typeInfo := newTypeInfo(doc, s)
+	typeInfo := NewTypeInfo(doc, s)
 	var errs []*Error
 	for _, f := range []func(*ast.Document, *schema.Schema, *TypeInfo) []*Error{
 		validateDocument,
