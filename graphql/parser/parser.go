@@ -9,11 +9,13 @@ import (
 )
 
 type Error struct {
-	message string
+	Message string
+	Line    int
+	Column  int
 }
 
 func (err *Error) Error() string {
-	return err.message
+	return err.Message
 }
 
 func ParseDocument(src []byte) (doc *ast.Document, errs []*Error) {
@@ -45,36 +47,26 @@ func ParseValue(src []byte) (value ast.Value, errs []*Error) {
 }
 
 type parserToken struct {
-	Token token.Token
-	Value string
+	Token  token.Token
+	Value  string
+	Line   int
+	Column int
 }
 
-var eof = &parserToken{}
-
 type parser struct {
-	errors    []*Error
-	tokens    []*parserToken
-	recursion int
+	errors        []*Error
+	recursion     int
+	scanner       *scanner.Scanner
+	scannerErrors int
+	eof           bool
+	nextToken     *parserToken
 }
 
 func newParser(src []byte) *parser {
-	var tokens []*parserToken
-	s := scanner.New(src, 0)
-	for s.Scan() {
-		tokens = append(tokens, &parserToken{
-			Token: s.Token(),
-			Value: s.StringValue(),
-		})
-	}
 	ret := &parser{
-		errors: make([]*Error, len(s.Errors())),
-		tokens: tokens,
+		scanner: scanner.New(src, 0),
 	}
-	for i, err := range s.Errors() {
-		ret.errors[i] = &Error{
-			message: err.Error(),
-		}
-	}
+	ret.consumeToken()
 	return ret
 }
 
@@ -92,21 +84,41 @@ func (p *parser) exit() {
 }
 
 func (p *parser) peek() *parserToken {
-	if len(p.tokens) > 0 {
-		return p.tokens[0]
-	}
-	return eof
+	return p.nextToken
 }
 
 func (p *parser) consumeToken() {
-	if len(p.tokens) > 0 {
-		p.tokens = p.tokens[1:]
+	if p.scanner.Scan() {
+		p.nextToken = &parserToken{
+			Token:  p.scanner.Token(),
+			Value:  p.scanner.StringValue(),
+			Line:   p.scanner.Line(),
+			Column: p.scanner.Column(),
+		}
+	} else {
+		p.eof = true
+		p.nextToken = &parserToken{
+			Token:  token.INVALID,
+			Value:  "EOF",
+			Line:   p.scanner.Line(),
+			Column: p.scanner.Column(),
+		}
+	}
+	for _, err := range p.scanner.Errors()[p.scannerErrors:] {
+		p.errors = append(p.errors, &Error{
+			Message: err.Message,
+			Line:    err.Line,
+			Column:  err.Column,
+		})
+		p.scannerErrors++
 	}
 }
 
 func (p *parser) errorf(message string, args ...interface{}) *Error {
 	err := &Error{
-		message: fmt.Sprintf(message, args...),
+		Message: fmt.Sprintf(message, args...),
+		Line:    p.peek().Line,
+		Column:  p.peek().Column,
 	}
 	p.errors = append(p.errors, err)
 	return err
@@ -116,8 +128,11 @@ func (p *parser) parseDocument() *ast.Document {
 	p.enter()
 
 	ret := &ast.Document{}
-	for p.peek() != eof {
+	for !p.eof {
 		ret.Definitions = append(ret.Definitions, p.parseDefinition())
+	}
+	if len(ret.Definitions) == 0 {
+		panic(p.errorf("expected definition"))
 	}
 
 	p.exit()
@@ -128,8 +143,8 @@ func (p *parser) parseDefinition() ast.Definition {
 	p.enter()
 
 	var ret ast.Definition
-	if t := p.peek(); t.Token == token.NAME && t.Value == "fragment" {
-		ret = p.parseFragmentDefinition()
+	if def := p.parseOptionalFragmentDefinition(); def != nil {
+		ret = def
 	} else {
 		ret = p.parseOperationDefinition()
 	}
@@ -138,19 +153,23 @@ func (p *parser) parseDefinition() ast.Definition {
 	return ret
 }
 
-func (p *parser) parseFragmentDefinition() *ast.FragmentDefinition {
+func (p *parser) parseOptionalFragmentDefinition() *ast.FragmentDefinition {
 	p.enter()
 
-	if t := p.peek(); t.Token != token.NAME || t.Value != "fragment" {
-		panic(p.errorf(`expected "fragment"`))
-	}
-	p.consumeToken()
+	var ret *ast.FragmentDefinition
+	if t := p.peek(); t.Token == token.NAME && t.Value == "fragment" {
+		p.consumeToken()
 
-	ret := &ast.FragmentDefinition{
-		Name:          p.parseName(),
-		TypeCondition: p.parseTypeCondition(),
-		Directives:    p.parseOptionalDirectives(),
-		SelectionSet:  p.parseSelectionSet(),
+		if t := p.peek(); t.Token != token.NAME || t.Value == "on" {
+			panic(p.errorf(`expected fragment name`))
+		}
+
+		ret = &ast.FragmentDefinition{
+			Name:          p.parseName(),
+			TypeCondition: p.parseTypeCondition(),
+			Directives:    p.parseOptionalDirectives(),
+			SelectionSet:  p.parseSelectionSet(),
+		}
 	}
 
 	p.exit()
@@ -311,7 +330,7 @@ func (p *parser) parseOptionalVariableDefinitions() []*ast.VariableDefinition {
 		for {
 			if t := p.peek(); t.Token == token.PUNCTUATOR && t.Value == ")" {
 				if len(ret) == 0 {
-					panic(p.errorf("variable definition"))
+					panic(p.errorf("expected variable definition"))
 				}
 				p.consumeToken()
 				break

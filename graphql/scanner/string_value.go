@@ -78,9 +78,10 @@ func (s *Scanner) consumeStringValue() string {
 					value += string(`\`) + string(r)
 				}
 			} else {
-				switch r := s.consumeRune(); r {
+				consumed := false
+				switch s.nextRune {
 				case '"', '\\', '/':
-					value += string(r)
+					value += string(s.nextRune)
 				case 'b':
 					value += string('\b')
 				case 'f':
@@ -92,6 +93,9 @@ func (s *Scanner) consumeStringValue() string {
 				case 't':
 					value += string('\t')
 				case 'u':
+					s.consumeRune()
+					consumed = true
+
 					var code rune
 					for i := 0; i < 4; i++ {
 						if v := hexRuneValue(s.nextRune); v < 0 {
@@ -105,6 +109,9 @@ func (s *Scanner) consumeStringValue() string {
 					value += string(code)
 				default:
 					s.errorf("illegal escape sequence")
+				}
+				if !consumed {
+					s.consumeRune()
 				}
 			}
 			isEscaped = false

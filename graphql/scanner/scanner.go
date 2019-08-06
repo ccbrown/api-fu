@@ -8,17 +8,21 @@ import (
 )
 
 type Error struct {
-	message string
+	Message string
+	Line    int
+	Column  int
 }
 
 func (err *Error) Error() string {
-	return err.message
+	return err.Message
 }
 
 type Scanner struct {
 	src    []byte
 	mode   Mode
 	offset int
+	line   int
+	column int
 	errors []*Error
 
 	nextRune     rune
@@ -26,6 +30,8 @@ type Scanner struct {
 
 	token            token.Token
 	tokenOffset      int
+	tokenLine        int
+	tokenColumn      int
 	tokenLength      int
 	tokenStringValue string
 }
@@ -38,8 +44,10 @@ const (
 
 func New(src []byte, mode Mode) *Scanner {
 	s := &Scanner{
-		src:  src,
-		mode: mode,
+		src:    src,
+		mode:   mode,
+		line:   1,
+		column: 1,
 	}
 	s.readNextRune()
 	return s
@@ -51,7 +59,9 @@ func (s *Scanner) Errors() []*Error {
 
 func (s *Scanner) errorf(message string, args ...interface{}) {
 	s.errors = append(s.errors, &Error{
-		message: fmt.Sprintf(message, args...),
+		Message: fmt.Sprintf(message, args...),
+		Line:    s.line,
+		Column:  s.column,
 	})
 }
 
@@ -77,6 +87,12 @@ func (s *Scanner) consumeRune() rune {
 	r := s.nextRune
 	s.offset += s.nextRuneSize
 	s.readNextRune()
+	if r == '\n' || (r == '\r' && s.nextRune != '\n') {
+		s.line++
+		s.column = 1
+	} else {
+		s.column++
+	}
 	return r
 }
 
@@ -99,20 +115,20 @@ func isSourceCharacter(r rune) bool {
 	return r == '\t' || r == '\n' || r == '\r' || (r >= 0x20 && r <= 0xffff)
 }
 
-const maxErrors = 10
-
 func (s *Scanner) isDone() bool {
-	return len(s.errors) >= maxErrors || len(s.src) == s.offset
+	return len(s.src) == s.offset
 }
 
 func (s *Scanner) Scan() bool {
 	for {
+		s.token = token.INVALID
+		s.tokenOffset = s.offset
+		s.tokenLine = s.line
+		s.tokenColumn = s.column
+
 		if s.isDone() {
 			return false
 		}
-
-		s.token = token.INVALID
-		s.tokenOffset = s.offset
 
 		switch s.nextRune {
 		case '\t', ' ':
@@ -136,13 +152,17 @@ func (s *Scanner) Scan() bool {
 			s.token = token.COMMENT
 		case '.':
 			s.consumeRune()
-			if s.nextRune == '.' && s.peek() == '.' {
-				s.consumeRune()
-				s.consumeRune()
-				s.token = token.PUNCTUATOR
-			} else {
-				s.errorf("illegal character")
+			if s.nextRune != '.' {
+				s.errorf("expected '.'")
+				break
 			}
+			s.consumeRune()
+			if s.nextRune != '.' {
+				s.errorf("expected '.'")
+				break
+			}
+			s.consumeRune()
+			s.token = token.PUNCTUATOR
 		case '"':
 			s.tokenStringValue = s.consumeStringValue()
 			s.token = token.STRING_VALUE
@@ -169,7 +189,7 @@ func (s *Scanner) Scan() bool {
 			} else if s.consumeName() {
 				s.token = token.NAME
 			} else {
-				s.errorf("illegal character %#U", s.nextRune)
+				s.errorf("illegal character: %#U", s.nextRune)
 				s.consumeRune()
 			}
 		}
@@ -189,6 +209,14 @@ func (s *Scanner) Token() token.Token {
 
 func (s *Scanner) Literal() string {
 	return string(s.src[s.tokenOffset : s.tokenOffset+s.tokenLength])
+}
+
+func (s *Scanner) Line() int {
+	return s.tokenLine
+}
+
+func (s *Scanner) Column() int {
+	return s.tokenColumn
 }
 
 func (s *Scanner) StringValue() string {
