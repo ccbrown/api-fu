@@ -1,6 +1,10 @@
 package schema
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/ccbrown/api-fu/graphql/ast"
+)
 
 type ListType struct {
 	Type Type
@@ -44,6 +48,34 @@ func (t *ListType) shallowValidate() error {
 		return fmt.Errorf("non-null types cannot wrap other non-null types")
 	}
 	return nil
+}
+
+func (t *ListType) CoerceVariableValue(v interface{}) (interface{}, error) {
+	switch v := v.(type) {
+	case []interface{}:
+		result := make([]interface{}, len(v))
+		for i, v := range v {
+			if coerced, err := CoerceVariableValue(v, t.Type); err != nil {
+				return nil, err
+			} else {
+				result[i] = coerced
+			}
+		}
+		return result, nil
+	}
+	return nil, fmt.Errorf("invalid variable type")
+}
+
+func (t *ListType) CoerceLiteral(node *ast.ListValue, variableValues map[string]interface{}) (interface{}, error) {
+	result := make([]interface{}, len(node.Values))
+	for i, v := range node.Values {
+		if coerced, err := CoerceLiteral(v, t.Type, variableValues); err != nil {
+			return nil, err
+		} else {
+			result[i] = coerced
+		}
+	}
+	return result, nil
 }
 
 func IsListType(t Type) bool {

@@ -66,7 +66,9 @@ type SelectionSet struct {
 }
 
 // Field, FragmentSpread, or InlineFragment
-type Selection interface{}
+type Selection interface {
+	SelectionDirectives() []*Directive
+}
 
 type Field struct {
 	Alias        *Name
@@ -76,15 +78,27 @@ type Field struct {
 	SelectionSet *SelectionSet
 }
 
+func (s *Field) SelectionDirectives() []*Directive {
+	return s.Directives
+}
+
 type FragmentSpread struct {
 	FragmentName *Name
 	Directives   []*Directive
+}
+
+func (s *FragmentSpread) SelectionDirectives() []*Directive {
+	return s.Directives
 }
 
 type InlineFragment struct {
 	TypeCondition *NamedType
 	Directives    []*Directive
 	SelectionSet  *SelectionSet
+}
+
+func (s *InlineFragment) SelectionDirectives() []*Directive {
+	return s.Directives
 }
 
 type Argument struct {

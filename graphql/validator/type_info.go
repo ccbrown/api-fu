@@ -21,17 +21,16 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 		if inner := schemaType(t.Type, s); inner != nil {
 			return schema.NewListType(inner)
 		}
-		return nil
 	case *ast.NonNullType:
 		if inner := schemaType(t.Type, s); inner != nil {
 			return schema.NewNonNullType(inner)
 		}
-		return nil
 	case *ast.NamedType:
 		return s.NamedType(t.Name.Name)
 	default:
 		panic(fmt.Sprintf("unsupported ast type: %T", t))
 	}
+	return nil
 }
 
 func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {

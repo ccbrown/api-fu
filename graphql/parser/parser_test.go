@@ -11,7 +11,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/ast"
 )
 
-func TestParser_parseValue(t *testing.T) {
+func TestParseValue(t *testing.T) {
 	for src, expected := range map[string]ast.Value{
 		`null`: &ast.NullValue{},
 		`[123 "abc"]`: &ast.ListValue{
@@ -47,15 +47,13 @@ func TestParser_parseValue(t *testing.T) {
 			},
 		},
 	} {
-		p := newParser([]byte(src))
-		actual := p.parseValue(false)
-		assert.Empty(t, p.errors)
+		actual, errs := ParseValue([]byte(src))
+		assert.Empty(t, errs)
 		assert.Equal(t, expected, actual)
-		assert.Equal(t, 0, p.recursion)
 	}
 }
 
-func TestParser_ParseDocument_KitchenSink(t *testing.T) {
+func TestParseDocument_KitchenSink(t *testing.T) {
 	src, err := ioutil.ReadFile("testdata/kitchen-sink.graphql")
 	require.NoError(t, err)
 	doc, errs := ParseDocument(src)
@@ -64,7 +62,7 @@ func TestParser_ParseDocument_KitchenSink(t *testing.T) {
 	assert.NotEmpty(t, doc.Definitions)
 }
 
-func TestParser_ParseDocument_DeepRecursion(t *testing.T) {
+func TestParseDocument_DeepRecursion(t *testing.T) {
 	const nesting = 10000000
 	src := strings.Repeat("{x", nesting) + strings.Repeat("}", nesting)
 	_, errs := ParseDocument([]byte(src))
@@ -72,7 +70,7 @@ func TestParser_ParseDocument_DeepRecursion(t *testing.T) {
 	// most importantly, we shouldn't hang or overflow the stack
 }
 
-func TestParser_ParseDocument_ConstantValues(t *testing.T) {
+func TestParseDocument_ConstantValues(t *testing.T) {
 	_, errs := ParseDocument([]byte(`query ($n:Int=1) {x}`))
 	assert.Empty(t, errs)
 

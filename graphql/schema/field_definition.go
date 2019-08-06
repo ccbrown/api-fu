@@ -5,11 +5,18 @@ import (
 	"strings"
 )
 
+type FieldContext struct {
+	Object    interface{}
+	Arguments map[string]interface{}
+}
+
 type FieldDefinition struct {
 	Description string
 	Arguments   map[string]*InputValueDefinition
 	Type        Type
 	Directives  []*Directive
+
+	Resolve func(*FieldContext) (interface{}, error)
 }
 
 func (d *FieldDefinition) shallowValidate() error {

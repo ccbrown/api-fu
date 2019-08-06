@@ -30,6 +30,20 @@ func ParseDocument(src []byte) (doc *ast.Document, errs []*Error) {
 	return p.parseDocument(), p.errors
 }
 
+func ParseValue(src []byte) (value ast.Value, errs []*Error) {
+	p := newParser(src)
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(*Error); ok {
+				errs = p.errors
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	return p.parseValue(false), p.errors
+}
+
 type parserToken struct {
 	Token token.Token
 	Value string
@@ -194,14 +208,13 @@ func (p *parser) parseSelectionSet() *ast.SelectionSet {
 	ret := &ast.SelectionSet{}
 	for {
 		if t := p.peek(); t.Token == token.PUNCTUATOR && t.Value == "}" {
+			if len(ret.Selections) == 0 {
+				panic(p.errorf("expected selection"))
+			}
 			p.consumeToken()
 			break
 		}
-		if sel := p.parseSelection(); sel != nil {
-			ret.Selections = append(ret.Selections, sel)
-		} else {
-			break
-		}
+		ret.Selections = append(ret.Selections, p.parseSelection())
 	}
 
 	p.exit()
@@ -274,6 +287,9 @@ func (p *parser) parseOptionalArguments() []*ast.Argument {
 
 		for {
 			if t := p.peek(); t.Token == token.PUNCTUATOR && t.Value == ")" {
+				if len(ret) == 0 {
+					panic(p.errorf("expected argument"))
+				}
 				p.consumeToken()
 				break
 			}
@@ -294,6 +310,9 @@ func (p *parser) parseOptionalVariableDefinitions() []*ast.VariableDefinition {
 
 		for {
 			if t := p.peek(); t.Token == token.PUNCTUATOR && t.Value == ")" {
+				if len(ret) == 0 {
+					panic(p.errorf("variable definition"))
+				}
 				p.consumeToken()
 				break
 			}

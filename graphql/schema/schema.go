@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/ccbrown/api-fu/graphql/ast"
 )
 
 type Schema struct {
@@ -154,4 +156,63 @@ func UnwrappedType(t Type) NamedType {
 		return t.(NamedType)
 	}
 	return nil
+}
+
+func CoerceVariableValue(value interface{}, t Type) (interface{}, error) {
+	if value == nil {
+		if IsNonNullType(t) {
+			return nil, fmt.Errorf("a value is required")
+		}
+		return nil, nil
+	}
+
+	switch t := t.(type) {
+	case *ScalarType:
+		return t.CoerceVariableValue(value)
+	case *EnumType:
+		return t.CoerceVariableValue(value)
+	case *InputObjectType:
+		return t.CoerceVariableValue(value)
+	case *ListType:
+		return t.CoerceVariableValue(value)
+	case *NonNullType:
+		return CoerceVariableValue(value, t.Type)
+	default:
+		panic("unexpected variable coercion type")
+	}
+}
+
+func CoerceLiteral(from ast.Value, to Type, variableValues map[string]interface{}) (interface{}, error) {
+	if ast.IsNullValue(from) {
+		if IsNonNullType(to) {
+			return nil, fmt.Errorf("cannot coerce null to non-null type")
+		}
+		return nil, nil
+	} else if variable, ok := from.(*ast.Variable); ok {
+		return variableValues[variable.Name.Name], nil
+	}
+
+	switch to := to.(type) {
+	case *ScalarType:
+		if v := to.LiteralCoercion(from); v != nil {
+			return v, nil
+		}
+		return nil, fmt.Errorf("cannot coerce to %v", to)
+	case *ListType:
+		if v, ok := from.(*ast.ListValue); ok {
+			return to.CoerceLiteral(v, variableValues)
+		}
+		return nil, fmt.Errorf("cannot coerce to %v", to)
+	case *InputObjectType:
+		if v, ok := from.(*ast.ObjectValue); ok {
+			return to.CoerceLiteral(v, variableValues)
+		}
+		return nil, fmt.Errorf("cannot coerce to %v", to)
+	case *EnumType:
+		return to.CoerceLiteral(from)
+	case *NonNullType:
+		return CoerceLiteral(from, to.Type, variableValues)
+	}
+
+	panic("unsupported literal coercion type")
 }

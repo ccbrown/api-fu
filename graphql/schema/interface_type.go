@@ -10,6 +10,7 @@ type InterfaceType struct {
 	Description string
 	Directives  []*Directive
 	Fields      map[string]*FieldDefinition
+	ObjectType  func(object interface{}) *ObjectType
 }
 
 func (d *InterfaceType) String() string {

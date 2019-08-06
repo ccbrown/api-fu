@@ -7,6 +7,7 @@ type UnionType struct {
 	Description string
 	Directives  []*Directive
 	MemberTypes []NamedType
+	ObjectType  func(object interface{}) *ObjectType
 }
 
 func (d *UnionType) String() string {

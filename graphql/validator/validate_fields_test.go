@@ -22,11 +22,11 @@ func TestFields_LeafFieldSelections(t *testing.T) {
 	assert.Len(t, validateSource(t, `{scalar{asd}}`), 1)
 
 	assert.Empty(t, validateSource(t, `{interface{scalar}}`))
-	assert.Len(t, validateSource(t, `{interface{}}`), 1)
+	assert.Len(t, validateSource(t, `{interface{x}}`), 1)
 	assert.Len(t, validateSource(t, `{interface}`), 1)
 
 	assert.Empty(t, validateSource(t, `{__typename}`))
-	assert.Len(t, validateSource(t, `{__typename{}}`), 1)
+	assert.Len(t, validateSource(t, `{__typename{x}}`), 1)
 }
 
 func TestFields_FieldSelectionMerging(t *testing.T) {

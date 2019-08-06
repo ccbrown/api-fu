@@ -21,6 +21,10 @@ type DirectiveDefinition struct {
 	Description string
 	Arguments   map[string]*InputValueDefinition
 	Locations   []DirectiveLocation
+
+	// If non-nil, this function will be invoked during field collection for each selection with
+	// this directive present. If the function returns false, the selection will be skipped.
+	FieldCollectionFilter func(arguments map[string]interface{}) bool
 }
 
 func referencesDirective(node interface{}, directive *DirectiveDefinition) bool {
@@ -65,6 +69,9 @@ var SkipDirective = &DirectiveDefinition{
 		},
 	},
 	Locations: []DirectiveLocation{DirectiveLocationField, DirectiveLocationFragmentSpread, DirectiveLocationInlineFragment},
+	FieldCollectionFilter: func(arguments map[string]interface{}) bool {
+		return !arguments["if"].(bool)
+	},
 }
 
 var IncludeDirective = &DirectiveDefinition{
@@ -75,4 +82,7 @@ var IncludeDirective = &DirectiveDefinition{
 		},
 	},
 	Locations: []DirectiveLocation{DirectiveLocationField, DirectiveLocationFragmentSpread, DirectiveLocationInlineFragment},
+	FieldCollectionFilter: func(arguments map[string]interface{}) bool {
+		return arguments["if"].(bool)
+	},
 }

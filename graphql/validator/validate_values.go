@@ -90,7 +90,7 @@ func validateShallowCoercion(from ast.Value, to schema.Type) *Error {
 
 	switch to := to.(type) {
 	case *schema.ScalarType:
-		if to.CoerceLiteral(from) != nil {
+		if to.LiteralCoercion(from) != nil {
 			return nil
 		}
 		return newError("cannot coerce to %v", to)
