@@ -23,11 +23,12 @@ func TestVariables_AllUsesDefined(t *testing.T) {
 func TestVariables_InputTypes(t *testing.T) {
 	assert.Empty(t, validateSource(t, `query ($id: ID!) {node(id: $id){id}}`))
 	assert.Len(t, validateSource(t, `query ($id: Object!) {node(id: $id){id}}`), 2)
+	assert.Len(t, validateSource(t, `query ($id: NotAType!) {node(id: $id){id}}`), 1)
 }
 
 func TestVariables_NameUniqueness(t *testing.T) {
 	assert.Empty(t, validateSource(t, `query ($id: ID!) {node(id: $id){id}}`))
-	//assert.Len(t, validateSource(t, `query ($id: ID!, $id: ID!) {node(id: $id){id}}`), 1)
+	assert.Len(t, validateSource(t, `query ($id: ID!, $id: ID!) {node(id: $id){id}}`), 1)
 }
 
 func TestVariables_UsagesAllowed(t *testing.T) {

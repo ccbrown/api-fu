@@ -69,7 +69,7 @@ func (t *InputObjectType) CoerceVariableValue(v interface{}) (interface{}, error
 	return nil, fmt.Errorf("invalid variable type")
 }
 
-func (t *InputObjectType) CoerceLiteral(node *ast.ObjectValue, variableValues map[string]interface{}) (interface{}, error) {
+func (t *InputObjectType) CoerceLiteral(node *ast.ObjectValue, variableValues map[string]interface{}) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 	for _, field := range node.Fields {
 		name := field.Name.Name

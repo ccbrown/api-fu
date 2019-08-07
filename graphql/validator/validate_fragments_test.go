@@ -47,6 +47,9 @@ func TestValidateFragmentSpreads(t *testing.T) {
 	})
 
 	t.Run("IsPossible", func(t *testing.T) {
+		assert.Empty(t, validateSource(t, `{...{int}}`))
+		assert.Len(t, validateSource(t, `{...{asdf}}`), 1)
+
 		assert.Empty(t, validateSource(t, `{...f} fragment f on Object {... on Object {scalar}}`))
 		assert.Len(t, validateSource(t, `{...f} fragment f on Object {... on Object2 {scalar}}`), 1)
 		assert.Empty(t, validateSource(t, `{objects{...f}} fragment f on Object {... on Object {scalar}}`))

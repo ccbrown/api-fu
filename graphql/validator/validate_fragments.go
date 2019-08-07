@@ -44,7 +44,9 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 		case *ast.FragmentSpread:
 			usedFragments[node.FragmentName.Name] = struct{}{}
 		case *ast.InlineFragment:
-			validateTypeCondition(node.TypeCondition)
+			if node.TypeCondition != nil {
+				validateTypeCondition(node.TypeCondition)
+			}
 		}
 		return true
 	})
@@ -104,7 +106,11 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 			ret = append(ret, newSecondaryError("no type info for fragment spread parent"))
 			return
 		}
-		switch fragmentType := s.NamedType(tc.Name.Name).(type) {
+		fragmentType := parentType
+		if tc != nil {
+			fragmentType = s.NamedType(tc.Name.Name)
+		}
+		switch fragmentType := fragmentType.(type) {
 		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 			a := getPossibleTypes(s, fragmentType)
 			b := getPossibleTypes(s, parentType)

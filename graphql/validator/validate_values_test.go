@@ -33,6 +33,21 @@ func TestValues_OfCorrectType(t *testing.T) {
 	assert.Empty(t, validateSource(t, `{intArgField(intArg: 123)}`))
 	assert.Len(t, validateSource(t, `{intArgField(intArg: "123")}`), 1)
 
+	assert.Empty(t, validateSource(t, `{enumArgField(enumArg: FOO)}`))
+	assert.Len(t, validateSource(t, `{enumArgField(enumArg: "FOO")}`), 1)
+	assert.Len(t, validateSource(t, `{enumArgField(enumArg: ASDF)}`), 1)
+
+	assert.Empty(t, validateSource(t, `{intListArgField(intListArg: [1])}`))
+	assert.Empty(t, validateSource(t, `{intListArgField(intListArg: 1)}`))
+	assert.Len(t, validateSource(t, `{intListArgField(intListArg: ["1"])}`), 1)
+	assert.Len(t, validateSource(t, `{intListArgField(intListArg: "1")}`), 1)
+
+	assert.Empty(t, validateSource(t, `{intListListArgField(intListListArg: 1)}`))
+	assert.Empty(t, validateSource(t, `{intListListArgField(intListListArg: [[1]])}`))
+	assert.Len(t, validateSource(t, `{intListListArgField(intListListArg: "1")}`), 1)
+	assert.Len(t, validateSource(t, `{intListListArgField(intListListArg: [1])}`), 1)
+
 	assert.Empty(t, validateSource(t, `query q ($s: ComplexInput = {name: "Fido"}) {findDog(complex:$s){nickname}}`))
 	assert.Len(t, validateSource(t, `query q ($s: ComplexInput = {name: 123}) {findDog(complex:$s){nickname}}`), 1)
+	assert.Len(t, validateSource(t, `query q ($s: ComplexInput = "foo") {findDog(complex:$s){nickname}}`), 1)
 }

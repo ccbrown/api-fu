@@ -62,11 +62,11 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 		for _, node := range n.Directives {
 			Inspect(node, f)
 		}
-	case *ScalarType:
 	case *ListType:
 		Inspect(n.Type, f)
 	case *NonNullType:
 		Inspect(n.Type, f)
+	case *EnumType, *ScalarType:
 	default:
 		panic(fmt.Errorf("unknown node type: %T", n))
 	}

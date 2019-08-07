@@ -183,6 +183,10 @@ func CoerceVariableValue(value interface{}, t Type) (interface{}, error) {
 }
 
 func CoerceLiteral(from ast.Value, to Type, variableValues map[string]interface{}) (interface{}, error) {
+	return coerceLiteral(from, to, variableValues, true)
+}
+
+func coerceLiteral(from ast.Value, to Type, variableValues map[string]interface{}, allowItemToListCoercion bool) (interface{}, error) {
 	if ast.IsNullValue(from) {
 		if IsNonNullType(to) {
 			return nil, fmt.Errorf("cannot coerce null to non-null type")
@@ -199,10 +203,7 @@ func CoerceLiteral(from ast.Value, to Type, variableValues map[string]interface{
 		}
 		return nil, fmt.Errorf("cannot coerce to %v", to)
 	case *ListType:
-		if v, ok := from.(*ast.ListValue); ok {
-			return to.CoerceLiteral(v, variableValues)
-		}
-		return nil, fmt.Errorf("cannot coerce to %v", to)
+		return to.coerceLiteral(from, variableValues, allowItemToListCoercion)
 	case *InputObjectType:
 		if v, ok := from.(*ast.ObjectValue); ok {
 			return to.CoerceLiteral(v, variableValues)

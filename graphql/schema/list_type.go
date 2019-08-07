@@ -43,13 +43,6 @@ func (t *ListType) Unwrap() Type {
 	return t.Type
 }
 
-func (t *ListType) shallowValidate() error {
-	if IsListType(t.Type) {
-		return fmt.Errorf("non-null types cannot wrap other non-null types")
-	}
-	return nil
-}
-
 func (t *ListType) CoerceVariableValue(v interface{}) (interface{}, error) {
 	switch v := v.(type) {
 	case []interface{}:
@@ -66,16 +59,29 @@ func (t *ListType) CoerceVariableValue(v interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("invalid variable type")
 }
 
-func (t *ListType) CoerceLiteral(node *ast.ListValue, variableValues map[string]interface{}) (interface{}, error) {
-	result := make([]interface{}, len(node.Values))
-	for i, v := range node.Values {
-		if coerced, err := CoerceLiteral(v, t.Type, variableValues); err != nil {
+func (t *ListType) CoerceLiteral(node ast.Value, variableValues map[string]interface{}) ([]interface{}, error) {
+	return t.coerceLiteral(node, variableValues, true)
+}
+
+func (t *ListType) coerceLiteral(node ast.Value, variableValues map[string]interface{}, allowItemToListCoercion bool) ([]interface{}, error) {
+	if listNode, ok := node.(*ast.ListValue); ok {
+		result := make([]interface{}, len(listNode.Values))
+		for i, v := range listNode.Values {
+			if coerced, err := coerceLiteral(v, t.Type, variableValues, false); err != nil {
+				return nil, err
+			} else {
+				result[i] = coerced
+			}
+		}
+		return result, nil
+	} else if allowItemToListCoercion {
+		if coerced, err := CoerceLiteral(node, t.Type, variableValues); err != nil {
 			return nil, err
 		} else {
-			result[i] = coerced
+			return []interface{}{coerced}, nil
 		}
 	}
-	return result, nil
+	return nil, fmt.Errorf("cannot coerce to %v", t)
 }
 
 func IsListType(t Type) bool {

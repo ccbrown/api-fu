@@ -132,8 +132,7 @@ func validateFieldsInSetCanMerge(fieldsForName map[string][]fieldAndParent, frag
 						return err
 					} else if err := addFieldSelections(mergedSet, fieldB.SelectionSet, fragmentDefinitions); err != nil {
 						return err
-					}
-					if err := validateFieldsInSetCanMerge(mergedSet, fragmentDefinitions, typeInfo); err != nil {
+					} else if err := validateFieldsInSetCanMerge(mergedSet, fragmentDefinitions, typeInfo); err != nil {
 						return err
 					}
 				}

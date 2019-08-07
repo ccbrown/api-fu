@@ -63,6 +63,14 @@ var dogType = &schema.ObjectType{
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
 }
 
+var fooBarEnumType = &schema.EnumType{
+	Name: "FooBarEnum",
+	Values: map[string]*schema.EnumValueDefinition{
+		"FOO": &schema.EnumValueDefinition{},
+		"BAR": &schema.EnumValueDefinition{},
+	},
+}
+
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
 		"booleanArgField": &schema.FieldDefinition{
@@ -81,11 +89,35 @@ func init() {
 				},
 			},
 		},
+		"enumArgField": &schema.FieldDefinition{
+			Type: fooBarEnumType,
+			Arguments: map[string]*schema.InputValueDefinition{
+				"enumArg": &schema.InputValueDefinition{
+					Type: fooBarEnumType,
+				},
+			},
+		},
 		"floatArgField": &schema.FieldDefinition{
 			Type: schema.FloatType,
 			Arguments: map[string]*schema.InputValueDefinition{
 				"floatArg": &schema.InputValueDefinition{
 					Type: schema.FloatType,
+				},
+			},
+		},
+		"intListListArgField": &schema.FieldDefinition{
+			Type: schema.NewListType(schema.NewListType(schema.IntType)),
+			Arguments: map[string]*schema.InputValueDefinition{
+				"intListListArg": &schema.InputValueDefinition{
+					Type: schema.NewListType(schema.NewListType(schema.IntType)),
+				},
+			},
+		},
+		"intListArgField": &schema.FieldDefinition{
+			Type: schema.NewListType(schema.IntType),
+			Arguments: map[string]*schema.InputValueDefinition{
+				"intListArg": &schema.InputValueDefinition{
+					Type: schema.NewListType(schema.IntType),
 				},
 			},
 		},
@@ -214,6 +246,9 @@ func init() {
 		},
 		"int": &schema.FieldDefinition{
 			Type: schema.IntType,
+		},
+		"nonNullInt": &schema.FieldDefinition{
+			Type: schema.NewNonNullType(schema.IntType),
 		},
 		"int2": &schema.FieldDefinition{
 			Type: schema.IntType,

@@ -60,20 +60,17 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 				}
 			}
 		case *ast.ObjectValue:
-			switch expected := ret.ExpectedTypes[node].(type) {
-			case *schema.InputObjectType:
+			if expected, ok := ret.ExpectedTypes[node].(*schema.InputObjectType); ok {
 				for _, field := range node.Fields {
 					if expected, ok := expected.Fields[field.Name.Name]; ok {
 						ret.ExpectedTypes[field.Value] = expected.Type
 						if expected.DefaultValue != nil {
-							ret.DefaultValues[field.Value] = expected.DefaultValue
+							if expected.DefaultValue == schema.Null {
+								ret.DefaultValues[field.Value] = nil
+							} else {
+								ret.DefaultValues[field.Value] = expected.DefaultValue
+							}
 						}
-					}
-				}
-			case *schema.ObjectType:
-				for _, field := range node.Fields {
-					if expected, ok := expected.Fields[field.Name.Name]; ok {
-						ret.ExpectedTypes[field.Value] = expected.Type
 					}
 				}
 			}
@@ -83,7 +80,11 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 					if expected, ok := directive.Arguments[arg.Name.Name]; ok {
 						ret.ExpectedTypes[arg.Value] = expected.Type
 						if expected.DefaultValue != nil {
-							ret.DefaultValues[arg.Value] = expected.DefaultValue
+							if expected.DefaultValue == schema.Null {
+								ret.DefaultValues[arg.Value] = nil
+							} else {
+								ret.DefaultValues[arg.Value] = expected.DefaultValue
+							}
 						}
 					}
 				}
