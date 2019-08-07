@@ -197,7 +197,9 @@ func coerceLiteral(from ast.Value, to Type, variableValues map[string]interface{
 		}
 		return nil, nil
 	} else if variable, ok := from.(*ast.Variable); ok {
-		return variableValues[variable.Name.Name], nil
+		if value, ok := variableValues[variable.Name.Name]; ok {
+			return value, nil
+		}
 	}
 
 	switch to := to.(type) {

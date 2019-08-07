@@ -75,10 +75,17 @@ func (t *InputObjectType) CoerceLiteral(node *ast.ObjectValue, variableValues ma
 		name := field.Name.Name
 		if fieldDef, ok := t.Fields[name]; !ok {
 			return nil, fmt.Errorf("unknown field: %v", name)
-		} else if coerced, err := CoerceLiteral(field.Value, fieldDef.Type, variableValues); err != nil {
-			return nil, err
 		} else {
-			result[name] = coerced
+			if variable, ok := field.Value.(*ast.Variable); ok {
+				if _, ok := variableValues[variable.Name.Name]; !ok {
+					continue
+				}
+			}
+			if coerced, err := CoerceLiteral(field.Value, fieldDef.Type, variableValues); err != nil {
+				return nil, err
+			} else {
+				result[name] = coerced
+			}
 		}
 	}
 	for name, field := range t.Fields {
