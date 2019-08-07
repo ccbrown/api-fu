@@ -136,6 +136,8 @@ func (e *executor) subscribe(subscription *ast.OperationDefinition, initialValue
 }
 
 func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, forceSerial bool) (*OrderedMap, error) {
+	// TODO: parallel execution
+
 	groupedFieldSet := NewOrderedMap()
 	e.collectFields(objectType, selections, nil, groupedFieldSet)
 
