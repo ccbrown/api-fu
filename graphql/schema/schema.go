@@ -159,6 +159,10 @@ func UnwrappedType(t Type) NamedType {
 }
 
 func CoerceVariableValue(value interface{}, t Type) (interface{}, error) {
+	return coerceVariableValue(value, t, true)
+}
+
+func coerceVariableValue(value interface{}, t Type, allowItemToListCoercion bool) (interface{}, error) {
 	if value == nil {
 		if IsNonNullType(t) {
 			return nil, fmt.Errorf("a value is required")
@@ -174,7 +178,7 @@ func CoerceVariableValue(value interface{}, t Type) (interface{}, error) {
 	case *InputObjectType:
 		return t.CoerceVariableValue(value)
 	case *ListType:
-		return t.CoerceVariableValue(value)
+		return t.coerceVariableValue(value, allowItemToListCoercion)
 	case *NonNullType:
 		return CoerceVariableValue(value, t.Type)
 	default:

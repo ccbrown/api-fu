@@ -44,17 +44,26 @@ func (t *ListType) Unwrap() Type {
 }
 
 func (t *ListType) CoerceVariableValue(v interface{}) (interface{}, error) {
-	switch v := v.(type) {
-	case []interface{}:
-		result := make([]interface{}, len(v))
-		for i, v := range v {
-			if coerced, err := CoerceVariableValue(v, t.Type); err != nil {
+	return t.coerceVariableValue(v, true)
+}
+
+func (t *ListType) coerceVariableValue(v interface{}, allowItemToListCoercion bool) (interface{}, error) {
+	if listValue, ok := v.([]interface{}); ok {
+		result := make([]interface{}, len(listValue))
+		for i, v := range listValue {
+			if coerced, err := coerceVariableValue(v, t.Type, false); err != nil {
 				return nil, err
 			} else {
 				result[i] = coerced
 			}
 		}
 		return result, nil
+	} else if allowItemToListCoercion {
+		if coerced, err := CoerceVariableValue(v, t.Type); err != nil {
+			return nil, err
+		} else {
+			return []interface{}{coerced}, nil
+		}
 	}
 	return nil, fmt.Errorf("invalid variable type")
 }
