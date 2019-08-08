@@ -159,8 +159,8 @@ func TestParseDocument_Errors(t *testing.T) {
 			_, errs := ParseDocument([]byte(tc.Source))
 			require.Len(t, errs, 1)
 			assert.NotEmpty(t, errs[0].Error())
-			assert.Equal(t, tc.ExpectedLine, errs[0].Line)
-			assert.Equal(t, tc.ExpectedColumn, errs[0].Column)
+			assert.Equal(t, tc.ExpectedLine, errs[0].Location.Line)
+			assert.Equal(t, tc.ExpectedColumn, errs[0].Location.Column)
 		})
 	}
 }

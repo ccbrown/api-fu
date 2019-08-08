@@ -18,7 +18,7 @@ func validateValues(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 			if expected, ok := typeInfo.ExpectedTypes[node]; ok {
 				ret = append(ret, validateCoercion(node, expected, true)...)
 			} else {
-				ret = append(ret, newSecondaryError("no type info for value"))
+				ret = append(ret, newSecondaryError(node, "no type info for value"))
 			}
 			return false
 		}
@@ -38,7 +38,7 @@ func validateCoercion(from ast.Value, to schema.Type, allowItemToListCoercion bo
 
 	if ast.IsNullValue(from) {
 		if schema.IsNonNullType(to) {
-			ret = append(ret, newError("cannot coerce null to non-null type"))
+			ret = append(ret, newError(from, "cannot coerce null to non-null type"))
 		}
 		return ret
 	}
@@ -46,7 +46,7 @@ func validateCoercion(from ast.Value, to schema.Type, allowItemToListCoercion bo
 	switch to := to.(type) {
 	case *schema.ScalarType:
 		if to.LiteralCoercion(from) == nil {
-			ret = append(ret, newError("cannot coerce to %v", to))
+			ret = append(ret, newError(from, "cannot coerce to %v", to))
 		}
 	case *schema.ListType:
 		if fromList, ok := from.(*ast.ListValue); ok {
@@ -59,13 +59,13 @@ func validateCoercion(from ast.Value, to schema.Type, allowItemToListCoercion bo
 		} else if allowItemToListCoercion {
 			return validateCoercion(from, to.Type, true)
 		}
-		ret = append(ret, newError("cannot coerce to %v", to))
+		ret = append(ret, newError(from, "cannot coerce to %v", to))
 	case *schema.InputObjectType:
 		if from, ok := from.(*ast.ObjectValue); ok {
 			fieldsByName := map[string]*ast.ObjectField{}
 			for _, field := range from.Fields {
 				if _, ok := fieldsByName[field.Name.Name]; ok {
-					ret = append(ret, newError("duplicate field"))
+					ret = append(ret, newError(field, "duplicate field"))
 				}
 				fieldsByName[field.Name.Name] = field
 
@@ -74,23 +74,23 @@ func validateCoercion(from ast.Value, to schema.Type, allowItemToListCoercion bo
 						return err
 					}
 				} else {
-					ret = append(ret, newError("field does not exist on %v", to.Name))
+					ret = append(ret, newError(field, "field does not exist on %v", to.Name))
 				}
 			}
 
 			for name, field := range to.Fields {
 				if schema.IsNonNullType(field.Type) && field.DefaultValue == nil {
 					if _, ok := fieldsByName[name]; !ok {
-						ret = append(ret, newError("the %v field is required", name))
+						ret = append(ret, newError(from, "the %v field is required", name))
 					}
 				}
 			}
 			return ret
 		}
-		ret = append(ret, newError("cannot coerce to %v", to))
+		ret = append(ret, newError(from, "cannot coerce to %v", to))
 	case *schema.EnumType:
 		if _, err := to.CoerceLiteral(from); err != nil {
-			ret = append(ret, newError("cannot coerce to %v", to))
+			ret = append(ret, newError(from, "cannot coerce to %v", to))
 		}
 	case *schema.NonNullType:
 		return validateCoercion(from, to.Type, allowItemToListCoercion)

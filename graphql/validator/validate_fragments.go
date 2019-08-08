@@ -20,9 +20,9 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 		switch s.NamedType(tc.Name.Name).(type) {
 		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		case nil:
-			ret = append(ret, newError("undefined type"))
+			ret = append(ret, newError(tc.Name, "undefined type"))
 		default:
-			ret = append(ret, newError("fragments may only be defined on objects, interfaces, and unions"))
+			ret = append(ret, newError(tc.Name, "fragments may only be defined on objects, interfaces, and unions"))
 		}
 	}
 
@@ -30,7 +30,7 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 	for _, def := range doc.Definitions {
 		if def, ok := def.(*ast.FragmentDefinition); ok {
 			if _, ok := fragmentsByName[def.Name.Name]; ok {
-				ret = append(ret, newError("a fragment with this name already exists"))
+				ret = append(ret, newError(def.Name, "a fragment with this name already exists"))
 			} else {
 				fragmentsByName[def.Name.Name] = def
 			}
@@ -51,9 +51,9 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 		return true
 	})
 
-	for name := range fragmentsByName {
+	for name, def := range fragmentsByName {
 		if _, ok := usedFragments[name]; !ok {
-			ret = append(ret, newError("unused fragment"))
+			ret = append(ret, newError(def, "unused fragment"))
 		}
 	}
 
@@ -80,7 +80,7 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 		}
 	}
 
-	for name := range fragmentsByName {
+	for name, def := range fragmentsByName {
 		toVisit := []string{name}
 		encountered := map[string]struct{}{}
 		cycleFound := false
@@ -97,20 +97,16 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 			}
 		}
 		if cycleFound {
-			ret = append(ret, newError("fragment cycle detected"))
+			ret = append(ret, newError(def, "fragment cycle detected"))
 		}
 	}
 
 	validateSpread := func(tc *ast.NamedType, parentType schema.NamedType) {
 		if parentType == nil {
-			ret = append(ret, newSecondaryError("no type info for fragment spread parent"))
+			ret = append(ret, newSecondaryError(tc, "no type info for fragment spread parent"))
 			return
 		}
-		fragmentType := parentType
-		if tc != nil {
-			fragmentType = s.NamedType(tc.Name.Name)
-		}
-		switch fragmentType := fragmentType.(type) {
+		switch fragmentType := s.NamedType(tc.Name.Name).(type) {
 		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 			a := getPossibleTypes(s, fragmentType)
 			b := getPossibleTypes(s, parentType)
@@ -122,7 +118,7 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 				}
 			}
 			if !hasIntersection {
-				ret = append(ret, newError("impossible fragment spread"))
+				ret = append(ret, newError(tc, "impossible fragment spread"))
 			}
 		default:
 		}
@@ -142,12 +138,14 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 		case *ast.FragmentSpread:
 			name := node.FragmentName.Name
 			if def, ok := fragmentsByName[name]; !ok {
-				ret = append(ret, newError("undefined fragment"))
+				ret = append(ret, newError(node.FragmentName, "undefined fragment"))
 			} else {
 				validateSpread(def.TypeCondition, selectionSetTypes[len(selectionSetTypes)-1])
 			}
 		case *ast.InlineFragment:
-			validateSpread(node.TypeCondition, selectionSetTypes[len(selectionSetTypes)-1])
+			if node.TypeCondition != nil {
+				validateSpread(node.TypeCondition, selectionSetTypes[len(selectionSetTypes)-1])
+			}
 		}
 		selectionSetTypes = append(selectionSetTypes, selectionSetType)
 		return true

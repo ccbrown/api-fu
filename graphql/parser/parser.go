@@ -8,10 +8,14 @@ import (
 	"github.com/ccbrown/api-fu/graphql/token"
 )
 
+type Location struct {
+	Line   int
+	Column int
+}
+
 type Error struct {
-	Message string
-	Line    int
-	Column  int
+	Message  string
+	Location Location
 }
 
 func (err *Error) Error() string {
@@ -104,8 +108,10 @@ func (p *parser) consumeToken() {
 	for _, err := range p.scanner.Errors()[p.scannerErrors:] {
 		p.errors = append(p.errors, &Error{
 			Message: err.Message,
-			Line:    err.Line,
-			Column:  err.Column,
+			Location: Location{
+				Line:   err.Line,
+				Column: err.Column,
+			},
 		})
 		p.scannerErrors++
 	}
@@ -114,8 +120,10 @@ func (p *parser) consumeToken() {
 func (p *parser) errorf(message string, args ...interface{}) *Error {
 	err := &Error{
 		Message: fmt.Sprintf(message, args...),
-		Line:    p.peek().Position.Line,
-		Column:  p.peek().Position.Column,
+		Location: Location{
+			Line:   p.peek().Position.Line,
+			Column: p.peek().Position.Column,
+		},
 	}
 	p.errors = append(p.errors, err)
 	return err

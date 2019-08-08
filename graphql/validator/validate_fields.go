@@ -37,15 +37,15 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 					shouldHaveSubselection = true
 				}
 			} else if def == nil && node.Name.Name != "__typename" {
-				ret = append(ret, newSecondaryError("no type info for field"))
+				ret = append(ret, newSecondaryError(node, "no type info for field"))
 			}
 			if shouldHaveSubselection {
 				if node.SelectionSet == nil || len(node.SelectionSet.Selections) == 0 {
-					ret = append(ret, newError("%v field must have a subselection", node.Name.Name))
+					ret = append(ret, newError(node, "%v field must have a subselection", node.Name.Name))
 				}
 			} else {
 				if node.SelectionSet != nil {
-					ret = append(ret, newError("%v field cannot have a subselection", node.Name.Name))
+					ret = append(ret, newError(node, "%v field cannot have a subselection", node.Name.Name))
 				}
 			}
 
@@ -54,14 +54,14 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 				switch parent := selectionSetTypes[len(selectionSetTypes)-1].(type) {
 				case *schema.ObjectType:
 					if _, ok := parent.Fields[name]; !ok {
-						ret = append(ret, newError("field %v does not exist on %v", name, parent.Name))
+						ret = append(ret, newError(node.Name, "field %v does not exist on %v", name, parent.Name))
 					}
 				case *schema.InterfaceType:
 					if _, ok := parent.Fields[name]; !ok {
-						ret = append(ret, newError("field %v does not exist on %v", name, parent.Name))
+						ret = append(ret, newError(node.Name, "field %v does not exist on %v", name, parent.Name))
 					}
 				case *schema.UnionType:
-					ret = append(ret, newError("field %v does not exist on %v", name, parent.Name))
+					ret = append(ret, newError(node.Name, "field %v does not exist on %v", name, parent.Name))
 				}
 			}
 		}
@@ -104,17 +104,19 @@ func validateFieldsInSetCanMerge(fieldsForName map[string][]fieldAndParent, frag
 
 				parentTypeA := typeInfo.SelectionSetTypes[fields[i].parent]
 				parentTypeB := typeInfo.SelectionSetTypes[fields[j].parent]
-				if parentTypeA == nil || parentTypeB == nil {
-					return newSecondaryError("no type info for selection set")
+				if parentTypeA == nil {
+					return newSecondaryError(fields[i].parent, "no type info for selection set")
+				} else if parentTypeB == nil {
+					return newSecondaryError(fields[j].parent, "no type info for selection set")
 				}
 
 				if parentTypeA.IsSameType(parentTypeB) || !schema.IsObjectType(parentTypeA) || !schema.IsObjectType(parentTypeB) {
 					if fieldA.Name.Name != fieldB.Name.Name {
-						return newError("cannot merge fields with different names")
+						return newErrorWithNodes([]ast.Node{fieldA.Name, fieldB.Name}, "cannot merge fields with different names")
 					}
 
 					if len(fieldA.Arguments) != len(fieldB.Arguments) {
-						return newError("cannot merge fields with differing arguments")
+						return newErrorWithNodes([]ast.Node{fieldA, fieldB}, "cannot merge fields with differing arguments")
 					} else {
 						argsA := map[string]*ast.Argument{}
 						for _, arg := range fieldA.Arguments {
@@ -122,7 +124,7 @@ func validateFieldsInSetCanMerge(fieldsForName map[string][]fieldAndParent, frag
 						}
 						for _, argB := range fieldB.Arguments {
 							if argA, ok := argsA[argB.Name.Name]; !ok || !valuesAreIdentical(argA.Value, argB.Value) {
-								return newError("cannot merge fields with differing arguments")
+								return newErrorWithNodes([]ast.Node{argA, argB}, "cannot merge fields with differing arguments")
 							}
 						}
 					}
@@ -197,8 +199,10 @@ func valuesAreIdentical(a, b ast.Value) bool {
 func validateSameResponseShape(fieldA, fieldB *ast.Field, fragmentDefinitions map[string]*ast.FragmentDefinition, typeInfo *TypeInfo) *Error {
 	fieldDefA := typeInfo.FieldDefinitions[fieldA]
 	fieldDefB := typeInfo.FieldDefinitions[fieldB]
-	if fieldDefA == nil || fieldDefB == nil {
-		return newSecondaryError("no type info for field")
+	if fieldDefA == nil {
+		return newSecondaryError(fieldA, "no type info for field")
+	} else if fieldDefB == nil {
+		return newSecondaryError(fieldB, "no type info for field")
 	}
 
 	typeA := fieldDefA.Type
@@ -209,12 +213,12 @@ func validateSameResponseShape(fieldA, fieldB *ast.Field, fragmentDefinitions ma
 			if nonNullTypeA, ok := typeA.(*schema.NonNullType); ok {
 				typeA = nonNullTypeA.Type
 			} else {
-				return newError("cannot merge non-null and nullable fields")
+				return newErrorWithNodes([]ast.Node{fieldA, fieldB}, "cannot merge non-null and nullable fields")
 			}
 			if nonNullTypeB, ok := typeB.(*schema.NonNullType); ok {
 				typeB = nonNullTypeB.Type
 			} else {
-				return newError("cannot merge non-null and nullable fields")
+				return newErrorWithNodes([]ast.Node{fieldA, fieldB}, "cannot merge non-null and nullable fields")
 			}
 		}
 
@@ -222,12 +226,12 @@ func validateSameResponseShape(fieldA, fieldB *ast.Field, fragmentDefinitions ma
 			if listTypeA, ok := typeA.(*schema.ListType); ok {
 				typeA = listTypeA.Type
 			} else {
-				return newError("cannot merge list and non-list fields")
+				return newErrorWithNodes([]ast.Node{fieldA, fieldB}, "cannot merge list and non-list fields")
 			}
 			if listTypeB, ok := typeB.(*schema.ListType); ok {
 				typeB = listTypeB.Type
 			} else {
-				return newError("cannot merge list and non-list fields")
+				return newErrorWithNodes([]ast.Node{fieldA, fieldB}, "cannot merge list and non-list fields")
 			}
 		} else {
 			break
@@ -238,7 +242,7 @@ func validateSameResponseShape(fieldA, fieldB *ast.Field, fragmentDefinitions ma
 		if typeA.IsSameType(typeB) {
 			return nil
 		}
-		return newError("non-composite fields of the same name must be the same")
+		return newErrorWithNodes([]ast.Node{fieldA, fieldB}, "non-composite fields of the same name must be the same")
 	}
 
 	fieldsForName := map[string][]fieldAndParent{}
@@ -272,7 +276,7 @@ func addFieldSelectionsWithCycleDetection(fieldsForName map[string][]fieldAndPar
 	}
 
 	if _, ok := visited[selectionSet]; ok {
-		return newSecondaryError("cycle detected")
+		return newSecondaryError(selectionSet, "cycle detected")
 	}
 	visited[selectionSet] = struct{}{}
 
@@ -293,7 +297,7 @@ func addFieldSelectionsWithCycleDetection(fieldsForName map[string][]fieldAndPar
 			}
 		case *ast.FragmentSpread:
 			if def, ok := fragmentDefinitions[selection.FragmentName.Name]; !ok {
-				return newSecondaryError("undefined fragment")
+				return newSecondaryError(selection.FragmentName, "undefined fragment")
 			} else if err := addFieldSelectionsWithCycleDetection(fieldsForName, def.SelectionSet, fragmentDefinitions, visited); err != nil {
 				return err
 			}

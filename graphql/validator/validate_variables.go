@@ -20,15 +20,15 @@ func validateVariables(doc *ast.Document, schema *schema.Schema, typeInfo *TypeI
 			for _, def := range def.VariableDefinitions {
 				name := def.Variable.Name.Name
 				if _, ok := variableDefinitions[name]; ok {
-					ret = append(ret, newError("a variable with this name already exists"))
+					ret = append(ret, newError(def.Variable.Name, "a variable with this name already exists"))
 				} else {
 					variableDefinitions[def.Variable.Name.Name] = def
 				}
 
 				if t := typeInfo.VariableDefinitionTypes[def]; t == nil {
-					ret = append(ret, newError("unknown type"))
+					ret = append(ret, newError(def.Type, "unknown type"))
 				} else if !t.IsInputType() {
-					ret = append(ret, newError("%v is not an input type", t))
+					ret = append(ret, newError(def.Type, "%v is not an input type", t))
 				}
 			}
 
@@ -41,7 +41,7 @@ func validateVariables(doc *ast.Document, schema *schema.Schema, typeInfo *TypeI
 					switch node := node.(type) {
 					case *ast.Variable:
 						if def, ok := variableDefinitions[node.Name.Name]; !ok {
-							ret = append(ret, newError("undefined variable"))
+							ret = append(ret, newError(node, "undefined variable"))
 						} else if err := validateVariableUsage(def, node, typeInfo); err != nil {
 							ret = append(ret, err)
 						}
@@ -70,7 +70,7 @@ func validateVariables(doc *ast.Document, schema *schema.Schema, typeInfo *TypeI
 
 			for _, v := range def.VariableDefinitions {
 				if _, ok := encounteredVariables[v.Variable.Name.Name]; !ok {
-					ret = append(ret, newError("unused variable"))
+					ret = append(ret, newError(v.Variable, "unused variable"))
 				}
 			}
 		}
@@ -82,21 +82,23 @@ func validateVariableUsage(def *ast.VariableDefinition, usage *ast.Variable, typ
 	variableType := typeInfo.VariableDefinitionTypes[def]
 	locationType := typeInfo.ExpectedTypes[usage]
 
-	if variableType == nil || locationType == nil {
-		return newSecondaryError("no type info for variable or location type")
+	if variableType == nil {
+		return newSecondaryError(def, "no type info for variable type")
+	} else if locationType == nil {
+		return newSecondaryError(usage, "no type info for location type")
 	}
 
 	if nonNullLocationType, ok := locationType.(*schema.NonNullType); ok && !schema.IsNonNullType(variableType) {
 		hasNonNullVariableDefaultValue := def.DefaultValue != nil && !ast.IsNullValue(def.DefaultValue)
 		hasLocationDefaultValue := typeInfo.DefaultValues[usage] != nil
 		if !hasNonNullVariableDefaultValue && !hasLocationDefaultValue {
-			return newError("cannot use nullable variable where non-null type is expected")
+			return newError(usage, "cannot use nullable variable where non-null type is expected")
 		}
 		locationType = nonNullLocationType.Type
 	}
 
 	if !areTypesCompatible(variableType, locationType) {
-		return newError("incompatible variable type")
+		return newError(usage, "incompatible variable type")
 	}
 
 	return nil

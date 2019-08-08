@@ -7,8 +7,14 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
+type Location struct {
+	Line   int
+	Column int
+}
+
 type Error struct {
-	Message string
+	Message   string
+	Locations []Location
 
 	// If a validator is unable to perform its job due to an error unrelated to its purpose, it will
 	// emit a secondary error. Secondary errors are always errors that should be caught by other
@@ -22,16 +28,37 @@ func (err *Error) Error() string {
 	return err.Message
 }
 
-func newError(message string, args ...interface{}) *Error {
+func locationsForNodes(nodes ...ast.Node) []Location {
+	if len(nodes) == 0 {
+		return nil
+	}
+	ret := make([]Location, len(nodes))
+	for i, node := range nodes {
+		ret[i].Line = node.Position().Line
+		ret[i].Column = node.Position().Column
+	}
+	return ret
+}
+
+func newError(node ast.Node, message string, args ...interface{}) *Error {
 	return &Error{
-		Message: fmt.Sprintf(message, args...),
+		Message:   fmt.Sprintf(message, args...),
+		Locations: locationsForNodes(node),
 	}
 }
 
-func newSecondaryError(message string, args ...interface{}) *Error {
+func newErrorWithNodes(nodes []ast.Node, message string, args ...interface{}) *Error {
+	return &Error{
+		Message:   fmt.Sprintf(message, args...),
+		Locations: locationsForNodes(nodes...),
+	}
+}
+
+func newSecondaryError(node ast.Node, message string, args ...interface{}) *Error {
 	return &Error{
 		Message:     fmt.Sprintf(message, args...),
 		isSecondary: true,
+		Locations:   locationsForNodes(node),
 	}
 }
 

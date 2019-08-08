@@ -273,6 +273,8 @@ func validateSource(t *testing.T, src string) []*Error {
 
 	errs := ValidateDocument(doc, s)
 	for _, err := range errs {
+		assert.NotEmpty(t, err.Message)
+		assert.NotEmpty(t, err.Locations)
 		assert.False(t, err.isSecondary)
 	}
 	return errs

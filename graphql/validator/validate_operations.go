@@ -8,7 +8,6 @@ import (
 func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 
-	operationCount := 0
 	anonymousOperationCount := 0
 	operationNames := map[string]struct{}{}
 
@@ -21,11 +20,10 @@ func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *Type
 
 	for _, def := range doc.Definitions {
 		if def, ok := def.(*ast.OperationDefinition); ok {
-			operationCount++
 			if def.Name == nil {
 				anonymousOperationCount++
 			} else if _, ok := operationNames[def.Name.Name]; ok {
-				ret = append(ret, newError("an operation with this name already exists"))
+				ret = append(ret, newError(def.Name, "an operation with this name already exists"))
 			} else {
 				operationNames[def.Name.Name] = struct{}{}
 			}
@@ -35,14 +33,24 @@ func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *Type
 				if err := addFieldSelections(fieldsForName, def.SelectionSet, fragmentDefinitions); err != nil {
 					ret = append(ret, err)
 				} else if len(fieldsForName) != 1 {
-					ret = append(ret, newError("subscriptions may only have one root field"))
+					ret = append(ret, newError(def, "subscriptions may only have one root field"))
 				}
 			}
 		}
 	}
 
-	if operationCount > 1 && anonymousOperationCount > 0 {
-		ret = append(ret, newError("only one operation is allowed when an anonymous operation is present"))
+	if anonymousOperationCount > 0 {
+		seen := 0
+		for _, def := range doc.Definitions {
+			if def, ok := def.(*ast.OperationDefinition); ok {
+				seen++
+				if seen == 2 {
+					ret = append(ret, newError(def, "only one operation is allowed when an anonymous operation is present"))
+					break
+				}
+			}
+		}
 	}
+
 	return ret
 }

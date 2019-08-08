@@ -9,14 +9,14 @@ import (
 )
 
 type Location struct {
-	Line   int `json:"line"`
-	Column int `json:"column"`
+	Line   int
+	Column int
 }
 
 type Error struct {
-	Message   string        `json:"message"`
-	Locations []Location    `json:"locations,omitempty"`
-	Path      []interface{} `json:"path,omitempty"`
+	Message   string
+	Locations []Location
+	Path      []interface{}
 }
 
 func (err *Error) Error() string {

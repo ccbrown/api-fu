@@ -34,7 +34,7 @@ func validateDirectives(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo)
 			directives = node.Directives
 			location = schema.DirectiveLocationInlineFragment
 		case *ast.Directive:
-			ret = append(ret, newError("unsupported directive location"))
+			ret = append(ret, newError(node, "unsupported directive location"))
 		}
 
 		if len(directives) == 0 {
@@ -46,7 +46,7 @@ func validateDirectives(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo)
 			name := directive.Name.Name
 
 			if def := s.DirectiveDefinition(name); def == nil {
-				ret = append(ret, newError("undefined directive"))
+				ret = append(ret, newError(directive, "undefined directive"))
 			} else {
 				allowedLocation := false
 				for _, allowed := range def.Locations {
@@ -56,12 +56,12 @@ func validateDirectives(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo)
 					}
 				}
 				if !allowedLocation {
-					ret = append(ret, newError("this directive is not allowed at this location"))
+					ret = append(ret, newError(directive, "this directive is not allowed at this location"))
 				}
 			}
 
 			if _, ok := directiveNames[name]; ok {
-				ret = append(ret, newError("directive already exists at this location"))
+				ret = append(ret, newError(directive, "duplicate directive"))
 			} else {
 				directiveNames[name] = struct{}{}
 			}
