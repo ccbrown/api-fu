@@ -39,7 +39,7 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 	}
 
 	usedFragments := map[string]struct{}{}
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		switch node := node.(type) {
 		case *ast.FragmentSpread:
 			usedFragments[node.FragmentName.Name] = struct{}{}
@@ -70,7 +70,7 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 			fragmentsByName[def.Name.Name] = def
 
 			deps := map[string]struct{}{}
-			ast.Inspect(def, func(node interface{}) bool {
+			ast.Inspect(def, func(node ast.Node) bool {
 				if node, ok := node.(*ast.FragmentSpread); ok {
 					deps[node.FragmentName.Name] = struct{}{}
 				}
@@ -129,7 +129,7 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 	}
 
 	var selectionSetTypes []schema.NamedType
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		if node == nil {
 			selectionSetTypes = selectionSetTypes[:len(selectionSetTypes)-1]
 			return true

@@ -15,7 +15,7 @@ func TestInspect_KitchenSink(t *testing.T) {
 	require.NoError(t, err)
 	doc, errs := parser.ParseDocument(src)
 	require.Empty(t, errs)
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		return true
 	})
 }

@@ -9,42 +9,57 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ccbrown/api-fu/graphql/ast"
+	"github.com/ccbrown/api-fu/graphql/token"
 )
 
 func TestParseValue(t *testing.T) {
 	for src, expected := range map[string]ast.Value{
-		`null`: &ast.NullValue{},
+		`null`: &ast.NullValue{
+			Literal: token.Position{1, 1},
+		},
 		`[123 "abc"]`: &ast.ListValue{
 			Values: []ast.Value{
 				&ast.IntValue{
-					Value: "123",
+					Value:   "123",
+					Literal: token.Position{1, 2},
 				},
 				&ast.StringValue{
-					Value: "abc",
+					Value:   "abc",
+					Literal: token.Position{1, 6},
 				},
 			},
+			Opening: token.Position{1, 1},
+			Closing: token.Position{1, 11},
 		},
 		`["""long""" "short"]`: &ast.ListValue{
 			Values: []ast.Value{
 				&ast.StringValue{
-					Value: "long",
+					Value:   "long",
+					Literal: token.Position{1, 2},
 				},
 				&ast.StringValue{
-					Value: "short",
+					Value:   "short",
+					Literal: token.Position{1, 13},
 				},
 			},
+			Opening: token.Position{1, 1},
+			Closing: token.Position{1, 20},
 		},
 		`{foo: "foo"}`: &ast.ObjectValue{
 			Fields: []*ast.ObjectField{
 				&ast.ObjectField{
 					Name: &ast.Name{
-						Name: "foo",
+						Name:         "foo",
+						NamePosition: token.Position{1, 2},
 					},
 					Value: &ast.StringValue{
-						Value: "foo",
+						Value:   "foo",
+						Literal: token.Position{1, 7},
 					},
 				},
 			},
+			Opening: token.Position{1, 1},
+			Closing: token.Position{1, 12},
 		},
 	} {
 		actual, errs := ParseValue([]byte(src))
@@ -65,6 +80,15 @@ func TestParseDocument_KitchenSink(t *testing.T) {
 	assert.Empty(t, errs)
 	require.NotNil(t, doc)
 	assert.NotEmpty(t, doc.Definitions)
+	ast.Inspect(doc, func(node ast.Node) bool {
+		switch node.(type) {
+		case nil, *ast.Document:
+		default:
+			assert.NotEqual(t, 0, node.Position().Line)
+			assert.NotEqual(t, 0, node.Position().Column)
+		}
+		return true
+	})
 }
 
 func TestParseDocument_DeepRecursion(t *testing.T) {

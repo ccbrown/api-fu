@@ -74,11 +74,11 @@ func ExecuteRequest(r *Request) *Response {
 		}
 	}
 
-	if operation.OperationType == nil || *operation.OperationType == ast.OperationTypeQuery {
+	if operation.OperationType == nil || operation.OperationType.Value == "query" {
 		return e.executeQuery(operation, r.InitialValue)
-	} else if *operation.OperationType == ast.OperationTypeMutation {
+	} else if operation.OperationType.Value == "mutation" {
 		return e.executeMutation(operation, r.InitialValue)
-	} else if *operation.OperationType == ast.OperationTypeSubscription {
+	} else if operation.OperationType.Value == "subscription" {
 		return e.subscribe(operation, r.InitialValue)
 	}
 	panic("unexpected operation type")

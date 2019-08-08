@@ -18,7 +18,7 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 	}
 
 	var selectionSetTypes []schema.NamedType
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		if node == nil {
 			selectionSetTypes = selectionSetTypes[:len(selectionSetTypes)-1]
 			return true
@@ -70,7 +70,7 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 		return true
 	})
 
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		if node, ok := node.(*ast.SelectionSet); ok {
 			set := map[string][]fieldAndParent{}
 			if err := addFieldSelections(set, node, fragmentDefinitions); err != nil {

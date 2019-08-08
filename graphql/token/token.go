@@ -27,3 +27,8 @@ func (t Token) IsIgnored() bool {
 		return false
 	}
 }
+
+type Position struct {
+	Line   int
+	Column int
+}

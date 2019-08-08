@@ -30,8 +30,7 @@ type Scanner struct {
 
 	token            token.Token
 	tokenOffset      int
-	tokenLine        int
-	tokenColumn      int
+	tokenPosition    token.Position
 	tokenLength      int
 	tokenStringValue string
 }
@@ -123,8 +122,10 @@ func (s *Scanner) Scan() bool {
 	for {
 		s.token = token.INVALID
 		s.tokenOffset = s.offset
-		s.tokenLine = s.line
-		s.tokenColumn = s.column
+		s.tokenPosition = token.Position{
+			Line:   s.line,
+			Column: s.column,
+		}
 
 		if s.isDone() {
 			return false
@@ -207,16 +208,12 @@ func (s *Scanner) Token() token.Token {
 	return s.token
 }
 
+func (s *Scanner) Position() token.Position {
+	return s.tokenPosition
+}
+
 func (s *Scanner) Literal() string {
 	return string(s.src[s.tokenOffset : s.tokenOffset+s.tokenLength])
-}
-
-func (s *Scanner) Line() int {
-	return s.tokenLine
-}
-
-func (s *Scanner) Column() int {
-	return s.tokenColumn
 }
 
 func (s *Scanner) StringValue() string {

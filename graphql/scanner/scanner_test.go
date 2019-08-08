@@ -38,8 +38,8 @@ func TestScanner(t *testing.T) {
 		require.True(t, s.Scan())
 		assert.Equal(t, expected.Token, s.Token())
 		assert.Equal(t, expected.Literal, s.Literal())
-		assert.Equal(t, expected.Line, s.Line())
-		assert.Equal(t, expected.Column, s.Column())
+		assert.Equal(t, expected.Line, s.Position().Line)
+		assert.Equal(t, expected.Column, s.Position().Column)
 	}
 	assert.False(t, s.Scan())
 	assert.Empty(t, s.Errors())

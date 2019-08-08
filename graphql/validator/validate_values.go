@@ -10,7 +10,7 @@ import (
 func validateValues(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		switch node := node.(type) {
 		case *ast.Variable:
 			// variable types are validated by variable validation rules

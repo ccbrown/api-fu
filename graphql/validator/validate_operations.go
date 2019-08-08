@@ -30,7 +30,7 @@ func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *Type
 				operationNames[def.Name.Name] = struct{}{}
 			}
 
-			if def.OperationType != nil && *def.OperationType == ast.OperationTypeSubscription {
+			if def.OperationType != nil && def.OperationType.Value == "subscription" {
 				fieldsForName := map[string][]fieldAndParent{}
 				if err := addFieldSelections(fieldsForName, def.SelectionSet, fragmentDefinitions); err != nil {
 					ret = append(ret, err)

@@ -36,8 +36,8 @@ func validateVariables(doc *ast.Document, schema *schema.Schema, typeInfo *TypeI
 			unvalidatedFragmentSpreads := map[string]bool{}
 			validatedFragmentSpreads := map[string]bool{}
 
-			validate := func(node interface{}) {
-				ast.Inspect(node, func(node interface{}) bool {
+			validate := func(node ast.Node) {
+				ast.Inspect(node, func(node ast.Node) bool {
 					switch node := node.(type) {
 					case *ast.Variable:
 						if def, ok := variableDefinitions[node.Name.Name]; !ok {

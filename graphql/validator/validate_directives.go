@@ -7,18 +7,18 @@ import (
 
 func validateDirectives(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		var directives []*ast.Directive
 		var location schema.DirectiveLocation
 
 		switch node := node.(type) {
 		case *ast.OperationDefinition:
 			directives = node.Directives
-			if op := node.OperationType; op == nil || *op == ast.OperationTypeQuery {
+			if op := node.OperationType; op == nil || op.Value == "query" {
 				location = schema.DirectiveLocationQuery
-			} else if *op == ast.OperationTypeMutation {
+			} else if op.Value == "mutation" {
 				location = schema.DirectiveLocationMutation
-			} else if *op == ast.OperationTypeSubscription {
+			} else if op.Value == "subscription" {
 				location = schema.DirectiveLocationSubscription
 			}
 		case *ast.FragmentDefinition:

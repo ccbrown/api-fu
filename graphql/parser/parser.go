@@ -47,10 +47,9 @@ func ParseValue(src []byte) (value ast.Value, errs []*Error) {
 }
 
 type parserToken struct {
-	Token  token.Token
-	Value  string
-	Line   int
-	Column int
+	Token    token.Token
+	Value    string
+	Position token.Position
 }
 
 type parser struct {
@@ -90,18 +89,16 @@ func (p *parser) peek() *parserToken {
 func (p *parser) consumeToken() {
 	if p.scanner.Scan() {
 		p.nextToken = &parserToken{
-			Token:  p.scanner.Token(),
-			Value:  p.scanner.StringValue(),
-			Line:   p.scanner.Line(),
-			Column: p.scanner.Column(),
+			Token:    p.scanner.Token(),
+			Value:    p.scanner.StringValue(),
+			Position: p.scanner.Position(),
 		}
 	} else {
 		p.eof = true
 		p.nextToken = &parserToken{
-			Token:  token.INVALID,
-			Value:  "EOF",
-			Line:   p.scanner.Line(),
-			Column: p.scanner.Column(),
+			Token:    token.INVALID,
+			Value:    "EOF",
+			Position: p.scanner.Position(),
 		}
 	}
 	for _, err := range p.scanner.Errors()[p.scannerErrors:] {
@@ -117,8 +114,8 @@ func (p *parser) consumeToken() {
 func (p *parser) errorf(message string, args ...interface{}) *Error {
 	err := &Error{
 		Message: fmt.Sprintf(message, args...),
-		Line:    p.peek().Line,
-		Column:  p.peek().Column,
+		Line:    p.peek().Position.Line,
+		Column:  p.peek().Position.Column,
 	}
 	p.errors = append(p.errors, err)
 	return err
@@ -158,6 +155,7 @@ func (p *parser) parseOptionalFragmentDefinition() *ast.FragmentDefinition {
 
 	var ret *ast.FragmentDefinition
 	if t := p.peek(); t.Token == token.NAME && t.Value == "fragment" {
+		fragment := t.Position
 		p.consumeToken()
 
 		if t := p.peek(); t.Token != token.NAME || t.Value == "on" {
@@ -165,6 +163,7 @@ func (p *parser) parseOptionalFragmentDefinition() *ast.FragmentDefinition {
 		}
 
 		ret = &ast.FragmentDefinition{
+			Fragment:      fragment,
 			Name:          p.parseName(),
 			TypeCondition: p.parseTypeCondition(),
 			Directives:    p.parseOptionalDirectives(),
@@ -183,13 +182,7 @@ func (p *parser) parseOperationDefinition() *ast.OperationDefinition {
 	if ss := p.parseOptionalSelectionSet(); ss != nil {
 		ret.SelectionSet = ss
 	} else {
-		if t := p.peek(); t.Token != token.NAME || !ast.OperationType(t.Value).IsValid() {
-			panic(p.errorf("expected operation type"))
-		} else {
-			ot := ast.OperationType(t.Value)
-			ret.OperationType = &ot
-			p.consumeToken()
-		}
+		ret.OperationType = p.parseOperationType()
 
 		if t := p.peek(); t.Token == token.NAME {
 			ret.Name = p.parseName()
@@ -198,6 +191,24 @@ func (p *parser) parseOperationDefinition() *ast.OperationDefinition {
 		ret.VariableDefinitions = p.parseOptionalVariableDefinitions()
 		ret.Directives = p.parseOptionalDirectives()
 		ret.SelectionSet = p.parseSelectionSet()
+	}
+
+	p.exit()
+	return ret
+}
+
+func (p *parser) parseOperationType() *ast.OperationType {
+	p.enter()
+
+	var ret *ast.OperationType
+	if t := p.peek(); t.Token != token.NAME || (t.Value != "query" && t.Value != "mutation" && t.Value != "subscription") {
+		panic(p.errorf("expected operation type"))
+	} else {
+		ret = &ast.OperationType{
+			Value:         t.Value,
+			ValuePosition: t.Position,
+		}
+		p.consumeToken()
 	}
 
 	p.exit()
@@ -222,14 +233,17 @@ func (p *parser) parseSelectionSet() *ast.SelectionSet {
 	if t := p.peek(); t.Token != token.PUNCTUATOR || t.Value != "{" {
 		panic(p.errorf("expected selection set"))
 	}
+	ret := &ast.SelectionSet{
+		Opening: p.peek().Position,
+	}
 	p.consumeToken()
 
-	ret := &ast.SelectionSet{}
 	for {
 		if t := p.peek(); t.Token == token.PUNCTUATOR && t.Value == "}" {
 			if len(ret.Selections) == 0 {
 				panic(p.errorf("expected selection"))
 			}
+			ret.Closing = t.Position
 			p.consumeToken()
 			break
 		}
@@ -277,16 +291,20 @@ func (p *parser) parseSelection() ast.Selection {
 	if t := p.peek(); t.Token != token.PUNCTUATOR || t.Value != "..." {
 		return p.parseField()
 	}
+	ellipsis := p.peek().Position
 	p.consumeToken()
 
 	if t := p.peek(); t.Token == token.NAME && t.Value != "on" {
 		return &ast.FragmentSpread{
 			FragmentName: p.parseName(),
 			Directives:   p.parseOptionalDirectives(),
+			Ellipsis:     ellipsis,
 		}
 	}
 
-	ret := &ast.InlineFragment{}
+	ret := &ast.InlineFragment{
+		Ellipsis: ellipsis,
+	}
 	if t := p.peek(); t.Token == token.NAME {
 		ret.TypeCondition = p.parseTypeCondition()
 	}
@@ -373,14 +391,18 @@ func (p *parser) parseType() ast.Type {
 
 	var ret ast.Type
 	if t := p.peek(); t.Token == token.PUNCTUATOR && t.Value == "[" {
+		opening := t.Position
 		p.consumeToken()
 		typ := p.parseType()
 		if t := p.peek(); t.Token != token.PUNCTUATOR || t.Value != "]" {
 			panic(p.errorf("expected ]"))
 		}
+		closing := p.peek().Position
 		p.consumeToken()
 		ret = &ast.ListType{
-			Type: typ,
+			Type:    typ,
+			Opening: opening,
+			Closing: closing,
 		}
 	} else {
 		ret = p.parseNamedType()
@@ -419,10 +441,12 @@ func (p *parser) parseOptionalDirectives() []*ast.Directive {
 		if t := p.peek(); t.Token != token.PUNCTUATOR || t.Value != "@" {
 			break
 		}
+		at := p.peek().Position
 		p.consumeToken()
 		ret = append(ret, &ast.Directive{
 			Name:      p.parseName(),
 			Arguments: p.parseOptionalArguments(),
+			At:        at,
 		})
 	}
 
@@ -447,6 +471,7 @@ func (p *parser) parseName() *ast.Name {
 	ret := &ast.Name{}
 	if t := p.peek(); t.Token == token.NAME {
 		ret.Name = t.Value
+		ret.NamePosition = t.Position
 		p.consumeToken()
 	} else {
 		panic(p.errorf("expected name"))
@@ -462,9 +487,11 @@ func (p *parser) parseVariable() *ast.Variable {
 	if t := p.peek(); t.Token != token.PUNCTUATOR || t.Value != "$" {
 		panic(p.errorf("expected variable"))
 	}
+	dollar := p.peek().Position
 	p.consumeToken()
 	ret := &ast.Variable{
-		Name: p.parseName(),
+		Name:   p.parseName(),
+		Dollar: dollar,
 	}
 
 	p.exit()
@@ -480,30 +507,37 @@ func (p *parser) parseValue(constant bool) ast.Value {
 	case token.INT_VALUE:
 		p.consumeToken()
 		ret = &ast.IntValue{
-			Value: t.Value,
+			Value:   t.Value,
+			Literal: t.Position,
 		}
 	case token.FLOAT_VALUE:
 		p.consumeToken()
 		ret = &ast.FloatValue{
-			Value: t.Value,
+			Value:   t.Value,
+			Literal: t.Position,
 		}
 	case token.STRING_VALUE:
 		p.consumeToken()
 		ret = &ast.StringValue{
-			Value: t.Value,
+			Value:   t.Value,
+			Literal: t.Position,
 		}
 	case token.NAME:
 		p.consumeToken()
 		switch v := t.Value; v {
 		case "true", "false":
 			ret = &ast.BooleanValue{
-				Value: v == "true",
+				Value:   v == "true",
+				Literal: t.Position,
 			}
 		case "null":
-			ret = &ast.NullValue{}
+			ret = &ast.NullValue{
+				Literal: t.Position,
+			}
 		default:
 			ret = &ast.EnumValue{
-				Value: v,
+				Value:   v,
+				Literal: t.Position,
 			}
 		}
 	case token.PUNCTUATOR:
@@ -514,25 +548,34 @@ func (p *parser) parseValue(constant bool) ast.Value {
 			}
 			ret = p.parseVariable()
 		case "[":
+			opening := t.Position
 			p.consumeToken()
 			var values []ast.Value
 			for {
 				if t := p.peek(); t.Token == token.PUNCTUATOR && t.Value == "]" {
 					p.consumeToken()
+					ret = &ast.ListValue{
+						Values:  values,
+						Opening: opening,
+						Closing: t.Position,
+					}
 					break
 				}
 				values = append(values, p.parseValue(constant))
 			}
-			ret = &ast.ListValue{
-				Values: values,
-			}
 		case "{":
+			opening := t.Position
 			p.consumeToken()
 			var fields []*ast.ObjectField
 			for {
 				t := p.peek()
 				if t.Token == token.PUNCTUATOR && t.Value == "}" {
 					p.consumeToken()
+					ret = &ast.ObjectValue{
+						Fields:  fields,
+						Opening: opening,
+						Closing: t.Position,
+					}
 					break
 				}
 				name := p.parseName()
@@ -545,9 +588,6 @@ func (p *parser) parseValue(constant bool) ast.Value {
 					Name:  name,
 					Value: value,
 				})
-			}
-			ret = &ast.ObjectValue{
-				Fields: fields,
 			}
 		}
 	}

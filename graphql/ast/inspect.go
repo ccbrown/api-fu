@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-func Inspect(node interface{}, f func(interface{}) bool) {
+func Inspect(node Node, f func(Node) bool) {
 	if node == nil || reflect.ValueOf(node).IsNil() || !f(node) {
 		return
 	}
@@ -16,6 +16,7 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 			Inspect(node, f)
 		}
 	case *OperationDefinition:
+		Inspect(n.OperationType, f)
 		Inspect(n.Name, f)
 		for _, node := range n.VariableDefinitions {
 			Inspect(node, f)
@@ -75,7 +76,7 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 		Inspect(n.Name, f)
 	case *Variable:
 		Inspect(n.Name, f)
-	case *Name, *BooleanValue, *IntValue, *FloatValue, *StringValue, *EnumValue, *NullValue:
+	case *OperationType, *Name, *BooleanValue, *IntValue, *FloatValue, *StringValue, *EnumValue, *NullValue:
 	case *ListValue:
 		for _, node := range n.Values {
 			Inspect(node, f)

@@ -7,7 +7,7 @@ import (
 
 func validateArguments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		var arguments []*ast.Argument
 		var argumentDefinitions map[string]*schema.InputValueDefinition
 

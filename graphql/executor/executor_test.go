@@ -245,13 +245,13 @@ func TestGetOperation(t *testing.T) {
 	assert.Empty(t, errs)
 
 	_, err := getOperation(doc, "")
-	assert.NotEmpty(t, err)
+	assert.NotNil(t, err)
 
 	op, err := getOperation(doc, "m")
-	assert.NotNil(t, op)
-	assert.NotEmpty(t, err)
+	assert.Nil(t, op)
+	assert.NotNil(t, err)
 
 	op, err = getOperation(doc, "q")
 	assert.NotNil(t, op)
-	assert.Empty(t, err)
+	assert.Nil(t, err)
 }

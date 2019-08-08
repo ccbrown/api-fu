@@ -44,7 +44,7 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 
 	var selectionSetScopes []schema.NamedType
 
-	ast.Inspect(doc, func(node interface{}) bool {
+	ast.Inspect(doc, func(node ast.Node) bool {
 		if node == nil {
 			selectionSetScopes = selectionSetScopes[:len(selectionSetScopes)-1]
 			return true
@@ -121,11 +121,11 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 				selectionSetScope = s.NamedType(node.TypeCondition.Name.Name)
 			}
 		case *ast.OperationDefinition:
-			if op := node.OperationType; op == nil || *op == ast.OperationTypeQuery {
+			if op := node.OperationType; op == nil || op.Value == "query" {
 				selectionSetScope = s.QueryType()
-			} else if *op == ast.OperationTypeMutation {
+			} else if op.Value == "mutation" {
 				selectionSetScope = s.MutationType()
-			} else if *op == ast.OperationTypeSubscription {
+			} else if op.Value == "subscription" {
 				selectionSetScope = s.SubscriptionType()
 			}
 		case *ast.SelectionSet:
