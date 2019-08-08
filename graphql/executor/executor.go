@@ -37,30 +37,14 @@ type Request struct {
 	InitialValue   interface{}
 }
 
-type Response struct {
-	Data   **OrderedMap `json:"data,omitempty"`
-	Errors []*Error     `json:"errors,omitempty"`
-}
-
-func NewResponse(data *OrderedMap, errors []*Error) *Response {
-	return &Response{
-		Data:   &data,
-		Errors: errors,
-	}
-}
-
-func ExecuteRequest(r *Request) *Response {
+func ExecuteRequest(r *Request) (*OrderedMap, []*Error) {
 	operation, err := getOperation(r.Document, r.OperationName)
 	if err != nil {
-		return &Response{
-			Errors: []*Error{err},
-		}
+		return nil, []*Error{err}
 	}
 	coercedVariableValues, err := coerceVariableValues(r.Schema, operation, r.VariableValues)
 	if err != nil {
-		return &Response{
-			Errors: []*Error{err},
-		}
+		return nil, []*Error{err}
 	}
 
 	e := &executor{
@@ -91,48 +75,42 @@ type executor struct {
 	Errors              []*Error
 }
 
-func (e *executor) executeQuery(query *ast.OperationDefinition, initialValue interface{}) *Response {
+func (e *executor) executeQuery(query *ast.OperationDefinition, initialValue interface{}) (*OrderedMap, []*Error) {
 	queryType := e.Schema.QueryType()
 	if !schema.IsObjectType(queryType) {
-		return &Response{
-			Errors: []*Error{newError("This schema cannot perform queries.")},
-		}
+		return nil, []*Error{newError("This schema cannot perform queries.")}
 	}
 	data, err := e.executeSelections(query.SelectionSet.Selections, queryType, initialValue, nil, false)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
-	return NewResponse(data, e.Errors)
+	return data, e.Errors
 }
 
-func (e *executor) executeMutation(mutation *ast.OperationDefinition, initialValue interface{}) *Response {
+func (e *executor) executeMutation(mutation *ast.OperationDefinition, initialValue interface{}) (*OrderedMap, []*Error) {
 	mutationType := e.Schema.MutationType()
 	if !schema.IsObjectType(mutationType) {
-		return &Response{
-			Errors: []*Error{newError("This schema cannot perform mutations.")},
-		}
+		return nil, []*Error{newError("This schema cannot perform mutations.")}
 	}
 	data, err := e.executeSelections(mutation.SelectionSet.Selections, mutationType, initialValue, nil, true)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
-	return NewResponse(data, e.Errors)
+	return data, e.Errors
 }
 
-func (e *executor) subscribe(subscription *ast.OperationDefinition, initialValue interface{}) *Response {
+func (e *executor) subscribe(subscription *ast.OperationDefinition, initialValue interface{}) (*OrderedMap, []*Error) {
 	// TODO: event stream api
 
 	subscriptionType := e.Schema.SubscriptionType()
 	if !schema.IsObjectType(subscriptionType) {
-		return &Response{
-			Errors: []*Error{newError("This schema cannot perform subscriptions.")},
-		}
+		return nil, []*Error{newError("This schema cannot perform subscriptions.")}
 	}
 	data, err := e.executeSelections(subscription.SelectionSet.Selections, subscriptionType, initialValue, nil, false)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
-	return NewResponse(data, e.Errors)
+	return data, e.Errors
 }
 
 func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path []interface{}, forceSerial bool) (*OrderedMap, error) {

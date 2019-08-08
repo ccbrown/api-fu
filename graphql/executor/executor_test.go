@@ -289,28 +289,28 @@ func TestExecuteRequest(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			parsed, errs := parser.ParseDocument([]byte(tc.Document))
-			require.Empty(t, errs)
+			parsed, parseErrs := parser.ParseDocument([]byte(tc.Document))
+			require.Empty(t, parseErrs)
 			require.Empty(t, validator.ValidateDocument(parsed, s))
-			response := ExecuteRequest(&Request{
+			data, errs := ExecuteRequest(&Request{
 				Document:       parsed,
 				Schema:         s,
 				VariableValues: tc.VariableValues,
 			})
-			serializedData, err := json.Marshal(response.Data)
+			serializedData, err := json.Marshal(data)
 			require.NoError(t, err)
 			assert.Equal(t, tc.ExpectedData, string(serializedData))
 
-			serializedErrors, err := json.Marshal(response.Errors)
+			serializedErrors, err := json.Marshal(errs)
 			require.NoError(t, err)
 
 			if len(tc.ExpectedErrors) == 0 {
-				assert.Empty(t, response.Errors)
+				assert.Empty(t, errs)
 			} else {
-				assert.Len(t, response.Errors, len(tc.ExpectedErrors))
+				assert.Len(t, errs, len(tc.ExpectedErrors))
 				for _, expected := range tc.ExpectedErrors {
 					matched := false
-					for _, actual := range response.Errors {
+					for _, actual := range errs {
 						if reflect.DeepEqual(actual.Locations, expected.Locations) && reflect.DeepEqual(actual.Path, expected.Path) {
 							matched = true
 							break
