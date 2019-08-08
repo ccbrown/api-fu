@@ -428,8 +428,8 @@ func coerceArgumentValues(argumentDefinitions map[string]*schema.InputValueDefin
 		} else if schema.IsNonNullType(argumentType) && !hasValue {
 			return nil, fmt.Errorf("the %v argument is required", argumentName)
 		} else if hasValue {
-			if argumentValue, ok := argumentValue.(*ast.Variable); ok {
-				coercedValues[argumentName] = variableValues[argumentValue.Name.Name]
+			if argVariable, ok := argumentValue.(*ast.Variable); ok {
+				coercedValues[argumentName] = variableValues[argVariable.Name.Name]
 			} else if coerced, err := schema.CoerceLiteral(argumentValue, argumentType, variableValues); err != nil {
 				return nil, err
 			} else {

@@ -13,35 +13,35 @@ type InterfaceType struct {
 	ObjectType  func(object interface{}) *ObjectType
 }
 
-func (d *InterfaceType) String() string {
-	return d.Name
+func (t *InterfaceType) String() string {
+	return t.Name
 }
 
-func (d *InterfaceType) IsInputType() bool {
+func (t *InterfaceType) IsInputType() bool {
 	return false
 }
 
-func (d *InterfaceType) IsOutputType() bool {
+func (t *InterfaceType) IsOutputType() bool {
 	return true
 }
 
-func (d *InterfaceType) IsSubTypeOf(other Type) bool {
-	return d.IsSameType(other)
+func (t *InterfaceType) IsSubTypeOf(other Type) bool {
+	return t.IsSameType(other)
 }
 
-func (d *InterfaceType) IsSameType(other Type) bool {
-	return d == other
+func (t *InterfaceType) IsSameType(other Type) bool {
+	return t == other
 }
 
-func (d *InterfaceType) NamedType() string {
-	return d.Name
+func (t *InterfaceType) NamedType() string {
+	return t.Name
 }
 
-func (d *InterfaceType) shallowValidate() error {
-	if len(d.Fields) == 0 {
-		return fmt.Errorf("%v must have at least one field", d.Name)
+func (t *InterfaceType) shallowValidate() error {
+	if len(t.Fields) == 0 {
+		return fmt.Errorf("%v must have at least one field", t.Name)
 	} else {
-		for name := range d.Fields {
+		for name := range t.Fields {
 			if !isName(name) || strings.HasPrefix(name, "__") {
 				return fmt.Errorf("illegal field name: %v", name)
 			}

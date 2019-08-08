@@ -18,6 +18,9 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 		Inspect(n.Query, f)
 		Inspect(n.Mutation, f)
 		Inspect(n.Subscription, f)
+		for _, node := range n.AdditionalTypes {
+			Inspect(node, f)
+		}
 	case *UnionType:
 		for _, node := range n.Directives {
 			Inspect(node, f)
@@ -40,13 +43,13 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 			Inspect(node, f)
 		}
 	case *ObjectType:
-		for _, node := range n.ImplementedInterfaces {
-			Inspect(node, f)
-		}
 		for _, node := range n.Directives {
 			Inspect(node, f)
 		}
 		for _, node := range n.Fields {
+			Inspect(node, f)
+		}
+		for _, node := range n.ImplementedInterfaces {
 			Inspect(node, f)
 		}
 	case *FieldDefinition:

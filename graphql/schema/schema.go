@@ -23,7 +23,7 @@ func (s *Schema) QueryType() *ObjectType {
 }
 
 func (s *Schema) MutationType() *ObjectType {
-	return s.query
+	return s.mutation
 }
 
 func (s *Schema) SubscriptionType() *ObjectType {
@@ -119,6 +119,9 @@ type SchemaDefinition struct {
 	Query        *ObjectType
 	Mutation     *ObjectType
 	Subscription *ObjectType
+
+	// AdditionalTypes is used to add otherwise unreferenced types to the schema.
+	AdditionalTypes []NamedType
 }
 
 type Argument struct {

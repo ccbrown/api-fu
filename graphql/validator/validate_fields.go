@@ -54,14 +54,14 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 				switch parent := selectionSetTypes[len(selectionSetTypes)-1].(type) {
 				case *schema.ObjectType:
 					if _, ok := parent.Fields[name]; !ok {
-						ret = append(ret, newError("field %v does not exist on %v object", name, parent.Name))
+						ret = append(ret, newError("field %v does not exist on %v", name, parent.Name))
 					}
 				case *schema.InterfaceType:
 					if _, ok := parent.Fields[name]; !ok {
-						ret = append(ret, newError("field %v does not exist on %v interface", name, parent.Name))
+						ret = append(ret, newError("field %v does not exist on %v", name, parent.Name))
 					}
 				case *schema.UnionType:
-					ret = append(ret, newError("field %v does not exist on %v union", name, parent.Name))
+					ret = append(ret, newError("field %v does not exist on %v", name, parent.Name))
 				}
 			}
 		}

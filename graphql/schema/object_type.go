@@ -13,29 +13,29 @@ type ObjectType struct {
 	Fields                map[string]*FieldDefinition
 }
 
-func (d *ObjectType) String() string {
-	return d.Name
+func (t *ObjectType) String() string {
+	return t.Name
 }
 
-func (d *ObjectType) IsInputType() bool {
+func (t *ObjectType) IsInputType() bool {
 	return false
 }
 
-func (d *ObjectType) IsOutputType() bool {
+func (t *ObjectType) IsOutputType() bool {
 	return true
 }
 
-func (d *ObjectType) IsSubTypeOf(other Type) bool {
-	if d.IsSameType(other) {
+func (t *ObjectType) IsSubTypeOf(other Type) bool {
+	if t.IsSameType(other) {
 		return true
 	} else if union, ok := other.(*UnionType); ok {
 		for _, member := range union.MemberTypes {
-			if d.IsSameType(member) {
+			if t.IsSameType(member) {
 				return true
 			}
 		}
 	} else {
-		for _, iface := range d.ImplementedInterfaces {
+		for _, iface := range t.ImplementedInterfaces {
 			if iface.IsSameType(other) {
 				return true
 			}
@@ -44,17 +44,17 @@ func (d *ObjectType) IsSubTypeOf(other Type) bool {
 	return false
 }
 
-func (d *ObjectType) IsSameType(other Type) bool {
-	return d == other
+func (t *ObjectType) IsSameType(other Type) bool {
+	return t == other
 }
 
-func (d *ObjectType) NamedType() string {
-	return d.Name
+func (t *ObjectType) NamedType() string {
+	return t.Name
 }
 
-func (d *ObjectType) SatisfyInterface(iface *InterfaceType) error {
+func (t *ObjectType) satisfyInterface(iface *InterfaceType) error {
 	for name, ifaceField := range iface.Fields {
-		field, ok := d.Fields[name]
+		field, ok := t.Fields[name]
 		if !ok {
 			return fmt.Errorf("object is missing field named %v", name)
 		} else if !field.Type.IsSubTypeOf(ifaceField.Type) {
@@ -77,16 +77,20 @@ func (d *ObjectType) SatisfyInterface(iface *InterfaceType) error {
 	return nil
 }
 
-func (d *ObjectType) shallowValidate() error {
-	if len(d.Fields) == 0 {
-		return fmt.Errorf("%v must have at least one field", d.Name)
-	} else {
-		for name, field := range d.Fields {
-			if !isName(name) || strings.HasPrefix(name, "__") {
-				return fmt.Errorf("illegal field name: %v", name)
-			} else if !field.Type.IsOutputType() {
-				return fmt.Errorf("%v field must be an output type", name)
-			}
+func (t *ObjectType) shallowValidate() error {
+	if len(t.Fields) == 0 {
+		return fmt.Errorf("%v must have at least one field", t.Name)
+	}
+	for name, field := range t.Fields {
+		if !isName(name) || strings.HasPrefix(name, "__") {
+			return fmt.Errorf("illegal field name: %v", name)
+		} else if !field.Type.IsOutputType() {
+			return fmt.Errorf("%v field must be an output type", name)
+		}
+	}
+	for _, iface := range t.ImplementedInterfaces {
+		if err := t.satisfyInterface(iface); err != nil {
+			return fmt.Errorf("%v does not satisfy %v: %v", t.Name, iface.Name, err.Error())
 		}
 	}
 	return nil
