@@ -244,10 +244,11 @@ func TestGetOperation(t *testing.T) {
 	doc, errs := parser.ParseDocument([]byte(`{x} {x} query q {x} mutation m {x} mutation m {x}`))
 	assert.Empty(t, errs)
 
-	op, err := getOperation(doc, "")
+	_, err := getOperation(doc, "")
 	assert.NotEmpty(t, err)
 
-	op, err = getOperation(doc, "m")
+	op, err := getOperation(doc, "m")
+	assert.NotNil(t, op)
 	assert.NotEmpty(t, err)
 
 	op, err = getOperation(doc, "q")
