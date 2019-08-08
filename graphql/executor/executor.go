@@ -146,16 +146,15 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		v, _ := groupedFieldSet.Get(responseKey)
 		fields := v.([]*ast.Field)
 
-		fieldName := fields[0].Name.Name
-		fieldDef := objectType.Fields[fieldName]
-		if fieldDef == nil {
-			continue
+		if fieldName := fields[0].Name.Name; fieldName == "__typename" {
+			resultMap.Set(responseKey, objectType.Name)
+		} else if fieldDef := objectType.Fields[fieldName]; fieldDef != nil {
+			responseValue, err := e.executeField(objectType, objectValue, fields, fieldDef.Type)
+			if err != nil {
+				return nil, err
+			}
+			resultMap.Set(responseKey, responseValue)
 		}
-		responseValue, err := e.executeField(objectType, objectValue, fields, fieldDef.Type)
-		if err != nil {
-			return nil, err
-		}
-		resultMap.Set(responseKey, responseValue)
 	}
 	return resultMap, nil
 }

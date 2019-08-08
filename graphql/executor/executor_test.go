@@ -219,6 +219,10 @@ func TestExecuteRequest(t *testing.T) {
 			Document:     `{pet{... on Pet{nickname}}}`,
 			ExpectedData: `{"pet":{"nickname":"fido"}}`,
 		},
+		"InterfaceTypename": {
+			Document:     `{pet{__typename}}`,
+			ExpectedData: `{"pet":{"__typename":"Dog"}}`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			parsed, errs := parser.ParseDocument([]byte(tc.Document))
