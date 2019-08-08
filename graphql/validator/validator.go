@@ -15,7 +15,7 @@ type Error struct {
 	// validators, so if there are any primary errors, secondary errors are discarded as they should
 	// all be duplicates. If a secondary error makes it out of validation, there's probably a
 	// mistake in one of the validators.
-	IsSecondary bool
+	isSecondary bool
 }
 
 func (err *Error) Error() string {
@@ -31,7 +31,7 @@ func newError(message string, args ...interface{}) *Error {
 func newSecondaryError(message string, args ...interface{}) *Error {
 	return &Error{
 		Message:     fmt.Sprintf(message, args...),
-		IsSecondary: true,
+		isSecondary: true,
 	}
 }
 
@@ -52,7 +52,7 @@ func ValidateDocument(doc *ast.Document, s *schema.Schema) []*Error {
 	}
 	var primary []*Error
 	for _, err := range errs {
-		if !err.IsSecondary {
+		if !err.isSecondary {
 			primary = append(primary, err)
 		}
 	}

@@ -273,7 +273,7 @@ func validateSource(t *testing.T, src string) []*Error {
 
 	errs := ValidateDocument(doc, s)
 	for _, err := range errs {
-		assert.False(t, err.IsSecondary)
+		assert.False(t, err.isSecondary)
 	}
 	return errs
 }

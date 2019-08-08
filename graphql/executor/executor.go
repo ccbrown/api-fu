@@ -9,14 +9,14 @@ import (
 )
 
 type Location struct {
-	Line   int
-	Column int
+	Line   int `json:"line"`
+	Column int `json:"column"`
 }
 
 type Error struct {
-	Message   string
-	Locations []Location
-	Path      []interface{}
+	Message   string        `json:"message"`
+	Locations []Location    `json:"locations,omitempty"`
+	Path      []interface{} `json:"path,omitempty"`
 }
 
 func (err *Error) Error() string {
@@ -98,7 +98,7 @@ func (e *executor) executeQuery(query *ast.OperationDefinition, initialValue int
 			Errors: []*Error{newError("This schema cannot perform queries.")},
 		}
 	}
-	data, err := e.executeSelections(query.SelectionSet.Selections, queryType, initialValue, false)
+	data, err := e.executeSelections(query.SelectionSet.Selections, queryType, initialValue, nil, false)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
@@ -112,7 +112,7 @@ func (e *executor) executeMutation(mutation *ast.OperationDefinition, initialVal
 			Errors: []*Error{newError("This schema cannot perform mutations.")},
 		}
 	}
-	data, err := e.executeSelections(mutation.SelectionSet.Selections, mutationType, initialValue, true)
+	data, err := e.executeSelections(mutation.SelectionSet.Selections, mutationType, initialValue, nil, true)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
@@ -128,14 +128,14 @@ func (e *executor) subscribe(subscription *ast.OperationDefinition, initialValue
 			Errors: []*Error{newError("This schema cannot perform subscriptions.")},
 		}
 	}
-	data, err := e.executeSelections(subscription.SelectionSet.Selections, subscriptionType, initialValue, false)
+	data, err := e.executeSelections(subscription.SelectionSet.Selections, subscriptionType, initialValue, nil, false)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
 	return NewResponse(data, e.Errors)
 }
 
-func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, forceSerial bool) (*OrderedMap, error) {
+func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path []interface{}, forceSerial bool) (*OrderedMap, error) {
 	// TODO: parallel execution
 
 	groupedFieldSet := NewOrderedMap()
@@ -149,9 +149,31 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		if fieldName := fields[0].Name.Name; fieldName == "__typename" {
 			resultMap.Set(responseKey, objectType.Name)
 		} else if fieldDef := objectType.Fields[fieldName]; fieldDef != nil {
-			responseValue, err := e.executeField(objectType, objectValue, fields, fieldDef.Type)
+			fieldPath := append(path, responseKey)
+			responseValue, err := e.executeField(objectType, objectValue, fields, fieldDef.Type, fieldPath)
 			if err != nil {
-				return nil, err
+				var responseError *Error
+				switch err := err.(type) {
+				case *Error:
+					responseError = err
+				default:
+					locations := make([]Location, len(fields))
+					for i, field := range fields {
+						locations[i].Line = field.Position().Line
+						locations[i].Column = field.Position().Column
+					}
+					responseError = &Error{
+						Message:   err.Error(),
+						Locations: locations,
+						Path:      fieldPath,
+					}
+				}
+
+				if schema.IsNonNullType(fieldDef.Type) {
+					return nil, responseError
+				} else {
+					e.Errors = append(e.Errors, responseError)
+				}
 			}
 			resultMap.Set(responseKey, responseValue)
 		}
@@ -167,7 +189,7 @@ func isNil(v interface{}) bool {
 	return (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) && rv.IsNil()
 }
 
-func (e *executor) executeField(objectType *schema.ObjectType, objectValue interface{}, fields []*ast.Field, fieldType schema.Type) (interface{}, error) {
+func (e *executor) executeField(objectType *schema.ObjectType, objectValue interface{}, fields []*ast.Field, fieldType schema.Type, path []interface{}) (interface{}, error) {
 	field := fields[0]
 	fieldName := field.Name.Name
 	fieldDef := objectType.Fields[fieldName]
@@ -185,12 +207,12 @@ func (e *executor) executeField(objectType *schema.ObjectType, objectValue inter
 	if !isNil(err) {
 		return nil, err
 	}
-	return e.completeValue(fieldType, fields, resolvedValue)
+	return e.completeValue(fieldType, fields, resolvedValue, path)
 }
 
-func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}) (interface{}, error) {
+func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path []interface{}) (interface{}, error) {
 	if nonNullType, ok := fieldType.(*schema.NonNullType); ok {
-		completedResult, err := e.completeValue(nonNullType.Type, fields, result)
+		completedResult, err := e.completeValue(nonNullType.Type, fields, result, path)
 		if err != nil {
 			return nil, err
 		} else if completedResult == nil {
@@ -212,7 +234,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		innerType := fieldType.Type
 		completedResult := make([]interface{}, result.Len())
 		for i := range completedResult {
-			completedResultItem, err := e.completeValue(innerType, fields, result.Index(i).Interface())
+			completedResultItem, err := e.completeValue(innerType, fields, result.Index(i).Interface(), append(path, i))
 			if err != nil {
 				return nil, err
 			}
@@ -236,7 +258,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		if objectType == nil {
 			return nil, fmt.Errorf("unknown object type")
 		}
-		return e.executeSelections(mergeSelectionSets(fields), objectType, result, false)
+		return e.executeSelections(mergeSelectionSets(fields), objectType, result, path, false)
 	}
 	panic(fmt.Sprintf("unexpected field type: %T", fieldType))
 }

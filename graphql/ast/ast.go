@@ -10,7 +10,7 @@ type Document struct {
 	Definitions []Definition
 }
 
-func (*Document) Position() token.Position { return token.Position{} }
+func (*Document) Position() token.Position { return token.Position{1, 1} }
 
 // OperationDefinition or FragmentDefinition
 type Definition interface {

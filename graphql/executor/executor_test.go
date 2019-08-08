@@ -2,6 +2,8 @@ package executor
 
 import (
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,6 +80,10 @@ var objectType = &schema.ObjectType{
 	Name: "Object",
 }
 
+type object struct {
+	Error error
+}
+
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
 		"intOne": &schema.FieldDefinition{
@@ -107,7 +113,34 @@ func init() {
 		"object": &schema.FieldDefinition{
 			Type: objectType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
-				return struct{}{}, nil
+				return &object{}, nil
+			},
+		},
+		"objectsWithError": &schema.FieldDefinition{
+			Type: schema.NewListType(objectType),
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				return []*object{&object{}, &object{Error: fmt.Errorf("error")}}, nil
+			},
+		},
+		"intOneOrError": &schema.FieldDefinition{
+			Type: schema.IntType,
+			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+				if err := ctx.Object.(*object).Error; err != nil {
+					return nil, err
+				}
+				return 1, nil
+			},
+		},
+		"error": &schema.FieldDefinition{
+			Type: schema.IntType,
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				return nil, fmt.Errorf("error")
+			},
+		},
+		"nonNullError": &schema.FieldDefinition{
+			Type: schema.NewNonNullType(schema.IntType),
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				return nil, fmt.Errorf("error")
 			},
 		},
 	}
@@ -158,6 +191,7 @@ func TestExecuteRequest(t *testing.T) {
 	for name, tc := range map[string]struct {
 		Document       string
 		ExpectedData   string
+		ExpectedErrors []*Error
 		VariableValues map[string]interface{}
 	}{
 		"Query": {
@@ -223,6 +257,36 @@ func TestExecuteRequest(t *testing.T) {
 			Document:     `{pet{__typename}}`,
 			ExpectedData: `{"pet":{"__typename":"Dog"}}`,
 		},
+		"Error": {
+			Document:     `{error error}`,
+			ExpectedData: `{"error":null}`,
+			ExpectedErrors: []*Error{
+				&Error{
+					Locations: []Location{{1, 2}, {1, 8}},
+					Path:      []interface{}{"error"},
+				},
+			},
+		},
+		"PropagatedError": {
+			Document:     `{object{nonNullError}}`,
+			ExpectedData: `{"object":null}`,
+			ExpectedErrors: []*Error{
+				&Error{
+					Locations: []Location{{1, 9}},
+					Path:      []interface{}{"object", "nonNullError"},
+				},
+			},
+		},
+		"ListError": {
+			Document:     `{objs:objectsWithError{n:intOneOrError}}`,
+			ExpectedData: `{"objs":[{"n":1},{"n":null}]}`,
+			ExpectedErrors: []*Error{
+				&Error{
+					Locations: []Location{{1, 24}},
+					Path:      []interface{}{"objs", 1, "n"},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			parsed, errs := parser.ParseDocument([]byte(tc.Document))
@@ -236,6 +300,25 @@ func TestExecuteRequest(t *testing.T) {
 			serializedData, err := json.Marshal(response.Data)
 			require.NoError(t, err)
 			assert.Equal(t, tc.ExpectedData, string(serializedData))
+
+			serializedErrors, err := json.Marshal(response.Errors)
+			require.NoError(t, err)
+
+			if len(tc.ExpectedErrors) == 0 {
+				assert.Empty(t, response.Errors)
+			} else {
+				assert.Len(t, response.Errors, len(tc.ExpectedErrors))
+				for _, expected := range tc.ExpectedErrors {
+					matched := false
+					for _, actual := range response.Errors {
+						if reflect.DeepEqual(actual.Locations, expected.Locations) && reflect.DeepEqual(actual.Path, expected.Path) {
+							matched = true
+							break
+						}
+					}
+					assert.True(t, matched, "couldn't find %+v in %v", *expected, string(serializedErrors))
+				}
+			}
 		})
 	}
 }
