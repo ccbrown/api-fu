@@ -6,8 +6,7 @@ type UnionType struct {
 	Name        string
 	Description string
 	Directives  []*Directive
-	MemberTypes []NamedType
-	ObjectType  func(object interface{}) *ObjectType
+	MemberTypes []*ObjectType
 }
 
 func (d *UnionType) String() string {
@@ -40,14 +39,10 @@ func (d *UnionType) shallowValidate() error {
 	} else {
 		objNames := map[string]struct{}{}
 		for _, member := range d.MemberTypes {
-			if obj, ok := member.(*ObjectType); ok {
-				if _, ok := objNames[obj.Name]; ok {
-					return fmt.Errorf("union member types must be unique")
-				}
-				objNames[obj.Name] = struct{}{}
-			} else {
-				return fmt.Errorf("union member types must be objects")
+			if _, ok := objNames[member.Name]; ok {
+				return fmt.Errorf("union member types must be unique")
 			}
+			objNames[member.Name] = struct{}{}
 		}
 	}
 	return nil

@@ -28,6 +28,10 @@ func (m *OrderedMap) Get(key string) (interface{}, bool) {
 	return v, ok
 }
 
+func (m *OrderedMap) Len() int {
+	return len(m.m)
+}
+
 func (m *OrderedMap) Keys() []string {
 	return m.order
 }

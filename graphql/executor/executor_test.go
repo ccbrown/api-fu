@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -26,18 +27,6 @@ var petType = &schema.InterfaceType{
 type dog struct{}
 type cat struct{}
 
-func init() {
-	petType.ObjectType = func(v interface{}) *schema.ObjectType {
-		switch v.(type) {
-		case dog:
-			return dogType
-		case cat:
-			return catType
-		}
-		return nil
-	}
-}
-
 var dogType = &schema.ObjectType{
 	Name: "Dog",
 	Fields: map[string]*schema.FieldDefinition{
@@ -55,6 +44,10 @@ var dogType = &schema.ObjectType{
 		},
 	},
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
+	IsTypeOf: func(v interface{}) bool {
+		_, ok := v.(dog)
+		return ok
+	},
 }
 
 var catType = &schema.ObjectType{
@@ -74,6 +67,10 @@ var catType = &schema.ObjectType{
 		},
 	},
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
+	IsTypeOf: func(v interface{}) bool {
+		_, ok := v.(cat)
+		return ok
+	},
 }
 
 var objectType = &schema.ObjectType{
@@ -175,11 +172,47 @@ var mutationType = &schema.ObjectType{
 	},
 }
 
+func TestSubscribe(t *testing.T) {
+	s, err := schema.New(&schema.SchemaDefinition{
+		Query: objectType,
+		Subscription: &schema.ObjectType{
+			Name: "Subscription",
+			Fields: map[string]*schema.FieldDefinition{
+				"int": &schema.FieldDefinition{
+					Type: schema.NewNonNullType(schema.IntType),
+					Resolve: func(*schema.FieldContext) (interface{}, error) {
+						return 1, nil
+					},
+				},
+			},
+		},
+		AdditionalTypes: []schema.NamedType{dogType, catType},
+	})
+	require.NoError(t, err)
+	doc, parseErrs := parser.ParseDocument([]byte(`subscription {int}`))
+	require.Empty(t, parseErrs)
+	require.Empty(t, validator.ValidateDocument(doc, s))
+
+	assert.True(t, IsSubscription(doc, ""))
+
+	r := &Request{
+		Document: doc,
+		Schema:   s,
+	}
+
+	responseStream, err := Subscribe(context.Background(), r)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, responseStream)
+
+	data, errs := ExecuteRequest(context.Background(), r)
+	assert.Empty(t, errs)
+	assert.Equal(t, 1, data.Len())
+}
+
 func TestExecuteRequest(t *testing.T) {
 	s, err := schema.New(&schema.SchemaDefinition{
-		Query:        objectType,
-		Mutation:     mutationType,
-		Subscription: objectType,
+		Query:    objectType,
+		Mutation: mutationType,
 		DirectiveDefinitions: map[string]*schema.DirectiveDefinition{
 			"include": schema.IncludeDirective,
 			"skip":    schema.SkipDirective,
@@ -292,7 +325,7 @@ func TestExecuteRequest(t *testing.T) {
 			parsed, parseErrs := parser.ParseDocument([]byte(tc.Document))
 			require.Empty(t, parseErrs)
 			require.Empty(t, validator.ValidateDocument(parsed, s))
-			data, errs := ExecuteRequest(&Request{
+			data, errs := ExecuteRequest(context.Background(), &Request{
 				Document:       parsed,
 				Schema:         s,
 				VariableValues: tc.VariableValues,

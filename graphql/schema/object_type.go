@@ -6,11 +6,16 @@ import (
 )
 
 type ObjectType struct {
-	Name                  string
-	Description           string
+	Name        string
+	Description string
+	Directives  []*Directive
+	Fields      map[string]*FieldDefinition
+
 	ImplementedInterfaces []*InterfaceType
-	Directives            []*Directive
-	Fields                map[string]*FieldDefinition
+
+	// Objects that implement one or more interfaces must define this. The function should return
+	// true if obj is an object of this type.
+	IsTypeOf func(obj interface{}) bool
 }
 
 func (t *ObjectType) String() string {
@@ -92,6 +97,9 @@ func (t *ObjectType) shallowValidate() error {
 		if err := t.satisfyInterface(iface); err != nil {
 			return fmt.Errorf("%v does not satisfy %v: %v", t.Name, iface.Name, err.Error())
 		}
+	}
+	if len(t.ImplementedInterfaces) > 0 && t.IsTypeOf == nil {
+		return fmt.Errorf("%v does not define IsTypeOf", t.Name)
 	}
 	return nil
 }

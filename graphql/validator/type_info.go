@@ -121,17 +121,22 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 				selectionSetScope = s.NamedType(node.TypeCondition.Name.Name)
 			}
 		case *ast.OperationDefinition:
+			var t *schema.ObjectType
 			if op := node.OperationType; op == nil || op.Value == "query" {
-				selectionSetScope = s.QueryType()
+				t = s.QueryType()
 			} else if op.Value == "mutation" {
-				selectionSetScope = s.MutationType()
+				t = s.MutationType()
 			} else if op.Value == "subscription" {
-				selectionSetScope = s.SubscriptionType()
+				t = s.SubscriptionType()
+			}
+			if t != nil {
+				selectionSetScope = t
 			}
 		case *ast.SelectionSet:
-			t := selectionSetScopes[len(selectionSetScopes)-1]
-			ret.SelectionSetTypes[node] = t
-			selectionSetScope = t
+			if t := selectionSetScopes[len(selectionSetScopes)-1]; t != nil {
+				ret.SelectionSetTypes[node] = t
+				selectionSetScope = t
+			}
 		case *ast.VariableDefinition:
 			if t := schemaType(node.Type, s); t != nil {
 				ret.VariableDefinitionTypes[node] = t

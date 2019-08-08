@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -37,76 +38,131 @@ type Request struct {
 	InitialValue   interface{}
 }
 
-func ExecuteRequest(r *Request) (*OrderedMap, []*Error) {
+func ExecuteRequest(ctx context.Context, r *Request) (*OrderedMap, []*Error) {
+	if e, err := newExecutor(ctx, r); err != nil {
+		return nil, []*Error{err}
+	} else if opType := e.Operation.OperationType; opType == nil || opType.Value == "query" {
+		return e.executeQuery(r.InitialValue)
+	} else if opType.Value == "mutation" {
+		return e.executeMutation(r.InitialValue)
+	} else if opType.Value == "subscription" {
+		return e.executeSubscriptionEvent(r.InitialValue)
+	}
+	panic("unexpected operation type")
+}
+
+// IsSubscription can be used to determine if a request is for a subscription.
+func IsSubscription(doc *ast.Document, operationName string) bool {
+	operation, err := getOperation(doc, operationName)
+	return err == nil && operation.OperationType != nil && operation.OperationType.Value == "subscription"
+}
+
+// Subscribe resolves the root subscription field of a request and returns the result.
+func Subscribe(ctx context.Context, r *Request) (interface{}, error) {
+	if e, err := newExecutor(ctx, r); err != nil {
+		return nil, err
+	} else if e.Operation.OperationType != nil && e.Operation.OperationType.Value == "subscription" {
+		return e.subscribe(r.InitialValue)
+	}
+	return nil, newError("A subscription operation is required.")
+}
+
+type executor struct {
+	Context             context.Context
+	Schema              *schema.Schema
+	FragmentDefinitions map[string]*ast.FragmentDefinition
+	VariableValues      map[string]interface{}
+	Errors              []*Error
+	Operation           *ast.OperationDefinition
+}
+
+func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 	operation, err := getOperation(r.Document, r.OperationName)
 	if err != nil {
-		return nil, []*Error{err}
+		return nil, err
 	}
 	coercedVariableValues, err := coerceVariableValues(r.Schema, operation, r.VariableValues)
 	if err != nil {
-		return nil, []*Error{err}
+		return nil, err
 	}
 
 	e := &executor{
+		Context:             ctx,
 		Schema:              r.Schema,
 		FragmentDefinitions: map[string]*ast.FragmentDefinition{},
 		VariableValues:      coercedVariableValues,
+		Operation:           operation,
 	}
 	for _, def := range r.Document.Definitions {
 		if def, ok := def.(*ast.FragmentDefinition); ok {
 			e.FragmentDefinitions[def.Name.Name] = def
 		}
 	}
-
-	if operation.OperationType == nil || operation.OperationType.Value == "query" {
-		return e.executeQuery(operation, r.InitialValue)
-	} else if operation.OperationType.Value == "mutation" {
-		return e.executeMutation(operation, r.InitialValue)
-	} else if operation.OperationType.Value == "subscription" {
-		return e.subscribe(operation, r.InitialValue)
-	}
-	panic("unexpected operation type")
+	return e, nil
 }
 
-type executor struct {
-	Schema              *schema.Schema
-	FragmentDefinitions map[string]*ast.FragmentDefinition
-	VariableValues      map[string]interface{}
-	Errors              []*Error
-}
-
-func (e *executor) executeQuery(query *ast.OperationDefinition, initialValue interface{}) (*OrderedMap, []*Error) {
+func (e *executor) executeQuery(initialValue interface{}) (*OrderedMap, []*Error) {
 	queryType := e.Schema.QueryType()
 	if !schema.IsObjectType(queryType) {
 		return nil, []*Error{newError("This schema cannot perform queries.")}
 	}
-	data, err := e.executeSelections(query.SelectionSet.Selections, queryType, initialValue, nil, false)
+	data, err := e.executeSelections(e.Operation.SelectionSet.Selections, queryType, initialValue, nil, false)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
 	return data, e.Errors
 }
 
-func (e *executor) executeMutation(mutation *ast.OperationDefinition, initialValue interface{}) (*OrderedMap, []*Error) {
+func (e *executor) executeMutation(initialValue interface{}) (*OrderedMap, []*Error) {
 	mutationType := e.Schema.MutationType()
 	if !schema.IsObjectType(mutationType) {
 		return nil, []*Error{newError("This schema cannot perform mutations.")}
 	}
-	data, err := e.executeSelections(mutation.SelectionSet.Selections, mutationType, initialValue, nil, true)
+	data, err := e.executeSelections(e.Operation.SelectionSet.Selections, mutationType, initialValue, nil, true)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
 	return data, e.Errors
 }
 
-func (e *executor) subscribe(subscription *ast.OperationDefinition, initialValue interface{}) (*OrderedMap, []*Error) {
-	// TODO: event stream api
+func (e *executor) subscribe(initialValue interface{}) (interface{}, error) {
+	subscriptionType := e.Schema.SubscriptionType()
+	if !schema.IsObjectType(subscriptionType) {
+		return nil, newError("This schema cannot perform subscriptions.")
+	}
 
+	groupedFieldSet := NewOrderedMap()
+	e.collectFields(subscriptionType, e.Operation.SelectionSet.Selections, nil, groupedFieldSet)
+
+	if groupedFieldSet.Len() != 1 {
+		return nil, newError("Subscriptions can only contain one root field selection.")
+	}
+
+	v, _ := groupedFieldSet.Get(groupedFieldSet.Keys()[0])
+	fields := v.([]*ast.Field)
+	field := fields[0]
+	fieldName := field.Name.Name
+	fieldDef := subscriptionType.Fields[fieldName]
+	if fieldDef == nil {
+		return nil, fmt.Errorf("undefined field")
+	}
+	argumentValues, err := coerceArgumentValues(fieldDef.Arguments, field.Arguments, e.VariableValues)
+	if err != nil {
+		return nil, err
+	}
+	return fieldDef.Resolve(&schema.FieldContext{
+		Context:   e.Context,
+		Object:    initialValue,
+		Arguments: argumentValues,
+	})
+}
+
+func (e *executor) executeSubscriptionEvent(initialValue interface{}) (*OrderedMap, []*Error) {
 	subscriptionType := e.Schema.SubscriptionType()
 	if !schema.IsObjectType(subscriptionType) {
 		return nil, []*Error{newError("This schema cannot perform subscriptions.")}
 	}
-	data, err := e.executeSelections(subscription.SelectionSet.Selections, subscriptionType, initialValue, nil, false)
+	data, err := e.executeSelections(e.Operation.SelectionSet.Selections, subscriptionType, initialValue, nil, false)
 	if err != nil {
 		e.Errors = append(e.Errors, newError("%v", err.Error()))
 	}
@@ -179,6 +235,7 @@ func (e *executor) executeField(objectType *schema.ObjectType, objectValue inter
 		return nil, err
 	}
 	resolvedValue, err := fieldDef.Resolve(&schema.FieldContext{
+		Context:   e.Context,
 		Object:    objectValue,
 		Arguments: argumentValues,
 	})
@@ -229,9 +286,19 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		case *schema.ObjectType:
 			objectType = fieldType
 		case *schema.InterfaceType:
-			objectType = fieldType.ObjectType(result)
+			for _, t := range e.Schema.InterfaceImplementations(fieldType.Name) {
+				if t.IsTypeOf(result) {
+					objectType = t
+					break
+				}
+			}
 		case *schema.UnionType:
-			objectType = fieldType.ObjectType(result)
+			for _, t := range fieldType.MemberTypes {
+				if t.IsTypeOf(result) {
+					objectType = t
+					break
+				}
+			}
 		}
 		if objectType == nil {
 			return nil, fmt.Errorf("unknown object type")

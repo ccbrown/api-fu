@@ -28,7 +28,11 @@ func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *Type
 				operationNames[def.Name.Name] = struct{}{}
 			}
 
-			if def.OperationType != nil && def.OperationType.Value == "subscription" {
+			if _, ok := typeInfo.SelectionSetTypes[def.SelectionSet]; !ok {
+				ret = append(ret, newError(def, "unsupported operation type"))
+			}
+
+			if opType := def.OperationType; opType != nil && opType.Value == "subscription" {
 				fieldsForName := map[string][]fieldAndParent{}
 				if err := addFieldSelections(fieldsForName, def.SelectionSet, fragmentDefinitions); err != nil {
 					ret = append(ret, err)

@@ -1,11 +1,13 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
 
 type FieldContext struct {
+	Context   context.Context
 	Object    interface{}
 	Arguments map[string]interface{}
 }
