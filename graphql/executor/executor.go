@@ -16,19 +16,41 @@ type Location struct {
 }
 
 type Error struct {
+	// Executor error messages are formatted as sentences, e.g. "An error occurred."
 	Message   string
 	Locations []Location
 	Path      []interface{}
+
+	originalError error
 }
 
 func (err *Error) Error() string {
 	return err.Message
 }
 
-func newError(message string, args ...interface{}) *Error {
-	return &Error{
+// If the error came from a resolver, you can get the original error with Unwrap.
+func (err *Error) Unwrap() error {
+	return err.originalError
+}
+
+func newError(node ast.Node, message string, args ...interface{}) *Error {
+	return newErrorWithPath(node, nil, message, args...)
+}
+
+func newErrorWithPath(node ast.Node, path []interface{}, message string, args ...interface{}) *Error {
+	ret := &Error{
 		Message: fmt.Sprintf(message, args...),
 	}
+	if node != nil {
+		ret.Locations = []Location{{
+			Line:   node.Position().Line,
+			Column: node.Position().Column,
+		}}
+	}
+	if path != nil {
+		ret.Path = path
+	}
+	return ret
 }
 
 type Request struct {
@@ -59,13 +81,14 @@ func IsSubscription(doc *ast.Document, operationName string) bool {
 }
 
 // Subscribe resolves the root subscription field of a request and returns the result.
-func Subscribe(ctx context.Context, r *Request) (interface{}, error) {
+func Subscribe(ctx context.Context, r *Request) (interface{}, *Error) {
 	if e, err := newExecutor(ctx, r); err != nil {
 		return nil, err
 	} else if e.Operation.OperationType != nil && e.Operation.OperationType.Value == "subscription" {
 		return e.subscribe(r.InitialValue)
+	} else {
+		return nil, newError(e.Operation, "A subscription operation is required.")
 	}
-	return nil, newError("A subscription operation is required.")
 }
 
 type executor struct {
@@ -105,11 +128,11 @@ func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 func (e *executor) executeQuery(initialValue interface{}) (*OrderedMap, []*Error) {
 	queryType := e.Schema.QueryType()
 	if !schema.IsObjectType(queryType) {
-		return nil, []*Error{newError("This schema cannot perform queries.")}
+		return nil, []*Error{newError(e.Operation, "This schema cannot perform queries.")}
 	}
 	data, err := e.executeSelections(e.Operation.SelectionSet.Selections, queryType, initialValue, nil, false)
 	if err != nil {
-		e.Errors = append(e.Errors, newError("%v", err.Error()))
+		e.Errors = append(e.Errors, err)
 	}
 	return data, e.Errors
 }
@@ -117,61 +140,75 @@ func (e *executor) executeQuery(initialValue interface{}) (*OrderedMap, []*Error
 func (e *executor) executeMutation(initialValue interface{}) (*OrderedMap, []*Error) {
 	mutationType := e.Schema.MutationType()
 	if !schema.IsObjectType(mutationType) {
-		return nil, []*Error{newError("This schema cannot perform mutations.")}
+		return nil, []*Error{newError(e.Operation, "This schema cannot perform mutations.")}
 	}
 	data, err := e.executeSelections(e.Operation.SelectionSet.Selections, mutationType, initialValue, nil, true)
 	if err != nil {
-		e.Errors = append(e.Errors, newError("%v", err.Error()))
+		e.Errors = append(e.Errors, err)
 	}
 	return data, e.Errors
 }
 
-func (e *executor) subscribe(initialValue interface{}) (interface{}, error) {
+func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
 	subscriptionType := e.Schema.SubscriptionType()
 	if !schema.IsObjectType(subscriptionType) {
-		return nil, newError("This schema cannot perform subscriptions.")
+		return nil, newError(e.Operation, "This schema cannot perform subscriptions.")
 	}
 
 	groupedFieldSet := NewOrderedMap()
 	e.collectFields(subscriptionType, e.Operation.SelectionSet.Selections, nil, groupedFieldSet)
 
 	if groupedFieldSet.Len() != 1 {
-		return nil, newError("Subscriptions can only contain one root field selection.")
+		return nil, newError(e.Operation.SelectionSet, "Subscriptions must contain exactly one root field selection.")
 	}
 
-	v, _ := groupedFieldSet.Get(groupedFieldSet.Keys()[0])
+	responseKey := groupedFieldSet.Keys()[0]
+	v, _ := groupedFieldSet.Get(responseKey)
 	fields := v.([]*ast.Field)
 	field := fields[0]
 	fieldName := field.Name.Name
 	fieldDef := subscriptionType.Fields[fieldName]
 	if fieldDef == nil {
-		return nil, newError("Undefined root subscription field.")
+		return nil, newError(field, "Undefined root subscription field.")
 	}
-	argumentValues, err := coerceArgumentValues(fieldDef.Arguments, field.Arguments, e.VariableValues)
+	argumentValues, err := coerceArgumentValues(field, fieldDef.Arguments, field.Arguments, e.VariableValues)
 	if err != nil {
 		return nil, err
 	}
-	return fieldDef.Resolve(&schema.FieldContext{
+
+	resolveValue, resolveErr := fieldDef.Resolve(&schema.FieldContext{
 		Context:   e.Context,
 		Schema:    e.Schema,
 		Object:    initialValue,
 		Arguments: argumentValues,
 	})
+	if !isNil(resolveErr) {
+		return nil, &Error{
+			Message: err.Error(),
+			Locations: []Location{{
+				Line:   field.Position().Line,
+				Column: field.Position().Column,
+			}},
+			Path:          []interface{}{responseKey},
+			originalError: resolveErr,
+		}
+	}
+	return resolveValue, nil
 }
 
 func (e *executor) executeSubscriptionEvent(initialValue interface{}) (*OrderedMap, []*Error) {
 	subscriptionType := e.Schema.SubscriptionType()
 	if !schema.IsObjectType(subscriptionType) {
-		return nil, []*Error{newError("This schema cannot perform subscriptions.")}
+		return nil, []*Error{newError(e.Operation, "This schema cannot perform subscriptions.")}
 	}
 	data, err := e.executeSelections(e.Operation.SelectionSet.Selections, subscriptionType, initialValue, nil, false)
 	if err != nil {
-		e.Errors = append(e.Errors, newError("%v", err.Error()))
+		e.Errors = append(e.Errors, err)
 	}
 	return data, e.Errors
 }
 
-func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path []interface{}, forceSerial bool) (*OrderedMap, error) {
+func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path []interface{}, forceSerial bool) (*OrderedMap, *Error) {
 	// TODO: parallel execution
 
 	groupedFieldSet := NewOrderedMap()
@@ -197,27 +234,10 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 			fieldPath := append(path, responseKey)
 			responseValue, err := e.executeField(objectValue, fields, fieldDef, fieldPath)
 			if err != nil {
-				var responseError *Error
-				switch err := err.(type) {
-				case *Error:
-					responseError = err
-				default:
-					locations := make([]Location, len(fields))
-					for i, field := range fields {
-						locations[i].Line = field.Position().Line
-						locations[i].Column = field.Position().Column
-					}
-					responseError = &Error{
-						Message:   err.Error(),
-						Locations: locations,
-						Path:      fieldPath,
-					}
-				}
-
 				if schema.IsNonNullType(fieldDef.Type) {
-					return nil, responseError
+					return nil, err
 				} else {
-					e.Errors = append(e.Errors, responseError)
+					e.Errors = append(e.Errors, err)
 				}
 			}
 			resultMap.Set(responseKey, responseValue)
@@ -234,11 +254,11 @@ func isNil(v interface{}) bool {
 	return (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) && rv.IsNil()
 }
 
-func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path []interface{}) (interface{}, error) {
+func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path []interface{}) (interface{}, *Error) {
 	field := fields[0]
-	argumentValues, err := coerceArgumentValues(fieldDef.Arguments, field.Arguments, e.VariableValues)
-	if err != nil {
-		return nil, err
+	argumentValues, coercionErr := coerceArgumentValues(field, fieldDef.Arguments, field.Arguments, e.VariableValues)
+	if coercionErr != nil {
+		return nil, coercionErr
 	}
 	resolvedValue, err := fieldDef.Resolve(&schema.FieldContext{
 		Context:   e.Context,
@@ -247,18 +267,28 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 		Arguments: argumentValues,
 	})
 	if !isNil(err) {
-		return nil, err
+		locations := make([]Location, len(fields))
+		for i, field := range fields {
+			locations[i].Line = field.Position().Line
+			locations[i].Column = field.Position().Column
+		}
+		return nil, &Error{
+			Message:       err.Error(),
+			Locations:     locations,
+			Path:          path,
+			originalError: err,
+		}
 	}
 	return e.completeValue(fieldDef.Type, fields, resolvedValue, path)
 }
 
-func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path []interface{}) (interface{}, error) {
+func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path []interface{}) (interface{}, *Error) {
 	if nonNullType, ok := fieldType.(*schema.NonNullType); ok {
 		completedResult, err := e.completeValue(nonNullType.Type, fields, result, path)
 		if err != nil {
 			return nil, err
 		} else if completedResult == nil {
-			return nil, fmt.Errorf("null result for non-null field")
+			return nil, newErrorWithPath(fields[0], path, "Null result for non-null field.")
 		}
 		return completedResult, nil
 	}
@@ -271,7 +301,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 	case *schema.ListType:
 		result := reflect.ValueOf(result)
 		if result.Kind() != reflect.Slice {
-			return nil, fmt.Errorf("result is not a list")
+			return nil, newErrorWithPath(fields[0], path, "Result is not a list.")
 		}
 		innerType := fieldType.Type
 		completedResult := make([]interface{}, result.Len())
@@ -284,9 +314,17 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		}
 		return completedResult, nil
 	case *schema.ScalarType:
-		return fieldType.CoerceResult(result)
+		if coerced, err := fieldType.CoerceResult(result); err != nil {
+			return nil, newErrorWithPath(fields[0], path, "Unexpected result: %v", err)
+		} else {
+			return coerced, nil
+		}
 	case *schema.EnumType:
-		return fieldType.CoerceResult(result)
+		if coerced, err := fieldType.CoerceResult(result); err != nil {
+			return nil, newErrorWithPath(fields[0], path, "Unexpected result: %v", err)
+		} else {
+			return coerced, nil
+		}
 	case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		var objectType *schema.ObjectType
 		switch fieldType := fieldType.(type) {
@@ -308,7 +346,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 			}
 		}
 		if objectType == nil {
-			return nil, fmt.Errorf("unknown object type")
+			return nil, newErrorWithPath(fields[0], path, "Unable to determine object type.")
 		}
 		return e.executeSelections(mergeSelectionSets(fields), objectType, result, path, false)
 	}
@@ -334,7 +372,7 @@ func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast
 		skip := false
 		for _, directive := range selection.SelectionDirectives() {
 			if def := e.Schema.Directives()[directive.Name.Name]; def != nil && def.FieldCollectionFilter != nil {
-				if arguments, err := coerceArgumentValues(def.Arguments, directive.Arguments, e.VariableValues); err == nil && !def.FieldCollectionFilter(arguments) {
+				if arguments, err := coerceArgumentValues(directive, def.Arguments, directive.Arguments, e.VariableValues); err == nil && !def.FieldCollectionFilter(arguments) {
 					skip = true
 				}
 			}
@@ -415,14 +453,14 @@ func getOperation(doc *ast.Document, operationName string) (*ast.OperationDefini
 		if def, ok := def.(*ast.OperationDefinition); ok {
 			if (def.Name == nil && operationName == "") || (def.Name != nil && def.Name.Name == operationName) {
 				if ret != nil {
-					return nil, newError("multiple matching operations")
+					return nil, newError(def, "Multiple matching operations.")
 				}
 				ret = def
 			}
 		}
 	}
 	if ret == nil {
-		return nil, newError("no matching operations")
+		return nil, newError(nil, "No matching operations.")
 	}
 	return ret, nil
 }
@@ -458,22 +496,22 @@ func coerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, 
 		variableName := def.Variable.Name.Name
 		variableType := schemaType(def.Type, s)
 		if variableType == nil || !variableType.IsInputType() {
-			return nil, newError("invalid variable type")
+			return nil, newError(def.Type, "Invalid variable type.")
 		}
 		value, hasValue := variableValues[variableName]
 
 		if !hasValue && def.DefaultValue != nil {
 			if coerced, err := schema.CoerceLiteral(def.DefaultValue, variableType, variableValues); err != nil {
-				return nil, newError("%v", err.Error())
+				return nil, newError(def.DefaultValue, "Invalid default value for $%v: %v", variableName, err.Error())
 			} else {
 				coercedValues[variableName] = coerced
 			}
 			continue
 		} else if schema.IsNonNullType(variableType) && !hasValue {
-			return nil, newError("the %v variable is required", variableName)
+			return nil, newError(def.Variable, "The %v variable is required.", variableName)
 		} else if hasValue {
 			if coerced, err := schema.CoerceVariableValue(value, variableType); err != nil {
-				return nil, newError("%v", err.Error())
+				return nil, newError(def.Variable, "Invalid $%v value: %v", variableName, err.Error())
 			} else {
 				coercedValues[variableName] = coerced
 			}
@@ -482,7 +520,7 @@ func coerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, 
 	return coercedValues, nil
 }
 
-func coerceArgumentValues(argumentDefinitions map[string]*schema.InputValueDefinition, arguments []*ast.Argument, variableValues map[string]interface{}) (map[string]interface{}, error) {
+func coerceArgumentValues(node ast.Node, argumentDefinitions map[string]*schema.InputValueDefinition, arguments []*ast.Argument, variableValues map[string]interface{}) (map[string]interface{}, *Error) {
 	coercedValues := map[string]interface{}{}
 
 	argumentValues := map[string]ast.Value{}
@@ -506,12 +544,12 @@ func coerceArgumentValues(argumentDefinitions map[string]*schema.InputValueDefin
 			}
 			coercedValues[argumentName] = defaultValue
 		} else if schema.IsNonNullType(argumentType) && !hasValue {
-			return nil, fmt.Errorf("the %v argument is required", argumentName)
+			return nil, newError(node, "The %v argument is required.", argumentName)
 		} else if hasValue {
 			if argVariable, ok := argumentValue.(*ast.Variable); ok {
 				coercedValues[argumentName] = variableValues[argVariable.Name.Name]
 			} else if coerced, err := schema.CoerceLiteral(argumentValue, argumentType, variableValues); err != nil {
-				return nil, err
+				return nil, newError(argumentValue, "Invalid argument value: %v", err.Error())
 			} else {
 				coercedValues[argumentName] = coerced
 			}

@@ -202,7 +202,7 @@ func TestSubscribe(t *testing.T) {
 	}
 
 	responseStream, err := Subscribe(context.Background(), r)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 	assert.Equal(t, 1, responseStream)
 
 	data, errs := ExecuteRequest(context.Background(), r)
