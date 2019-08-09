@@ -17,9 +17,13 @@ type Location struct {
 
 type Error struct {
 	// Executor error messages are formatted as sentences, e.g. "An error occurred."
-	Message   string
+	Message string
+
+	// Nearly all errors have locations, which point to one or more relevant query tokens.
 	Locations []Location
-	Path      []interface{}
+
+	// If the error occurred during the resolution of a particular field, a path will be present.
+	Path []interface{}
 
 	originalError error
 }
