@@ -82,6 +82,8 @@ type object struct {
 	Error error
 }
 
+var stringPromises []ResolvePromise
+
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
 		"intOne": &schema.FieldDefinition{
@@ -102,6 +104,14 @@ func init() {
 				return 2, nil
 			},
 		},
+		"asyncString": &schema.FieldDefinition{
+			Type: schema.StringType,
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				ch := make(ResolvePromise, 1)
+				stringPromises = append(stringPromises, ch)
+				return ResolvePromise(ch), nil
+			},
+		},
 		"stringFoo": &schema.FieldDefinition{
 			Type: schema.StringType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
@@ -112,6 +122,12 @@ func init() {
 			Type: objectType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return &object{}, nil
+			},
+		},
+		"nonNullIntListWithNull": &schema.FieldDefinition{
+			Type: schema.NewListType(schema.NewNonNullType(schema.IntType)),
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				return []interface{}{1, nil, 3}, nil
 			},
 		},
 		"objectsWithError": &schema.FieldDefinition{
@@ -148,6 +164,14 @@ var theNumber int
 var mutationType = &schema.ObjectType{
 	Name: "Mutation",
 	Fields: map[string]*schema.FieldDefinition{
+		"asyncString": &schema.FieldDefinition{
+			Type: schema.StringType,
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				ch := make(ResolvePromise, 1)
+				stringPromises = append(stringPromises, ch)
+				return ResolvePromise(ch), nil
+			},
+		},
 		"changeTheNumber": &schema.FieldDefinition{
 			Type: &schema.ObjectType{
 				Name: "ChangeTheNumberResult",
@@ -234,10 +258,11 @@ func TestExecuteRequest(t *testing.T) {
 	})
 
 	for name, tc := range map[string]struct {
-		Document       string
-		ExpectedData   string
-		ExpectedErrors []*Error
-		VariableValues map[string]interface{}
+		Document             string
+		ExpectedData         string
+		ExpectedErrors       []*Error
+		ExpectedIdlePromises []int
+		VariableValues       map[string]interface{}
 	}{
 		"Query": {
 			Document:     `{intOne stringFoo object {intOne}}`,
@@ -266,6 +291,21 @@ func TestExecuteRequest(t *testing.T) {
 		"FragmentCollection": {
 			Document:     `{object{intOne} ...Frag} fragment Frag on Object {object{stringFoo} intTwo}`,
 			ExpectedData: `{"object":{"intOne":1,"stringFoo":"foo"},"intTwo":2}`,
+		},
+		"AsyncQuery": {
+			Document:             `{a:asyncString b:asyncString}`,
+			ExpectedData:         `{"a":"s","b":"s"}`,
+			ExpectedIdlePromises: []int{2},
+		},
+		"AsyncQueryNested": {
+			Document:             `{a:asyncString object{b:asyncString}}`,
+			ExpectedData:         `{"a":"s","object":{"b":"s"}}`,
+			ExpectedIdlePromises: []int{2},
+		},
+		"AsyncMutation": {
+			Document:             `mutation {a:asyncString b:asyncString}`,
+			ExpectedData:         `{"a":"s","b":"s"}`,
+			ExpectedIdlePromises: []int{1, 1},
 		},
 		"Mutation": {
 			Document:     `mutation {changeTheNumber(newNumber: 1) {theNumber}}`,
@@ -332,6 +372,16 @@ func TestExecuteRequest(t *testing.T) {
 				},
 			},
 		},
+		"NonNullIntListWithNull": {
+			Document:     `{l:nonNullIntListWithNull}`,
+			ExpectedData: `{"l":null}`,
+			ExpectedErrors: []*Error{
+				&Error{
+					Locations: []Location{{1, 2}},
+					Path:      []interface{}{"l", 1},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			parsed, parseErrs := parser.ParseDocument([]byte(tc.Document))
@@ -341,6 +391,17 @@ func TestExecuteRequest(t *testing.T) {
 				Document:       parsed,
 				Schema:         s,
 				VariableValues: tc.VariableValues,
+				IdleHandler: func() {
+					require.NotEmpty(t, tc.ExpectedIdlePromises)
+					assert.Len(t, stringPromises, tc.ExpectedIdlePromises[len(tc.ExpectedIdlePromises)-1])
+					for _, p := range stringPromises {
+						p <- ResolveResult{
+							Value: "s",
+						}
+					}
+					stringPromises = nil
+					tc.ExpectedIdlePromises = tc.ExpectedIdlePromises[:len(tc.ExpectedIdlePromises)-1]
+				},
 			})
 			serializedData, err := json.Marshal(data)
 			require.NoError(t, err)
