@@ -117,7 +117,7 @@ func init() {
 		"objectsWithError": &schema.FieldDefinition{
 			Type: schema.NewListType(objectType),
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
-				return []*object{&object{}, &object{Error: fmt.Errorf("error")}}, nil
+				return []*object{&object{}, &object{Error: fmt.Errorf("error")}, &object{}}, nil
 			},
 		},
 		"intOneOrError": &schema.FieldDefinition{
@@ -323,12 +323,12 @@ func TestExecuteRequest(t *testing.T) {
 			},
 		},
 		"ListError": {
-			Document:     `{objs:objectsWithError{n:intOneOrError}}`,
-			ExpectedData: `{"objs":[{"n":1},{"n":null}]}`,
+			Document:     `{object{object{object{object{objs:objectsWithError{n:intOneOrError}}}}}}`,
+			ExpectedData: `{"object":{"object":{"object":{"object":{"objs":[{"n":1},{"n":null},{"n":1}]}}}}}`,
 			ExpectedErrors: []*Error{
 				&Error{
-					Locations: []Location{{1, 24}},
-					Path:      []interface{}{"objs", 1, "n"},
+					Locations: []Location{{1, 52}},
+					Path:      []interface{}{"object", "object", "object", "object", "objs", 1, "n"},
 				},
 			},
 		},

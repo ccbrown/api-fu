@@ -41,7 +41,7 @@ func newError(node ast.Node, message string, args ...interface{}) *Error {
 	return newErrorWithPath(node, nil, message, args...)
 }
 
-func newErrorWithPath(node ast.Node, path []interface{}, message string, args ...interface{}) *Error {
+func newErrorWithPath(node ast.Node, path *path, message string, args ...interface{}) *Error {
 	ret := &Error{
 		Message: fmt.Sprintf(message, args...),
 	}
@@ -52,9 +52,28 @@ func newErrorWithPath(node ast.Node, path []interface{}, message string, args ..
 		}}
 	}
 	if path != nil {
-		ret.Path = path
+		ret.Path = path.Slice()
 	}
 	return ret
+}
+
+type path struct {
+	Prev      *path
+	Component interface{}
+}
+
+func (p *path) WithComponent(component interface{}) *path {
+	return &path{
+		Prev:      p,
+		Component: component,
+	}
+}
+
+func (p *path) Slice() []interface{} {
+	if p == nil {
+		return nil
+	}
+	return append(p.Prev.Slice(), p.Component)
 }
 
 type Request struct {
@@ -212,7 +231,7 @@ func (e *executor) executeSubscriptionEvent(initialValue interface{}) (*OrderedM
 	return data, e.Errors
 }
 
-func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path []interface{}, forceSerial bool) (*OrderedMap, *Error) {
+func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path *path, forceSerial bool) (*OrderedMap, *Error) {
 	// TODO: parallel execution
 
 	groupedFieldSet := NewOrderedMap()
@@ -235,8 +254,7 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 
 		if fieldDef != nil {
-			fieldPath := append(path, responseKey)
-			responseValue, err := e.executeField(objectValue, fields, fieldDef, fieldPath)
+			responseValue, err := e.executeField(objectValue, fields, fieldDef, path.WithComponent(responseKey))
 			if err != nil {
 				if schema.IsNonNullType(fieldDef.Type) {
 					return nil, err
@@ -258,7 +276,7 @@ func isNil(v interface{}) bool {
 	return (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) && rv.IsNil()
 }
 
-func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path []interface{}) (interface{}, *Error) {
+func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path *path) (interface{}, *Error) {
 	field := fields[0]
 	argumentValues, coercionErr := coerceArgumentValues(field, fieldDef.Arguments, field.Arguments, e.VariableValues)
 	if coercionErr != nil {
@@ -279,14 +297,14 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 		return nil, &Error{
 			Message:       err.Error(),
 			Locations:     locations,
-			Path:          path,
+			Path:          path.Slice(),
 			originalError: err,
 		}
 	}
 	return e.completeValue(fieldDef.Type, fields, resolvedValue, path)
 }
 
-func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path []interface{}) (interface{}, *Error) {
+func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path *path) (interface{}, *Error) {
 	if nonNullType, ok := fieldType.(*schema.NonNullType); ok {
 		completedResult, err := e.completeValue(nonNullType.Type, fields, result, path)
 		if err != nil {
@@ -310,7 +328,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		innerType := fieldType.Type
 		completedResult := make([]interface{}, result.Len())
 		for i := range completedResult {
-			completedResultItem, err := e.completeValue(innerType, fields, result.Index(i).Interface(), append(path, i))
+			completedResultItem, err := e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithComponent(i))
 			if err != nil {
 				return nil, err
 			}
