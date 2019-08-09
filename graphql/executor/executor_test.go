@@ -157,6 +157,18 @@ func init() {
 				return nil, fmt.Errorf("error")
 			},
 		},
+		"badResolveValue": &schema.FieldDefinition{
+			Type: schema.IntType,
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				return &struct{}{}, nil
+			},
+		},
+		"intListWithBadResolveValue": &schema.FieldDefinition{
+			Type: schema.NewListType(schema.IntType),
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				return []interface{}{1, &struct{}{}, 3}, nil
+			},
+		},
 	}
 }
 
@@ -283,6 +295,26 @@ func TestExecuteRequest(t *testing.T) {
 		"IncludeFalse": {
 			Document:     `{intOne @include(if: false)}`,
 			ExpectedData: `{}`,
+		},
+		"BadResolveValue": {
+			Document:     `{intOne badResolveValue}`,
+			ExpectedData: `{"intOne":1,"badResolveValue":null}`,
+			ExpectedErrors: []*Error{
+				&Error{
+					Locations: []Location{{1, 9}},
+					Path:      []interface{}{"badResolveValue"},
+				},
+			},
+		},
+		"IntListWithBadResolveValue": {
+			Document:     `{intOne l:intListWithBadResolveValue}`,
+			ExpectedData: `{"intOne":1,"l":[1,null,3]}`,
+			ExpectedErrors: []*Error{
+				&Error{
+					Locations: []Location{{1, 9}},
+					Path:      []interface{}{"l", 1},
+				},
+			},
 		},
 		"InlineFragmentCollection": {
 			Document:     `{...{intOne} ...{intOne}}`,

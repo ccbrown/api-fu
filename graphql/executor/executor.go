@@ -236,27 +236,17 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 
 		if fieldDef != nil {
-			p := e.executeField(objectValue, fields, fieldDef, path.WithComponent(responseKey))
+			p := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, path.WithComponent(responseKey)))
 			if forceSerial {
 				responseValue, err := e.wait(p)
 				if err != nil {
-					if schema.IsNonNullType(fieldDef.Type) {
-						return promise.Reject(err)
-					}
-					e.Errors = append(e.Errors, err.(*Error))
+					return promise.Reject(err)
 				}
 				resultMap.Set(responseKey, responseValue)
 			} else {
 				responseKey := responseKey
 				promises = append(promises, p.Then(func(responseValue interface{}) interface{} {
 					resultMap.Set(responseKey, responseValue)
-					return nil
-				}).Catch(func(err error) interface{} {
-					if schema.IsNonNullType(fieldDef.Type) {
-						return promise.Reject(err)
-					}
-					resultMap.Set(responseKey, nil)
-					e.Errors = append(e.Errors, err.(*Error))
 					return nil
 				}))
 			}
@@ -325,6 +315,16 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 	return e.completeValue(fieldDef.Type, fields, resolvedValue, path)
 }
 
+func (e *executor) catchErrorIfNullable(t schema.Type, p *promise.Promise) *promise.Promise {
+	return p.Catch(func(err error) interface{} {
+		if schema.IsNonNullType(t) {
+			return promise.Reject(err)
+		}
+		e.Errors = append(e.Errors, err.(*Error))
+		return nil
+	})
+}
+
 func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path *path) *promise.Promise {
 	if nonNullType, ok := fieldType.(*schema.NonNullType); ok {
 		return e.completeValue(nonNullType.Type, fields, result, path).Then(func(result interface{}) interface{} {
@@ -348,7 +348,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		innerType := fieldType.Type
 		completedResult := make([]interface{}, result.Len())
 		for i := range completedResult {
-			completedResult[i] = e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithComponent(i))
+			completedResult[i] = e.catchErrorIfNullable(innerType, e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithComponent(i)))
 		}
 		return promise.All(completedResult)
 	case *schema.ScalarType:
