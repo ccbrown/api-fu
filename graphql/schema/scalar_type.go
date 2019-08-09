@@ -42,7 +42,7 @@ func (t *ScalarType) IsSameType(other Type) bool {
 	return t == other
 }
 
-func (t *ScalarType) NamedType() string {
+func (t *ScalarType) TypeName() string {
 	return t.Name
 }
 

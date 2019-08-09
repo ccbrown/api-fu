@@ -5,6 +5,7 @@ import (
 
 	"github.com/ccbrown/api-fu/graphql/ast"
 	"github.com/ccbrown/api-fu/graphql/schema"
+	"github.com/ccbrown/api-fu/graphql/schema/introspection"
 )
 
 type TypeInfo struct {
@@ -13,6 +14,13 @@ type TypeInfo struct {
 	FieldDefinitions        map[*ast.Field]*schema.FieldDefinition
 	ExpectedTypes           map[ast.Value]schema.Type
 	DefaultValues           map[ast.Value]interface{}
+}
+
+func namedType(s *schema.Schema, name string) schema.NamedType {
+	if ret := s.NamedTypes()[name]; ret != nil {
+		return ret
+	}
+	return introspection.NamedTypes[name]
 }
 
 func schemaType(t ast.Type, s *schema.Schema) schema.Type {
@@ -26,7 +34,7 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 			return schema.NewNonNullType(inner)
 		}
 	case *ast.NamedType:
-		return s.NamedType(t.Name.Name)
+		return namedType(s, t.Name.Name)
 	default:
 		panic(fmt.Sprintf("unsupported ast type: %T", t))
 	}
@@ -75,7 +83,7 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 				}
 			}
 		case *ast.Directive:
-			if directive := s.DirectiveDefinition(node.Name.Name); directive != nil {
+			if directive := s.Directives()[node.Name.Name]; directive != nil {
 				for _, arg := range node.Arguments {
 					if expected, ok := directive.Arguments[arg.Name.Name]; ok {
 						ret.ExpectedTypes[arg.Value] = expected.Type
@@ -96,6 +104,9 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 				field = parent.Fields[node.Name.Name]
 			case *schema.ObjectType:
 				field = parent.Fields[node.Name.Name]
+				if field == nil && parent == s.QueryType() {
+					field = introspection.MetaFields[node.Name.Name]
+				}
 			}
 			if field == nil {
 				break
@@ -113,12 +124,12 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 			ret.FieldDefinitions[node] = field
 			selectionSetScope = schema.UnwrappedType(field.Type)
 		case *ast.FragmentDefinition:
-			selectionSetScope = s.NamedType(node.TypeCondition.Name.Name)
+			selectionSetScope = namedType(s, node.TypeCondition.Name.Name)
 		case *ast.InlineFragment:
 			if node.TypeCondition == nil {
 				selectionSetScope = selectionSetScopes[len(selectionSetScopes)-1]
 			} else {
-				selectionSetScope = s.NamedType(node.TypeCondition.Name.Name)
+				selectionSetScope = namedType(s, node.TypeCondition.Name.Name)
 			}
 		case *ast.OperationDefinition:
 			var t *schema.ObjectType

@@ -8,15 +8,17 @@ import (
 
 type FieldContext struct {
 	Context   context.Context
+	Schema    *Schema
 	Object    interface{}
 	Arguments map[string]interface{}
 }
 
 type FieldDefinition struct {
-	Description string
-	Arguments   map[string]*InputValueDefinition
-	Type        Type
-	Directives  []*Directive
+	Description       string
+	Arguments         map[string]*InputValueDefinition
+	Type              Type
+	Directives        []*Directive
+	DeprecationReason string
 
 	Resolve func(*FieldContext) (interface{}, error)
 }

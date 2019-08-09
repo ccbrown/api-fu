@@ -65,6 +65,10 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 		for _, node := range n.Directives {
 			Inspect(node, f)
 		}
+	case *DirectiveDefinition:
+		for _, node := range n.Arguments {
+			Inspect(node, f)
+		}
 	case *ListType:
 		Inspect(n.Type, f)
 	case *NonNullType:

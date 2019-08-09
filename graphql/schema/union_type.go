@@ -29,7 +29,7 @@ func (d *UnionType) IsSameType(other Type) bool {
 	return d == other
 }
 
-func (d *UnionType) NamedType() string {
+func (d *UnionType) TypeName() string {
 	return d.Name
 }
 

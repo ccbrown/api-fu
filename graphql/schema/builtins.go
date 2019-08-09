@@ -224,10 +224,36 @@ var IDType = &ScalarType{
 	},
 }
 
-var builtins = map[string]*ScalarType{
+var builtinTypes = map[string]*ScalarType{
 	"Int":     IntType,
 	"Float":   FloatType,
 	"String":  StringType,
 	"Boolean": BooleanType,
 	"ID":      IDType,
+}
+
+var SkipDirective = &DirectiveDefinition{
+	Description: "The @skip directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional exclusion during execution as described by the if argument.",
+	Arguments: map[string]*InputValueDefinition{
+		"if": &InputValueDefinition{
+			Type: NewNonNullType(BooleanType),
+		},
+	},
+	Locations: []DirectiveLocation{DirectiveLocationField, DirectiveLocationFragmentSpread, DirectiveLocationInlineFragment},
+	FieldCollectionFilter: func(arguments map[string]interface{}) bool {
+		return !arguments["if"].(bool)
+	},
+}
+
+var IncludeDirective = &DirectiveDefinition{
+	Description: "The @include directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional inclusion during execution as described by the if argument.",
+	Arguments: map[string]*InputValueDefinition{
+		"if": &InputValueDefinition{
+			Type: NewNonNullType(BooleanType),
+		},
+	},
+	Locations: []DirectiveLocation{DirectiveLocationField, DirectiveLocationFragmentSpread, DirectiveLocationInlineFragment},
+	FieldCollectionFilter: func(arguments map[string]interface{}) bool {
+		return arguments["if"].(bool)
+	},
 }

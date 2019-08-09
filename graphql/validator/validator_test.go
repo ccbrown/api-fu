@@ -8,6 +8,7 @@ import (
 
 	"github.com/ccbrown/api-fu/graphql/parser"
 	"github.com/ccbrown/api-fu/graphql/schema"
+	"github.com/ccbrown/api-fu/graphql/schema/introspection"
 )
 
 var petType = &schema.InterfaceType{
@@ -61,7 +62,6 @@ var dogType = &schema.ObjectType{
 		},
 	},
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
-	IsTypeOf:              func(interface{}) bool { return false },
 }
 
 var fooBarEnumType = &schema.EnumType{
@@ -148,7 +148,6 @@ func init() {
 					},
 				},
 				ImplementedInterfaces: []*schema.InterfaceType{petType},
-				IsTypeOf:              func(interface{}) bool { return false },
 			},
 		},
 		"node": &schema.FieldDefinition{
@@ -168,7 +167,6 @@ func init() {
 					},
 				},
 				ImplementedInterfaces: []*schema.InterfaceType{nodeType},
-				IsTypeOf:              func(interface{}) bool { return false },
 			},
 		},
 		"objects": &schema.FieldDefinition{
@@ -228,7 +226,6 @@ func init() {
 							},
 						},
 						ImplementedInterfaces: []*schema.InterfaceType{unionMemberType},
-						IsTypeOf:              func(interface{}) bool { return false },
 					},
 					&schema.ObjectType{
 						Name: "UnionObjectB",
@@ -241,7 +238,6 @@ func init() {
 							},
 						},
 						ImplementedInterfaces: []*schema.InterfaceType{unionMemberType},
-						IsTypeOf:              func(interface{}) bool { return false },
 					},
 				},
 			},
@@ -265,7 +261,7 @@ func validateSource(t *testing.T, src string) []*Error {
 	s, err := schema.New(&schema.SchemaDefinition{
 		Query:        objectType,
 		Subscription: objectType,
-		DirectiveDefinitions: map[string]*schema.DirectiveDefinition{
+		Directives: map[string]*schema.DirectiveDefinition{
 			"include": schema.IncludeDirective,
 			"skip":    schema.SkipDirective,
 		},
@@ -286,4 +282,8 @@ func validateSourceWithSchema(t *testing.T, s *schema.Schema, src string) []*Err
 		assert.False(t, err.isSecondary)
 	}
 	return errs
+}
+
+func TestIntrospectionQuery(t *testing.T) {
+	assert.Empty(t, validateSource(t, string(introspection.Query)))
 }

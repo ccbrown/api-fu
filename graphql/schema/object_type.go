@@ -53,7 +53,7 @@ func (t *ObjectType) IsSameType(other Type) bool {
 	return t == other
 }
 
-func (t *ObjectType) NamedType() string {
+func (t *ObjectType) TypeName() string {
 	return t.Name
 }
 
@@ -97,9 +97,6 @@ func (t *ObjectType) shallowValidate() error {
 		if err := t.satisfyInterface(iface); err != nil {
 			return fmt.Errorf("%v does not satisfy %v: %v", t.Name, iface.Name, err.Error())
 		}
-	}
-	if len(t.ImplementedInterfaces) > 0 && t.IsTypeOf == nil {
-		return fmt.Errorf("%v does not define IsTypeOf", t.Name)
 	}
 	return nil
 }

@@ -13,7 +13,7 @@ func validateArguments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) 
 
 		switch node := node.(type) {
 		case *ast.Directive:
-			if def := s.DirectiveDefinition(node.Name.Name); def != nil {
+			if def := s.Directives()[node.Name.Name]; def != nil {
 				arguments = node.Arguments
 				argumentDefinitions = def.Arguments
 			} else {

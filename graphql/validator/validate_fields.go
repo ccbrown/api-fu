@@ -5,6 +5,7 @@ import (
 
 	"github.com/ccbrown/api-fu/graphql/ast"
 	"github.com/ccbrown/api-fu/graphql/schema"
+	"github.com/ccbrown/api-fu/graphql/schema/introspection"
 )
 
 func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
@@ -30,38 +31,48 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 		case *ast.SelectionSet:
 			selectionSetType = typeInfo.SelectionSetTypes[node]
 		case *ast.Field:
+			name := node.Name.Name
+
 			shouldHaveSubselection := false
+
 			if def := typeInfo.FieldDefinitions[node]; def != nil {
 				switch schema.UnwrappedType(def.Type).(type) {
 				case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 					shouldHaveSubselection = true
 				}
-			} else if def == nil && node.Name.Name != "__typename" {
+			} else if def == nil && name != "__typename" {
 				ret = append(ret, newSecondaryError(node, "no type info for field"))
 			}
-			if shouldHaveSubselection {
-				if node.SelectionSet == nil || len(node.SelectionSet.Selections) == 0 {
-					ret = append(ret, newError(node, "%v field must have a subselection", node.Name.Name))
-				}
-			} else {
-				if node.SelectionSet != nil {
-					ret = append(ret, newError(node, "%v field cannot have a subselection", node.Name.Name))
-				}
-			}
 
-			name := node.Name.Name
+			fieldExists := true
+
 			if name != "__typename" {
 				switch parent := selectionSetTypes[len(selectionSetTypes)-1].(type) {
 				case *schema.ObjectType:
-					if _, ok := parent.Fields[name]; !ok {
+					if _, ok := parent.Fields[name]; !ok && (parent != s.QueryType() || introspection.MetaFields[name] == nil) {
 						ret = append(ret, newError(node.Name, "field %v does not exist on %v", name, parent.Name))
+						fieldExists = false
 					}
 				case *schema.InterfaceType:
 					if _, ok := parent.Fields[name]; !ok {
 						ret = append(ret, newError(node.Name, "field %v does not exist on %v", name, parent.Name))
+						fieldExists = false
 					}
 				case *schema.UnionType:
 					ret = append(ret, newError(node.Name, "field %v does not exist on %v", name, parent.Name))
+					fieldExists = false
+				}
+			}
+
+			if fieldExists {
+				if shouldHaveSubselection {
+					if node.SelectionSet == nil || len(node.SelectionSet.Selections) == 0 {
+						ret = append(ret, newError(node, "%v field must have a subselection", name))
+					}
+				} else {
+					if node.SelectionSet != nil {
+						ret = append(ret, newError(node, "%v field cannot have a subselection", name))
+					}
 				}
 			}
 		}

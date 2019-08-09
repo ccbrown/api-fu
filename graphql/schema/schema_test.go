@@ -25,8 +25,8 @@ func TestSchema(t *testing.T) {
 	assert.NotNil(t, schema)
 	assert.NoError(t, err)
 
-	assert.NotNil(t, schema.NamedType("Query"))
-	assert.NotNil(t, schema.NamedType("Int"))
+	assert.NotNil(t, schema.NamedTypes()["Query"])
+	assert.NotNil(t, schema.NamedTypes()["Int"])
 }
 
 func TestCoercion(t *testing.T) {

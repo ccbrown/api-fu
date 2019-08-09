@@ -9,33 +9,33 @@ import (
 )
 
 type Schema struct {
-	directiveDefinitions     map[string]*DirectiveDefinition
+	directives               map[string]*DirectiveDefinition
 	namedTypes               map[string]NamedType
 	interfaceImplementations map[string][]*ObjectType
 
-	query        *ObjectType
-	mutation     *ObjectType
-	subscription *ObjectType
+	queryType        *ObjectType
+	mutationType     *ObjectType
+	subscriptionType *ObjectType
 }
 
 func (s *Schema) QueryType() *ObjectType {
-	return s.query
+	return s.queryType
 }
 
 func (s *Schema) MutationType() *ObjectType {
-	return s.mutation
+	return s.mutationType
 }
 
 func (s *Schema) SubscriptionType() *ObjectType {
-	return s.subscription
+	return s.subscriptionType
 }
 
-func (s *Schema) DirectiveDefinition(name string) *DirectiveDefinition {
-	return s.directiveDefinitions[name]
+func (s *Schema) Directives() map[string]*DirectiveDefinition {
+	return s.directives
 }
 
-func (s *Schema) NamedType(name string) NamedType {
-	return s.namedTypes[name]
+func (s *Schema) NamedTypes() map[string]NamedType {
+	return s.namedTypes
 }
 
 func (s *Schema) InterfaceImplementations(name string) []*ObjectType {
@@ -51,19 +51,19 @@ func isName(s string) bool {
 func New(def *SchemaDefinition) (*Schema, error) {
 	var err error
 	schema := &Schema{
-		directiveDefinitions:     def.DirectiveDefinitions,
+		directives:               def.Directives,
 		namedTypes:               map[string]NamedType{},
 		interfaceImplementations: map[string][]*ObjectType{},
-		query:                    def.Query,
-		mutation:                 def.Mutation,
-		subscription:             def.Subscription,
+		queryType:                def.Query,
+		mutationType:             def.Mutation,
+		subscriptionType:         def.Subscription,
 	}
 
-	if schema.query == nil {
+	if schema.queryType == nil {
 		return nil, fmt.Errorf("schemas must define the query operation")
 	}
 
-	for name := range def.DirectiveDefinitions {
+	for name := range def.Directives {
 		if !isName(name) || strings.HasPrefix(name, "__") {
 			return nil, fmt.Errorf("illegal directive name: %v", name)
 		}
@@ -75,11 +75,11 @@ func New(def *SchemaDefinition) (*Schema, error) {
 		}
 
 		if namedType, ok := node.(NamedType); ok {
-			if name := namedType.NamedType(); !isName(name) || strings.HasPrefix(name, "__") {
+			if name := namedType.TypeName(); !isName(name) || strings.HasPrefix(name, "__") {
 				err = fmt.Errorf("illegal type name: %v", name)
 			} else if existing, ok := schema.namedTypes[name]; ok && existing != namedType {
 				err = fmt.Errorf("multiple definitions for named type: %v", name)
-			} else if builtin, ok := builtins[name]; ok && namedType != builtin {
+			} else if builtin, ok := builtinTypes[name]; ok && namedType != builtin {
 				err = fmt.Errorf("%v builtin may not be overridden", name)
 			} else if existing != nil {
 				// already visited
@@ -113,8 +113,9 @@ func New(def *SchemaDefinition) (*Schema, error) {
 }
 
 type SchemaDefinition struct {
-	Directives           []*Directive
-	DirectiveDefinitions map[string]*DirectiveDefinition
+	// Directives to define within the schema. For example, you might want to add IncludeDirective
+	// and SkipDirective here.
+	Directives map[string]*DirectiveDefinition
 
 	Query        *ObjectType
 	Mutation     *ObjectType
@@ -139,7 +140,7 @@ type Type interface {
 
 type NamedType interface {
 	Type
-	NamedType() string
+	TypeName() string
 }
 
 type WrappedType interface {

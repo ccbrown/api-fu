@@ -34,7 +34,7 @@ func (t *InputObjectType) IsSameType(other Type) bool {
 	return t == other
 }
 
-func (t *InputObjectType) NamedType() string {
+func (t *InputObjectType) TypeName() string {
 	return t.Name
 }
 

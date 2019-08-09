@@ -45,7 +45,7 @@ func validateDirectives(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo)
 		for _, directive := range directives {
 			name := directive.Name.Name
 
-			if def := s.DirectiveDefinition(name); def == nil {
+			if def := s.Directives()[name]; def == nil {
 				ret = append(ret, newError(directive, "undefined directive"))
 			} else {
 				allowedLocation := false

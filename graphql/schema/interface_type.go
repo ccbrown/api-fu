@@ -32,7 +32,7 @@ func (t *InterfaceType) IsSameType(other Type) bool {
 	return t == other
 }
 
-func (t *InterfaceType) NamedType() string {
+func (t *InterfaceType) TypeName() string {
 	return t.Name
 }
 

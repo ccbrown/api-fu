@@ -7,6 +7,7 @@ import (
 
 	"github.com/ccbrown/api-fu/graphql/ast"
 	"github.com/ccbrown/api-fu/graphql/schema"
+	"github.com/ccbrown/api-fu/graphql/schema/introspection"
 )
 
 type Location struct {
@@ -144,7 +145,7 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, error) {
 	fieldName := field.Name.Name
 	fieldDef := subscriptionType.Fields[fieldName]
 	if fieldDef == nil {
-		return nil, fmt.Errorf("undefined field")
+		return nil, newError("Undefined root subscription field.")
 	}
 	argumentValues, err := coerceArgumentValues(fieldDef.Arguments, field.Arguments, e.VariableValues)
 	if err != nil {
@@ -152,6 +153,7 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, error) {
 	}
 	return fieldDef.Resolve(&schema.FieldContext{
 		Context:   e.Context,
+		Schema:    e.Schema,
 		Object:    initialValue,
 		Arguments: argumentValues,
 	})
@@ -179,12 +181,21 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 	for _, responseKey := range groupedFieldSet.Keys() {
 		v, _ := groupedFieldSet.Get(responseKey)
 		fields := v.([]*ast.Field)
+		fieldName := fields[0].Name.Name
 
-		if fieldName := fields[0].Name.Name; fieldName == "__typename" {
+		if fieldName == "__typename" {
 			resultMap.Set(responseKey, objectType.Name)
-		} else if fieldDef := objectType.Fields[fieldName]; fieldDef != nil {
+			continue
+		}
+
+		fieldDef := objectType.Fields[fieldName]
+		if fieldDef == nil && objectType == e.Schema.QueryType() {
+			fieldDef = introspection.MetaFields[fieldName]
+		}
+
+		if fieldDef != nil {
 			fieldPath := append(path, responseKey)
-			responseValue, err := e.executeField(objectType, objectValue, fields, fieldDef.Type, fieldPath)
+			responseValue, err := e.executeField(objectValue, fields, fieldDef, fieldPath)
 			if err != nil {
 				var responseError *Error
 				switch err := err.(type) {
@@ -223,26 +234,22 @@ func isNil(v interface{}) bool {
 	return (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) && rv.IsNil()
 }
 
-func (e *executor) executeField(objectType *schema.ObjectType, objectValue interface{}, fields []*ast.Field, fieldType schema.Type, path []interface{}) (interface{}, error) {
+func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path []interface{}) (interface{}, error) {
 	field := fields[0]
-	fieldName := field.Name.Name
-	fieldDef := objectType.Fields[fieldName]
-	if fieldDef == nil {
-		return nil, fmt.Errorf("undefined field")
-	}
 	argumentValues, err := coerceArgumentValues(fieldDef.Arguments, field.Arguments, e.VariableValues)
 	if err != nil {
 		return nil, err
 	}
 	resolvedValue, err := fieldDef.Resolve(&schema.FieldContext{
 		Context:   e.Context,
+		Schema:    e.Schema,
 		Object:    objectValue,
 		Arguments: argumentValues,
 	})
 	if !isNil(err) {
 		return nil, err
 	}
-	return e.completeValue(fieldType, fields, resolvedValue, path)
+	return e.completeValue(fieldDef.Type, fields, resolvedValue, path)
 }
 
 func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path []interface{}) (interface{}, error) {
@@ -326,7 +333,7 @@ func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast
 	for _, selection := range selections {
 		skip := false
 		for _, directive := range selection.SelectionDirectives() {
-			if def := e.Schema.DirectiveDefinition(directive.Name.Name); def != nil && def.FieldCollectionFilter != nil {
+			if def := e.Schema.Directives()[directive.Name.Name]; def != nil && def.FieldCollectionFilter != nil {
 				if arguments, err := coerceArgumentValues(def.Arguments, directive.Arguments, e.VariableValues); err == nil && !def.FieldCollectionFilter(arguments) {
 					skip = true
 				}
@@ -420,6 +427,13 @@ func getOperation(doc *ast.Document, operationName string) (*ast.OperationDefini
 	return ret, nil
 }
 
+func namedType(s *schema.Schema, name string) schema.NamedType {
+	if ret := s.NamedTypes()[name]; ret != nil {
+		return ret
+	}
+	return introspection.NamedTypes[name]
+}
+
 func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 	switch t := t.(type) {
 	case *ast.ListType:
@@ -431,7 +445,7 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 			return schema.NewNonNullType(inner)
 		}
 	case *ast.NamedType:
-		return s.NamedType(t.Name.Name)
+		return namedType(s, t.Name.Name)
 	default:
 		panic(fmt.Sprintf("unexpected ast type: %T", t))
 	}

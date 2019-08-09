@@ -8,13 +8,25 @@ import (
 type DirectiveLocation string
 
 const (
-	DirectiveLocationQuery              = "QUERY"
-	DirectiveLocationMutation           = "MUTATION"
-	DirectiveLocationSubscription       = "SUBSCRIPTION"
-	DirectiveLocationField              = "FIELD"
-	DirectiveLocationFragmentDefinition = "FRAGMENT_DEFINITION"
-	DirectiveLocationFragmentSpread     = "FRAGMENT_SPREAD"
-	DirectiveLocationInlineFragment     = "INLINE_FRAGMENT"
+	DirectiveLocationQuery              DirectiveLocation = "QUERY"
+	DirectiveLocationMutation           DirectiveLocation = "MUTATION"
+	DirectiveLocationSubscription       DirectiveLocation = "SUBSCRIPTION"
+	DirectiveLocationField              DirectiveLocation = "FIELD"
+	DirectiveLocationFragmentDefinition DirectiveLocation = "FRAGMENT_DEFINITION"
+	DirectiveLocationFragmentSpread     DirectiveLocation = "FRAGMENT_SPREAD"
+	DirectiveLocationInlineFragment     DirectiveLocation = "INLINE_FRAGMENT"
+
+	DirectiveLocationSchema               DirectiveLocation = "SCHEMA"
+	DirectiveLocationScalar               DirectiveLocation = "SCALAR"
+	DirectiveLocationObject               DirectiveLocation = "OBJECT"
+	DirectiveLocationFieldDefinition      DirectiveLocation = "FIELD_DEFINITION"
+	DirectiveLocationArgumentDefinition   DirectiveLocation = "ARGUMENT_DEFINITION"
+	DirectiveLocationInterface            DirectiveLocation = "INTERFACE"
+	DirectiveLocationUnion                DirectiveLocation = "UNION"
+	DirectiveLocationEnum                 DirectiveLocation = "ENUM"
+	DirectiveLocationEnumValue            DirectiveLocation = "ENUM_VALUE"
+	DirectiveLocationInputObject          DirectiveLocation = "INPUT_OBJECT"
+	DirectiveLocationInputFieldDefinition DirectiveLocation = "INPUT_FIELD_DEFINITION"
 )
 
 type DirectiveDefinition struct {
@@ -53,36 +65,13 @@ func (d *DirectiveDefinition) shallowValidate() error {
 			return fmt.Errorf("directive is self-referencing via %v argument", name)
 		}
 	}
+	if len(d.Locations) == 0 {
+		return fmt.Errorf("directives must have one or more locations")
+	}
 	return nil
 }
 
 type Directive struct {
 	Definition *DirectiveDefinition
 	Arguments  []*Argument
-}
-
-var SkipDirective = &DirectiveDefinition{
-	Description: "The @skip directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional exclusion during execution as described by the if argument.",
-	Arguments: map[string]*InputValueDefinition{
-		"if": &InputValueDefinition{
-			Type: NewNonNullType(BooleanType),
-		},
-	},
-	Locations: []DirectiveLocation{DirectiveLocationField, DirectiveLocationFragmentSpread, DirectiveLocationInlineFragment},
-	FieldCollectionFilter: func(arguments map[string]interface{}) bool {
-		return !arguments["if"].(bool)
-	},
-}
-
-var IncludeDirective = &DirectiveDefinition{
-	Description: "The @include directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional inclusion during execution as described by the if argument.",
-	Arguments: map[string]*InputValueDefinition{
-		"if": &InputValueDefinition{
-			Type: NewNonNullType(BooleanType),
-		},
-	},
-	Locations: []DirectiveLocation{DirectiveLocationField, DirectiveLocationFragmentSpread, DirectiveLocationInlineFragment},
-	FieldCollectionFilter: func(arguments map[string]interface{}) bool {
-		return arguments["if"].(bool)
-	},
 }

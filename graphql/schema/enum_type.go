@@ -14,9 +14,10 @@ type EnumType struct {
 }
 
 type EnumValueDefinition struct {
-	Description string
-	Directives  []*Directive
-	Value       interface{}
+	Description       string
+	Directives        []*Directive
+	Value             interface{}
+	DeprecationReason string
 }
 
 func (t *EnumType) String() string {
@@ -39,7 +40,7 @@ func (t *EnumType) IsSameType(other Type) bool {
 	return t == other
 }
 
-func (t *EnumType) NamedType() string {
+func (t *EnumType) TypeName() string {
 	return t.Name
 }
 
@@ -80,7 +81,7 @@ func (t *EnumType) CoerceResult(result interface{}) (string, error) {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("invalid enum result value")
+	return "", fmt.Errorf("invalid %v enum value: %v", t.Name, result)
 }
 
 func IsEnumType(t Type) bool {

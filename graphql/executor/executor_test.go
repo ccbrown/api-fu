@@ -12,6 +12,7 @@ import (
 
 	"github.com/ccbrown/api-fu/graphql/parser"
 	"github.com/ccbrown/api-fu/graphql/schema"
+	"github.com/ccbrown/api-fu/graphql/schema/introspection"
 	"github.com/ccbrown/api-fu/graphql/validator"
 )
 
@@ -213,13 +214,24 @@ func TestExecuteRequest(t *testing.T) {
 	s, err := schema.New(&schema.SchemaDefinition{
 		Query:    objectType,
 		Mutation: mutationType,
-		DirectiveDefinitions: map[string]*schema.DirectiveDefinition{
+		Directives: map[string]*schema.DirectiveDefinition{
 			"include": schema.IncludeDirective,
 			"skip":    schema.SkipDirective,
 		},
 		AdditionalTypes: []schema.NamedType{dogType, catType},
 	})
 	require.NoError(t, err)
+
+	t.Run("IntrospectionQuery", func(t *testing.T) {
+		parsed, parseErrs := parser.ParseDocument(introspection.Query)
+		require.Empty(t, parseErrs)
+		require.Empty(t, validator.ValidateDocument(parsed, s))
+		_, errs := ExecuteRequest(context.Background(), &Request{
+			Document: parsed,
+			Schema:   s,
+		})
+		require.Empty(t, errs)
+	})
 
 	for name, tc := range map[string]struct {
 		Document       string

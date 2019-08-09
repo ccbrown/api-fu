@@ -17,7 +17,7 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 	var ret []*Error
 
 	validateTypeCondition := func(tc *ast.NamedType) {
-		switch s.NamedType(tc.Name.Name).(type) {
+		switch namedType(s, tc.Name.Name).(type) {
 		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		case nil:
 			ret = append(ret, newError(tc.Name, "undefined type"))
@@ -106,7 +106,7 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 			ret = append(ret, newSecondaryError(tc, "no type info for fragment spread parent"))
 			return
 		}
-		switch fragmentType := s.NamedType(tc.Name.Name).(type) {
+		switch fragmentType := namedType(s, tc.Name.Name).(type) {
 		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 			a := getPossibleTypes(s, fragmentType)
 			b := getPossibleTypes(s, parentType)
@@ -165,7 +165,7 @@ func getPossibleTypes(s *schema.Schema, t schema.NamedType) map[string]schema.Na
 		}
 	case *schema.UnionType:
 		for _, t := range t.MemberTypes {
-			ret[t.NamedType()] = t
+			ret[t.TypeName()] = t
 		}
 	default:
 		panic(fmt.Sprintf("unexpected type: %T", t))
