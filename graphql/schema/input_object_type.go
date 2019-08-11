@@ -12,6 +12,11 @@ type InputObjectType struct {
 	Description string
 	Directives  []*Directive
 	Fields      map[string]*InputValueDefinition
+
+	// If given, input objects can validated and converted to other types via this function.
+	// Otherwise the objects will remain as maps. This function is called after all fields are fully
+	// coerced.
+	InputCoercion func(map[string]interface{}) (interface{}, error)
 }
 
 func (t *InputObjectType) String() string {
@@ -39,9 +44,10 @@ func (t *InputObjectType) TypeName() string {
 }
 
 func (t *InputObjectType) CoerceVariableValue(v interface{}) (interface{}, error) {
+	result := map[string]interface{}{}
+
 	switch v := v.(type) {
 	case map[string]interface{}:
-		result := map[string]interface{}{}
 		for name, field := range t.Fields {
 			if fieldValue, ok := v[name]; ok {
 				if coerced, err := CoerceVariableValue(fieldValue, field.Type); err != nil {
@@ -64,13 +70,19 @@ func (t *InputObjectType) CoerceVariableValue(v interface{}) (interface{}, error
 				return nil, fmt.Errorf("unknown field: %v", name)
 			}
 		}
-		return result, nil
+	default:
+		return nil, fmt.Errorf("invalid variable type")
 	}
-	return nil, fmt.Errorf("invalid variable type")
+
+	if t.InputCoercion != nil {
+		return t.InputCoercion(result)
+	}
+	return result, nil
 }
 
-func (t *InputObjectType) CoerceLiteral(node *ast.ObjectValue, variableValues map[string]interface{}) (map[string]interface{}, error) {
+func (t *InputObjectType) CoerceLiteral(node *ast.ObjectValue, variableValues map[string]interface{}) (interface{}, error) {
 	result := map[string]interface{}{}
+
 	for _, field := range node.Fields {
 		name := field.Name.Name
 		if fieldDef, ok := t.Fields[name]; !ok {
@@ -98,6 +110,10 @@ func (t *InputObjectType) CoerceLiteral(node *ast.ObjectValue, variableValues ma
 		} else if (!ok || v == nil) && IsNonNullType(field.Type) {
 			return nil, fmt.Errorf("the %v field is required", name)
 		}
+	}
+
+	if t.InputCoercion != nil {
+		return t.InputCoercion(result)
 	}
 	return result, nil
 }
