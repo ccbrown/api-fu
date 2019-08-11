@@ -25,6 +25,10 @@ type InputValueDefinition = schema.InputValueDefinition
 type FieldDefinition = schema.FieldDefinition
 
 var IDType = schema.IDType
+var StringType = schema.StringType
+var IntType = schema.IntType
+var FloatType = schema.FloatType
+var BooleanType = schema.BooleanType
 
 func NewNonNullType(t Type) *NonNullType {
 	return schema.NewNonNullType(t)

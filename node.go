@@ -18,13 +18,11 @@ type Node struct {
 	// models.
 	GetByIds func(ctx context.Context, ids interface{}) (models interface{}, err error)
 
-	Fields map[string]*NodeField
+	Fields map[string]*graphql.FieldDefinition
 }
 
-type NodeField struct {
-	Resolve func(graphql.FieldContext) (interface{}, error)
-}
-
-func NonNullString(modelField string) *NodeField {
-	return &NodeField{}
+func NonNullString(modelField string) *graphql.FieldDefinition {
+	return &graphql.FieldDefinition{
+		Type: graphql.NewNonNullType(graphql.StringType),
+	}
 }
