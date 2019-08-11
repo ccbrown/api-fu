@@ -11,6 +11,7 @@ import (
 )
 
 type Type = schema.Type
+type NamedType = schema.NamedType
 type ObjectType = schema.ObjectType
 type InterfaceType = schema.InterfaceType
 type EnumType = schema.EnumType

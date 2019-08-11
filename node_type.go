@@ -7,10 +7,12 @@ import (
 	"github.com/ccbrown/api-fu/graphql"
 )
 
-type Node struct {
-	// TypeId should be an integer that uniquely identifies the node type. Once set, it should never
+type NodeType struct {
+	// Id should be an integer that uniquely identifies the node type. Once set, it should never
 	// change and no other nodes should ever use the same id.
-	TypeId int
+	Id int
+
+	Name string
 
 	Model reflect.Type
 

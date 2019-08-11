@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"sync"
 
@@ -8,11 +9,15 @@ import (
 	"github.com/ccbrown/api-fu/examples/chat/app"
 )
 
-var apiFu apifu.Config
+var fuCfg apifu.Config
 
 type sessionContextKeyType int
 
 var sessionContextKey sessionContextKeyType
+
+func ctxSession(ctx context.Context) *app.Session {
+	return ctx.Value(sessionContextKey).(*app.Session)
+}
 
 type API struct {
 	App *app.App
@@ -23,7 +28,7 @@ type API struct {
 
 func (api *API) init() {
 	api.initOnce.Do(func() {
-		fu, err := apifu.NewAPI(&apiFu)
+		fu, err := apifu.NewAPI(&fuCfg)
 		if err != nil {
 			panic(err)
 		}
