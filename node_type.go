@@ -23,6 +23,11 @@ type NodeType struct {
 	Fields map[string]*graphql.FieldDefinition
 }
 
+func NonNullID(modelField string) *graphql.FieldDefinition {
+	return &graphql.FieldDefinition{
+		Type: graphql.NewNonNullType(graphql.IDType),
+	}
+}
 func NonNullString(modelField string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(graphql.StringType),

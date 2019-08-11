@@ -17,13 +17,24 @@ var userType = fuCfg.AddNodeType(&apifu.NodeType{
 		return ctxSession(ctx).GetUsersByIds(ids.([]model.Id)...)
 	},
 	Fields: map[string]*graphql.FieldDefinition{
+		"id":     apifu.NonNullID("Id"),
 		"handle": apifu.NonNullString("Handle"),
 	},
 })
 
 func init() {
 	fuCfg.AddMutation("createUser", &graphql.FieldDefinition{
-		Type: graphql.NewNonNullType(userType),
+		Type: &graphql.ObjectType{
+			Name: "CreateUserResult",
+			Fields: map[string]*graphql.FieldDefinition{
+				"user": &graphql.FieldDefinition{
+					Type: graphql.NewNonNullType(userType),
+					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+						return ctx.Object, nil
+					},
+				},
+			},
+		},
 		Arguments: map[string]*graphql.InputValueDefinition{
 			"user": &graphql.InputValueDefinition{
 				Type: graphql.NewNonNullType(&graphql.InputObjectType{

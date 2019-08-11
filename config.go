@@ -70,21 +70,9 @@ func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 	}
 	cfg.nodeTypesById[t.Id] = t
 
-	fields := make(map[string]*graphql.FieldDefinition, len(t.Fields)+2)
-	for k, v := range t.Fields {
-		fields[k] = v
-	}
-	fields["id"] = &graphql.FieldDefinition{
-		Type: graphql.NewNonNullType(graphql.IDType),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-			// TODO
-			return "foo", nil
-		},
-	}
-
 	objectType := &graphql.ObjectType{
 		Name:                  t.Name,
-		Fields:                fields,
+		Fields:                t.Fields,
 		ImplementedInterfaces: []*graphql.InterfaceType{cfg.nodeInterface},
 	}
 	cfg.additionalTypes = append(cfg.additionalTypes, objectType)
