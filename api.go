@@ -1,6 +1,7 @@
 package apifu
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"reflect"
@@ -12,9 +13,10 @@ import (
 
 type API struct {
 	schema *graphql.Schema
+	config *Config
 }
 
-func normalizeModel(t reflect.Type) reflect.Type {
+func normalizeModelType(t reflect.Type) reflect.Type {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -27,27 +29,28 @@ func NewAPI(cfg *Config) (*API, error) {
 		return nil, errors.Wrap(err, "error building graphql schema")
 	}
 	return &API{
+		config: cfg,
 		schema: schema,
 	}, nil
 }
 
-func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
-	req := &graphql.Request{
-		Schema: api.schema,
-	}
+type apiContextKeyType int
 
-	switch r.Method {
-	case http.MethodGet:
-		query := r.URL.Query().Get("query")
-		if query == "" {
-			http.Error(w, "a query is required", http.StatusBadRequest)
-			return
-		}
-		req.Query = query
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+var apiContextKey apiContextKeyType
+
+func ctxAPI(ctx context.Context) *API {
+	return ctx.Value(apiContextKey).(*API)
+}
+
+func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(context.WithValue(r.Context(), apiContextKey, api))
+
+	req, err, code := graphql.NewRequestFromHTTP(r)
+	if err != nil {
+		http.Error(w, err.Error(), code)
 		return
 	}
+	req.Schema = api.schema
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(graphql.Execute(req))

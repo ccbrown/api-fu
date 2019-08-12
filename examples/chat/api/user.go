@@ -17,7 +17,7 @@ var userType = fuCfg.AddNodeType(&apifu.NodeType{
 		return ctxSession(ctx).GetUsersByIds(ids.([]model.Id)...)
 	},
 	Fields: map[string]*graphql.FieldDefinition{
-		"id":     apifu.NonNullID("Id"),
+		"id":     apifu.NonNullNodeID(reflect.TypeOf(model.User{}), "Id"),
 		"handle": apifu.NonNullString("Handle"),
 	},
 })

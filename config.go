@@ -59,7 +59,7 @@ func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
 func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 	cfg.init()
 
-	model := normalizeModel(t.Model)
+	model := normalizeModelType(t.Model)
 	if _, ok := cfg.nodeTypesByModel[model]; ok {
 		panic("node type already exists for model")
 	}

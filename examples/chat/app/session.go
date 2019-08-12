@@ -11,3 +11,10 @@ type Session struct {
 	UserId model.Id
 	Logger logrus.FieldLogger
 }
+
+func (a *App) NewSession() *Session {
+	return &Session{
+		App:    a,
+		Logger: logrus.StandardLogger(),
+	}
+}

@@ -2,21 +2,30 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"net/http"
 	"sync"
 
-	"github.com/ccbrown/api-fu"
+	apifu "github.com/ccbrown/api-fu"
 	"github.com/ccbrown/api-fu/examples/chat/app"
+	"github.com/ccbrown/api-fu/examples/chat/model"
 )
 
-var fuCfg apifu.Config
-
-type sessionContextKeyType int
-
-var sessionContextKey sessionContextKeyType
-
-func ctxSession(ctx context.Context) *app.Session {
-	return ctx.Value(sessionContextKey).(*app.Session)
+var fuCfg = apifu.Config{
+	SerializeNodeId: func(typeId int, id interface{}) string {
+		buf := make([]byte, binary.MaxVarintLen64)
+		n := binary.PutVarint(buf, int64(typeId))
+		return base64.RawURLEncoding.EncodeToString(append(buf[:n], id.(model.Id)...))
+	},
+	DeserializeNodeId: func(id string) (int, interface{}) {
+		if buf, err := base64.RawURLEncoding.DecodeString(id); err == nil {
+			if typeId, n := binary.Varint(buf); n > 0 {
+				return int(typeId), model.Id(buf[n:])
+			}
+		}
+		return 0, nil
+	},
 }
 
 type API struct {
@@ -38,5 +47,24 @@ func (api *API) init() {
 
 func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	api.init()
-	api.fu.ServeGraphQL(w, r)
+	api.withSession(api.fu.ServeGraphQL)(w, r)
+}
+
+type sessionContextKeyType int
+
+var sessionContextKey sessionContextKeyType
+
+func ctxSession(ctx context.Context) *app.Session {
+	return ctx.Value(sessionContextKey).(*app.Session)
+}
+
+func (api *API) withSession(f func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := api.App.NewSession()
+
+		// TODO: authentication
+
+		r = r.WithContext(context.WithValue(r.Context(), sessionContextKey, session))
+		f(w, r)
+	}
 }

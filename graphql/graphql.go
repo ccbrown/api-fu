@@ -2,6 +2,11 @@ package graphql
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"mime"
+	"net/http"
 
 	"github.com/ccbrown/api-fu/graphql/ast"
 	"github.com/ccbrown/api-fu/graphql/executor"
@@ -62,6 +67,59 @@ type Request struct {
 	IdleHandler    func()
 }
 
+func NewRequestFromHTTP(r *http.Request) (req *Request, err error, suggestedCode int) {
+	req = &Request{
+		Context: r.Context(),
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		if query := r.URL.Query().Get("query"); query == "" {
+			return nil, fmt.Errorf("the query parameter is required"), http.StatusBadRequest
+		} else {
+			req.Query = query
+		}
+
+		if variables := r.URL.Query().Get("variables"); variables != "" {
+			if err := json.Unmarshal([]byte(variables), &req.VariableValues); err != nil {
+				return nil, fmt.Errorf("malformed variables parameter"), http.StatusBadRequest
+			}
+		}
+
+		req.OperationName = r.URL.Query().Get("variables")
+	case http.MethodPost:
+		if query := r.URL.Query().Get("query"); query != "" {
+			req.Query = query
+		}
+
+		switch mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType {
+		case "application/json":
+			var body struct {
+				Query         string                 `json:"query"`
+				OperationName string                 `json:"operationName"`
+				Variables     map[string]interface{} `json:"variables"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				return nil, fmt.Errorf("malformed request body"), http.StatusBadRequest
+			}
+
+			req.Query = body.Query
+			req.OperationName = body.OperationName
+			req.VariableValues = body.Variables
+		case "application/graphql":
+			body, _ := ioutil.ReadAll(r.Body)
+			req.Query = string(body)
+		default:
+			return nil, fmt.Errorf("invalid content-type"), http.StatusBadRequest
+		}
+	default:
+		return nil, fmt.Errorf("method not allowed"), http.StatusMethodNotAllowed
+	}
+
+	return req, nil, http.StatusOK
+}
+
 type Location struct {
 	Line   int `json:"line"`
 	Column int `json:"column"`
@@ -86,7 +144,7 @@ func Execute(r *Request) *Response {
 		if len(parseErrs) > 0 {
 			for _, err := range parseErrs {
 				ret.Errors = append(ret.Errors, &Error{
-					Message: err.Message,
+					Message: "Syntax error: " + err.Message,
 					Locations: []Location{
 						Location{
 							Line:   err.Location.Line,
@@ -105,7 +163,7 @@ func Execute(r *Request) *Response {
 					locations[i].Column = loc.Column
 				}
 				ret.Errors = append(ret.Errors, &Error{
-					Message:   err.Message,
+					Message:   "Validation error: " + err.Message,
 					Locations: locations,
 				})
 			}
