@@ -489,7 +489,7 @@ func getOperation(doc *ast.Document, operationName string) (*ast.OperationDefini
 	var ret *ast.OperationDefinition
 	for _, def := range doc.Definitions {
 		if def, ok := def.(*ast.OperationDefinition); ok {
-			if (def.Name == nil && operationName == "") || (def.Name != nil && def.Name.Name == operationName) {
+			if operationName == "" || (def.Name != nil && def.Name.Name == operationName) {
 				if ret != nil {
 					return nil, newError(def, "Multiple matching operations.")
 				}

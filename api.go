@@ -55,3 +55,32 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(graphql.Execute(req))
 }
+
+func isNil(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	return (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) && rv.IsNil()
+}
+
+func (api *API) resolveNodeById(ctx context.Context, id string) (interface{}, error) {
+	// TODO: batching and concurrency
+
+	typeId, modelId := api.config.DeserializeNodeId(id)
+	nodeType, ok := api.config.nodeTypesById[typeId]
+	if !ok {
+		return nil, nil
+	}
+	ids := reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(modelId)), 1, 1)
+	ids.Index(0).Set(reflect.ValueOf(modelId))
+	nodes, err := nodeType.GetByIds(ctx, ids.Interface())
+	if !isNil(err) {
+		return nil, err
+	}
+	nodesValue := reflect.ValueOf(nodes)
+	if nodesValue.Len() < 1 {
+		return nil, nil
+	}
+	return nodesValue.Index(0).Interface(), nil
+}

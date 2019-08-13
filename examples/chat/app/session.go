@@ -8,7 +8,7 @@ import (
 
 type Session struct {
 	App    *App
-	UserId model.Id
+	User   *model.User
 	Logger logrus.FieldLogger
 }
 
@@ -17,4 +17,17 @@ func (a *App) NewSession() *Session {
 		App:    a,
 		Logger: logrus.StandardLogger(),
 	}
+}
+
+func (s *Session) WithHandleAndPassword(handle, password string) (*Session, SanitizedError) {
+	user, err := s.App.Store.GetUserByHandle(handle)
+	if user == nil {
+		return nil, s.InternalError(err)
+	}
+	if model.VerifyPasswordHash(user.PasswordHash, password) {
+		ret := *s
+		ret.User = user
+		return &ret, nil
+	}
+	return nil, nil
 }

@@ -62,6 +62,7 @@ var dogType = &schema.ObjectType{
 		},
 	},
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
+	IsTypeOf:              func(interface{}) bool { return false },
 }
 
 var fooBarEnumType = &schema.EnumType{
@@ -148,6 +149,7 @@ func init() {
 					},
 				},
 				ImplementedInterfaces: []*schema.InterfaceType{petType},
+				IsTypeOf:              func(interface{}) bool { return false },
 			},
 		},
 		"node": &schema.FieldDefinition{
@@ -167,6 +169,7 @@ func init() {
 					},
 				},
 				ImplementedInterfaces: []*schema.InterfaceType{nodeType},
+				IsTypeOf:              func(interface{}) bool { return false },
 			},
 		},
 		"objects": &schema.FieldDefinition{
@@ -226,6 +229,7 @@ func init() {
 							},
 						},
 						ImplementedInterfaces: []*schema.InterfaceType{unionMemberType},
+						IsTypeOf:              func(interface{}) bool { return false },
 					},
 					&schema.ObjectType{
 						Name: "UnionObjectB",
@@ -238,6 +242,7 @@ func init() {
 							},
 						},
 						ImplementedInterfaces: []*schema.InterfaceType{unionMemberType},
+						IsTypeOf:              func(interface{}) bool { return false },
 					},
 				},
 			},

@@ -39,8 +39,13 @@ func (cfg *Config) init() {
 			Fields: map[string]*graphql.FieldDefinition{
 				"node": &graphql.FieldDefinition{
 					Type: cfg.nodeInterface,
-					Resolve: func(*graphql.FieldContext) (interface{}, error) {
-						return nil, nil
+					Arguments: map[string]*graphql.InputValueDefinition{
+						"id": &graphql.InputValueDefinition{
+							Type: graphql.NewNonNullType(graphql.IDType),
+						},
+					},
+					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+						return ctxAPI(ctx.Context).resolveNodeById(ctx.Context, ctx.Arguments["id"].(string))
 					},
 				},
 			},
@@ -74,6 +79,9 @@ func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 		Name:                  t.Name,
 		Fields:                t.Fields,
 		ImplementedInterfaces: []*graphql.InterfaceType{cfg.nodeInterface},
+		IsTypeOf: func(v interface{}) bool {
+			return normalizeModelType(reflect.TypeOf(v)) == model
+		},
 	}
 	cfg.additionalTypes = append(cfg.additionalTypes, objectType)
 

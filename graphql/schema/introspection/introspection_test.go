@@ -31,6 +31,7 @@ var dogType = &schema.ObjectType{
 		},
 	},
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
+	IsTypeOf:              func(interface{}) bool { return false },
 }
 
 var fooBarEnumType = &schema.EnumType{
@@ -66,6 +67,7 @@ var objectType = &schema.ObjectType{
 								Type: schema.StringType,
 							},
 						},
+						IsTypeOf: func(interface{}) bool { return false },
 					},
 					&schema.ObjectType{
 						Name: "UnionObjectB",
@@ -77,6 +79,7 @@ var objectType = &schema.ObjectType{
 								Type: schema.StringType,
 							},
 						},
+						IsTypeOf: func(interface{}) bool { return false },
 					},
 				},
 			},

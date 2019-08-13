@@ -58,11 +58,30 @@ func ctxSession(ctx context.Context) *app.Session {
 	return ctx.Value(sessionContextKey).(*app.Session)
 }
 
+func statusCodeForError(err error) int {
+	switch err.(type) {
+	case *app.UserError:
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
 func (api *API) withSession(f func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := api.App.NewSession()
 
-		// TODO: authentication
+		if handle, password, ok := r.BasicAuth(); ok {
+			if newSession, err := session.WithHandleAndPassword(handle, password); err != nil {
+				http.Error(w, err.Error(), statusCodeForError(err))
+				return
+			} else if newSession == nil {
+				http.Error(w, "Invalid credentials.", http.StatusUnauthorized)
+				return
+			} else {
+				session = newSession
+			}
+		}
 
 		r = r.WithContext(context.WithValue(r.Context(), sessionContextKey, session))
 		f(w, r)

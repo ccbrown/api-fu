@@ -98,6 +98,9 @@ func (t *ObjectType) shallowValidate() error {
 			return fmt.Errorf("%v does not satisfy %v: %v", t.Name, iface.Name, err.Error())
 		}
 	}
+	if len(t.ImplementedInterfaces) > 0 && t.IsTypeOf == nil {
+		return fmt.Errorf("%v implements an interface, but does not define IsTypeOf", t.Name)
+	}
 	return nil
 }
 

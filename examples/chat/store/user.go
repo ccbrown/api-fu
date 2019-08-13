@@ -30,3 +30,15 @@ func (s *Store) GetUsersByIds(ids ...model.Id) ([]*model.User, error) {
 	var ret []*model.User
 	return ret, s.getByIds("user", &ret, ids...)
 }
+
+func (s *Store) GetUserByHandle(handle string) (*model.User, error) {
+	id, err := s.Backend.Get("user_by_handle:" + handle)
+	if id == nil {
+		return nil, err
+	}
+	users, err := s.GetUsersByIds(model.Id(*id))
+	if len(users) < 1 {
+		return nil, err
+	}
+	return users[0], nil
+}

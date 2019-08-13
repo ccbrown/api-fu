@@ -42,6 +42,9 @@ func (d *UnionType) shallowValidate() error {
 			if _, ok := objNames[member.Name]; ok {
 				return fmt.Errorf("union member types must be unique")
 			}
+			if member.IsTypeOf == nil {
+				return fmt.Errorf("union member types must define IsTypeOf")
+			}
 			objNames[member.Name] = struct{}{}
 		}
 	}

@@ -475,4 +475,11 @@ func TestGetOperation(t *testing.T) {
 	op, err = getOperation(doc, "q")
 	assert.NotNil(t, op)
 	assert.Nil(t, err)
+
+	doc, errs = parser.ParseDocument([]byte(`query q {x}`))
+	assert.Empty(t, errs)
+
+	op, err = getOperation(doc, "")
+	assert.NotNil(t, op)
+	assert.Nil(t, err)
 }

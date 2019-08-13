@@ -22,6 +22,9 @@ func (e *InternalError) Unwrap() error {
 }
 
 func (s *Session) InternalError(err error) *InternalError {
+	if err == nil {
+		return nil
+	}
 	s.Logger.Error(err)
 	return &InternalError{
 		cause: err,
