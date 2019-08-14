@@ -60,4 +60,11 @@ func init() {
 			return ctxSession(ctx.Context).CreateUser(ctx.Arguments["user"].(*model.User))
 		},
 	})
+
+	fuCfg.AddQueryField("authenticatedUser", &graphql.FieldDefinition{
+		Type: userType,
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			return ctxSession(ctx.Context).User, nil
+		},
+	})
 }

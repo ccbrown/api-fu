@@ -15,6 +15,7 @@ import (
 	"github.com/ccbrown/api-fu/examples/chat/api"
 	"github.com/ccbrown/api-fu/examples/chat/app"
 	"github.com/ccbrown/api-fu/examples/chat/store"
+	"github.com/ccbrown/api-fu/examples/chat/ui"
 )
 
 func main() {
@@ -28,6 +29,7 @@ func main() {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/graphql", api.ServeGraphQL)
+	router.NotFoundHandler = http.HandlerFunc(ui.ServeHTTP)
 
 	cors := handlers.CORS(
 		handlers.AllowedOrigins([]string{"*"}),

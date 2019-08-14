@@ -104,3 +104,13 @@ func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
 
 	cfg.mutation.Fields[name] = def
 }
+
+func (cfg *Config) AddQueryField(name string, def *graphql.FieldDefinition) {
+	cfg.init()
+
+	if _, ok := cfg.query.Fields[name]; ok {
+		panic("a field with that name already exists")
+	}
+
+	cfg.query.Fields[name] = def
+}
