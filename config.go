@@ -11,19 +11,21 @@ type Config struct {
 	SerializeNodeId   func(typeId int, id interface{}) string
 	DeserializeNodeId func(string) (typeId int, id interface{})
 
-	initOnce         sync.Once
-	nodeTypesByModel map[reflect.Type]*NodeType
-	nodeTypesById    map[int]*NodeType
-	nodeInterface    *graphql.InterfaceType
-	query            *graphql.ObjectType
-	mutation         *graphql.ObjectType
-	additionalTypes  []graphql.NamedType
+	initOnce              sync.Once
+	nodeTypesByModel      map[reflect.Type]*NodeType
+	nodeTypesById         map[int]*NodeType
+	nodeTypesByObjectType map[*graphql.ObjectType]*NodeType
+	nodeInterface         *graphql.InterfaceType
+	query                 *graphql.ObjectType
+	mutation              *graphql.ObjectType
+	additionalTypes       []graphql.NamedType
 }
 
 func (cfg *Config) init() {
 	cfg.initOnce.Do(func() {
 		cfg.nodeTypesByModel = make(map[reflect.Type]*NodeType)
 		cfg.nodeTypesById = make(map[int]*NodeType)
+		cfg.nodeTypesByObjectType = make(map[*graphql.ObjectType]*NodeType)
 
 		cfg.nodeInterface = &graphql.InterfaceType{
 			Name: "Node",
@@ -45,7 +47,7 @@ func (cfg *Config) init() {
 						},
 					},
 					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-						return ctxAPI(ctx.Context).resolveNodeById(ctx.Context, ctx.Arguments["id"].(string))
+						return ctxAPI(ctx.Context).resolveNodeByGlobalId(ctx.Context, ctx.Arguments["id"].(string))
 					},
 				},
 			},
@@ -84,6 +86,7 @@ func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 		},
 	}
 	cfg.additionalTypes = append(cfg.additionalTypes, objectType)
+	cfg.nodeTypesByObjectType[objectType] = t
 
 	return objectType
 }

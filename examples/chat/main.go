@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"flag"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	"github.com/ccbrown/keyvaluestore"
 	"github.com/ccbrown/keyvaluestore/memorystore"
+	"github.com/ccbrown/keyvaluestore/redisstore"
+	"github.com/go-redis/redis"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -19,10 +23,25 @@ import (
 )
 
 func main() {
+	redisAddress := flag.String("redis-address", "", "can be used to run with a redis database")
+	flag.Parse()
+
+	var backend keyvaluestore.Backend
+	if *redisAddress == "" {
+		logrus.Info("using a temporary database. if you would like data to be persistent, provide --redis-address")
+		backend = memorystore.NewBackend()
+	} else {
+		backend = &redisstore.Backend{
+			Client: redis.NewClient(&redis.Options{
+				Addr: *redisAddress,
+			}),
+		}
+	}
+
 	api := &api.API{
 		App: &app.App{
 			Store: &store.Store{
-				Backend: memorystore.NewBackend(),
+				Backend: backend,
 			},
 		},
 	}

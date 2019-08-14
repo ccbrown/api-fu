@@ -21,7 +21,7 @@ func (e *InternalError) Unwrap() error {
 	return e.cause
 }
 
-func (s *Session) InternalError(err error) *InternalError {
+func (s *Session) InternalError(err error) SanitizedError {
 	if err == nil {
 		return nil
 	}
@@ -43,8 +43,12 @@ func (e *UserError) SanitizedError() string {
 	return e.Error()
 }
 
-func (s *Session) UserError(message string) *UserError {
+func (s *Session) UserError(message string) SanitizedError {
 	return &UserError{
 		message: message,
 	}
+}
+
+func (s *Session) AuthorizationError() SanitizedError {
+	return s.UserError("Not authorized.")
 }

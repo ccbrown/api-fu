@@ -64,14 +64,18 @@ func isNil(v interface{}) bool {
 	return (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) && rv.IsNil()
 }
 
-func (api *API) resolveNodeById(ctx context.Context, id string) (interface{}, error) {
-	// TODO: batching and concurrency
-
+func (api *API) resolveNodeByGlobalId(ctx context.Context, id string) (interface{}, error) {
 	typeId, modelId := api.config.DeserializeNodeId(id)
 	nodeType, ok := api.config.nodeTypesById[typeId]
 	if !ok {
 		return nil, nil
 	}
+	return api.resolveNodeById(ctx, nodeType, modelId)
+}
+
+func (api *API) resolveNodeById(ctx context.Context, nodeType *NodeType, modelId interface{}) (interface{}, error) {
+	// TODO: batching and concurrency
+
 	ids := reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(modelId)), 1, 1)
 	ids.Index(0).Set(reflect.ValueOf(modelId))
 	nodes, err := nodeType.GetByIds(ctx, ids.Interface())

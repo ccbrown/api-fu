@@ -34,3 +34,17 @@ func NonNullString(fieldName string) *graphql.FieldDefinition {
 		},
 	}
 }
+
+func Node(nodeType *graphql.ObjectType, fieldName string) *graphql.FieldDefinition {
+	return &graphql.FieldDefinition{
+		Type: nodeType,
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			api := ctxAPI(ctx.Context)
+			nodeType, ok := api.config.nodeTypesByObjectType[nodeType]
+			if !ok {
+				return nil, nil
+			}
+			return api.resolveNodeById(ctx.Context, nodeType, fieldValue(ctx.Object, fieldName))
+		},
+	}
+}

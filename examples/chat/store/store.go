@@ -54,3 +54,11 @@ func (s *Store) getByIds(key string, dest interface{}, ids ...model.Id) error {
 	reflect.ValueOf(dest).Elem().Set(slice)
 	return nil
 }
+
+func stringsToIds(s []string) []model.Id {
+	ret := make([]model.Id, len(s))
+	for i, id := range s {
+		ret[i] = model.Id(id)
+	}
+	return ret
+}
