@@ -21,16 +21,14 @@ type ConnectionConfig struct {
 	Description string
 
 	// If getting all edges for the connection is cheap, you can just provide ResolveAllEdges.
-	// ResolveAllEdges should return a slice value, with one item for each edge.
-	ResolveAllEdges func(ctx *graphql.FieldContext) (interface{}, error)
+	// ResolveAllEdges should return a slice value, with one item for each edge, and a function that
+	// can be used to sort the cursors produced by EdgeCursor.
+	ResolveAllEdges func(ctx *graphql.FieldContext) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
 
 	// EdgeCursor should return a value that can be used to determine the edge's relative ordering.
 	// For example, this might be a struct with a name and id for a connection whose edges are
 	// sorted by name. The value must be able to be marshaled to and from binary.
 	EdgeCursor func(edge interface{}) interface{}
-
-	// CursorLess returns true if the edge with cursor a should come before the edge with cursor b.
-	CursorLess func(a, b interface{}) bool
 
 	// EdgeFields should provide definitions for the fields of each node. You must provide the
 	// "node" field, but the "cursor" field will be provided for you.
@@ -55,7 +53,7 @@ func deserializeCursor(t reflect.Type, s string) interface{} {
 	return nil
 }
 
-func (cfg *ConnectionConfig) applyCursorsToEdges(allEdges []interface{}, before, after string) (edges []edge, hasPreviousPage, hasNextPage bool) {
+func (cfg *ConnectionConfig) applyCursorsToEdges(allEdges []interface{}, before, after string, cursorLess func(a, b interface{}) bool) (edges []edge, hasPreviousPage, hasNextPage bool) {
 	edges = []edge{}
 
 	if len(allEdges) == 0 {
@@ -76,11 +74,11 @@ func (cfg *ConnectionConfig) applyCursorsToEdges(allEdges []interface{}, before,
 
 	for _, e := range allEdges {
 		cursor := cfg.EdgeCursor(e)
-		if afterCursor != nil && !cfg.CursorLess(afterCursor, cursor) {
+		if afterCursor != nil && !cursorLess(afterCursor, cursor) {
 			hasPreviousPage = true
 			continue
 		}
-		if beforeCursor != nil && !cfg.CursorLess(cursor, beforeCursor) {
+		if beforeCursor != nil && !cursorLess(cursor, beforeCursor) {
 			hasNextPage = true
 			continue
 		}
@@ -91,7 +89,7 @@ func (cfg *ConnectionConfig) applyCursorsToEdges(allEdges []interface{}, before,
 	}
 
 	sort.Slice(edges, func(i, j int) bool {
-		return cfg.CursorLess(edges[i].Cursor, edges[j].Cursor)
+		return cursorLess(edges[i].Cursor, edges[j].Cursor)
 	})
 
 	return
@@ -189,13 +187,15 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			},
 		},
 		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-			if _, ok := ctx.Arguments["first"]; !ok {
-				if _, ok := ctx.Arguments["last"]; !ok {
-					return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
+			if _, ok := ctx.Arguments["first"]; ok {
+				if _, ok := ctx.Arguments["last"]; ok {
+					return nil, fmt.Errorf("You cannot provide both `first` and `last` arguments.")
 				}
+			} else if _, ok := ctx.Arguments["last"]; !ok {
+				return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
 			}
 
-			edgeSlice, err := config.ResolveAllEdges(ctx)
+			edgeSlice, cursorLess, err := config.ResolveAllEdges(ctx)
 			if !isNil(err) {
 				return nil, err
 			}
@@ -212,7 +212,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 
 			before, _ := ctx.Arguments["before"].(string)
 			after, _ := ctx.Arguments["after"].(string)
-			edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, before, after)
+			edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, before, after, cursorLess)
 
 			if first, ok := ctx.Arguments["first"].(int); ok {
 				if first < 0 {
