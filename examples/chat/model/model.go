@@ -1,8 +1,15 @@
 package model
 
-import "crypto/rand"
+import (
+	"bytes"
+	"crypto/rand"
+)
 
 type Id []byte
+
+func (id Id) Before(other Id) bool {
+	return bytes.Compare(id, other) == -1
+}
 
 func (id Id) MarshalBinary() ([]byte, error) {
 	return id, nil

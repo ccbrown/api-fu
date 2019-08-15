@@ -35,6 +35,15 @@ func NonNullString(fieldName string) *graphql.FieldDefinition {
 	}
 }
 
+func NonNullBoolean(fieldName string) *graphql.FieldDefinition {
+	return &graphql.FieldDefinition{
+		Type: graphql.NewNonNullType(graphql.BooleanType),
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			return fieldValue(ctx.Object, fieldName), nil
+		},
+	}
+}
+
 func Node(nodeType *graphql.ObjectType, fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: nodeType,
