@@ -221,6 +221,8 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				if len(edges) > first {
 					edges = edges[:first]
 					hasNextPage = true
+				} else {
+					hasNextPage = false
 				}
 			}
 
@@ -231,6 +233,8 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				if len(edges) > last {
 					edges = edges[len(edges)-last:]
 					hasPreviousPage = true
+				} else {
+					hasPreviousPage = false
 				}
 			}
 
