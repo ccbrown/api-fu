@@ -29,6 +29,10 @@ type ListType = schema.ListType
 type FieldContext = schema.FieldContext
 type InputValueDefinition = schema.InputValueDefinition
 type FieldDefinition = schema.FieldDefinition
+type DirectiveDefinition = schema.DirectiveDefinition
+
+var IncludeDirective = schema.IncludeDirective
+var SkipDirective = schema.SkipDirective
 
 var IDType = schema.IDType
 var StringType = schema.StringType

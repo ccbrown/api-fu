@@ -60,6 +60,10 @@ func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
 		Query:           cfg.query,
 		Mutation:        cfg.mutation,
 		AdditionalTypes: cfg.additionalTypes,
+		Directives: map[string]*graphql.DirectiveDefinition{
+			"include": graphql.IncludeDirective,
+			"skip":    graphql.SkipDirective,
+		},
 	})
 }
 
