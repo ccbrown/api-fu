@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	apifu "github.com/ccbrown/api-fu"
 	"github.com/ccbrown/api-fu/examples/chat/model"
@@ -17,13 +18,49 @@ var channelType = fuCfg.AddNodeType(&apifu.NodeType{
 	GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
 		return ctxSession(ctx).GetChannelsByIds(ids.([]model.Id)...)
 	},
-	Fields: map[string]*graphql.FieldDefinition{
+})
+
+func init() {
+	type messageCursor struct {
+		Nano int64
+		Id   model.Id
+	}
+
+	channelType.Fields = map[string]*graphql.FieldDefinition{
 		"id":           apifu.NonNullNodeID(reflect.TypeOf(model.Channel{}), "Id"),
 		"name":         apifu.NonNullString("Name"),
 		"creationTime": apifu.NonNullDateTime("CreationTime"),
 		"creator":      apifu.Node(userType, "CreatorUserId"),
-	},
-})
+		"messagesConnection": apifu.Connection(&apifu.ConnectionConfig{
+			NamePrefix:  "ChannelMessages",
+			Description: "Provides messages sorted by time.",
+			EdgeCursor: func(edge interface{}) interface{} {
+				message := edge.(*model.Message)
+				return messageCursor{
+					Nano: message.Time.UnixNano(),
+					Id:   message.Id,
+				}
+			},
+			EdgeFields: map[string]*graphql.FieldDefinition{
+				"node": &graphql.FieldDefinition{
+					Type: graphql.NewNonNullType(messageType),
+					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+						return ctx.Object, nil
+					},
+				},
+			},
+			// TODO: version that doesn't use ResolveAllEdges
+			ResolveAllEdges: func(ctx *graphql.FieldContext) (interface{}, func(a, b interface{}) bool, error) {
+				channel := ctx.Object.(*model.Channel)
+				messages, err := ctxSession(ctx.Context).GetMessagesByChannelIdAndTimeRange(channel.Id, channel.CreationTime, time.Now(), 0)
+				return messages, func(a, b interface{}) bool {
+					ac, bc := a.(messageCursor), b.(messageCursor)
+					return ac.Nano < bc.Nano || (ac.Nano == bc.Nano && ac.Id.Before(bc.Id))
+				}, err
+			},
+		}),
+	}
+}
 
 func init() {
 	fuCfg.AddMutation("createChannel", &graphql.FieldDefinition{
@@ -85,6 +122,8 @@ func init() {
 				},
 			},
 		},
+		// If we assume the server will always have a relatively small number of channels, we can
+		// keep things simple using ResolveAllEdges.
 		ResolveAllEdges: func(ctx *graphql.FieldContext) (interface{}, func(a, b interface{}) bool, error) {
 			channels, err := ctxSession(ctx.Context).GetChannels()
 			return channels, func(a, b interface{}) bool {

@@ -12,6 +12,15 @@ import (
 	"github.com/ccbrown/api-fu/examples/chat/model"
 )
 
+func DeserializeId(id string) model.Id {
+	if buf, err := base64.RawURLEncoding.DecodeString(id); err == nil {
+		if _, n := binary.Varint(buf); n > 0 {
+			return model.Id(buf[n:])
+		}
+	}
+	return nil
+}
+
 var fuCfg = apifu.Config{
 	SerializeNodeId: func(typeId int, id interface{}) string {
 		buf := make([]byte, binary.MaxVarintLen64)

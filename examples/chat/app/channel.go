@@ -26,6 +26,14 @@ func (s *Session) CreateChannel(input *model.Channel) (*model.Channel, Sanitized
 	return &channel, nil
 }
 
+func (s *Session) GetChannelById(id model.Id) (*model.Channel, SanitizedError) {
+	channels, err := s.App.Store.GetChannelsByIds(id)
+	if len(channels) < 1 {
+		return nil, s.InternalError(err)
+	}
+	return channels[0], nil
+}
+
 func (s *Session) GetChannelsByIds(ids ...model.Id) ([]*model.Channel, SanitizedError) {
 	channels, err := s.App.Store.GetChannelsByIds(ids...)
 	return channels, s.InternalError(err)
