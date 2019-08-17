@@ -25,9 +25,29 @@ type ConnectionConfig struct {
 	// can be used to sort the cursors produced by EdgeCursor.
 	ResolveAllEdges func(ctx *graphql.FieldContext) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
 
+	// If getting all edges for the connection is too expensive for ResolveAllEdges, you can provide
+	// ResolveEdges. ResolveEdges is just like ResolveAllEdges, but is only required to return edges
+	// within the range defined by the given cursors and is only required to return up to `limit`
+	// edges. If limit is negative, the last edges within the range should be returned instead of
+	// the first.
+	//
+	// Returning extra edges or out-of-order edges is fine. They will be sorted and filtered
+	// automatically. However, you should ensure that no duplicate edges are returned.
+	//
+	// If desired, edges outside of the given range may be returned to indicate the presence of more
+	// pages before or after the given range. This is completely optional, and the connection's
+	// behavior will be fully compliant with the Relay Pagination spec regardless. However,
+	// providing these additional edges will allow hasNextPage and hasPreviousPage to be true in
+	// scenarios where the spec allows them to be false for performance reasons.
+	ResolveEdges func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
+
+	// CursorType allows the connection to deserialize cursors. It is required for all connections.
+	CursorType reflect.Type
+
 	// EdgeCursor should return a value that can be used to determine the edge's relative ordering.
 	// For example, this might be a struct with a name and id for a connection whose edges are
-	// sorted by name. The value must be able to be marshaled to and from binary.
+	// sorted by name. The value must be able to be marshaled to and from binary. This function
+	// should return the type of cursor assigned to CursorType.
 	EdgeCursor func(edge interface{}) interface{}
 
 	// EdgeFields should provide definitions for the fields of each node. You must provide the
@@ -53,32 +73,20 @@ func deserializeCursor(t reflect.Type, s string) interface{} {
 	return nil
 }
 
-func (cfg *ConnectionConfig) applyCursorsToEdges(allEdges []interface{}, before, after string, cursorLess func(a, b interface{}) bool) (edges []edge, hasPreviousPage, hasNextPage bool) {
+func (cfg *ConnectionConfig) applyCursorsToEdges(allEdges []interface{}, before, after interface{}, cursorLess func(a, b interface{}) bool) (edges []edge, hasPreviousPage, hasNextPage bool) {
 	edges = []edge{}
 
 	if len(allEdges) == 0 {
 		return edges, false, false
 	}
 
-	cursorType := reflect.TypeOf(cfg.EdgeCursor(allEdges[0]))
-
-	var afterCursor interface{}
-	if after != "" {
-		afterCursor = deserializeCursor(cursorType, after)
-	}
-
-	var beforeCursor interface{}
-	if before != "" {
-		beforeCursor = deserializeCursor(cursorType, before)
-	}
-
 	for _, e := range allEdges {
 		cursor := cfg.EdgeCursor(e)
-		if afterCursor != nil && !cursorLess(afterCursor, cursor) {
+		if after != nil && !cursorLess(after, cursor) {
 			hasPreviousPage = true
 			continue
 		}
-		if beforeCursor != nil && !cursorLess(cursor, beforeCursor) {
+		if before != nil && !cursorLess(cursor, before) {
 			hasNextPage = true
 			continue
 		}
@@ -187,15 +195,48 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			},
 		},
 		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-			if _, ok := ctx.Arguments["first"]; ok {
-				if _, ok := ctx.Arguments["last"]; ok {
+			if first, ok := ctx.Arguments["first"].(int); ok {
+				if first < 0 {
+					return nil, fmt.Errorf("The `first` argument cannot be negative.")
+				} else if _, ok := ctx.Arguments["last"]; ok {
 					return nil, fmt.Errorf("You cannot provide both `first` and `last` arguments.")
 				}
-			} else if _, ok := ctx.Arguments["last"]; !ok {
+			} else if last, ok := ctx.Arguments["last"].(int); ok {
+				if last < 0 {
+					return nil, fmt.Errorf("The `last` argument cannot be negative.")
+				}
+			} else {
 				return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
 			}
 
-			edgeSlice, cursorLess, err := config.ResolveAllEdges(ctx)
+			var afterCursor interface{}
+			if after, _ := ctx.Arguments["after"].(string); after != "" {
+				if afterCursor = deserializeCursor(config.CursorType, after); afterCursor == nil {
+					return nil, fmt.Errorf("Invalid after cursor.")
+				}
+			}
+
+			var beforeCursor interface{}
+			if before, _ := ctx.Arguments["before"].(string); before != "" {
+				if beforeCursor = deserializeCursor(config.CursorType, before); beforeCursor == nil {
+					return nil, fmt.Errorf("Invalid before cursor.")
+				}
+			}
+
+			var edgeSlice interface{}
+			var cursorLess func(a, b interface{}) bool
+			var err error
+			if config.ResolveAllEdges != nil {
+				edgeSlice, cursorLess, err = config.ResolveAllEdges(ctx)
+			} else {
+				var limit int
+				if first, ok := ctx.Arguments["first"].(int); ok {
+					limit = first + 1
+				} else {
+					limit = -(ctx.Arguments["last"].(int) + 1)
+				}
+				edgeSlice, cursorLess, err = config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
+			}
 			if !isNil(err) {
 				return nil, err
 			}
@@ -210,14 +251,9 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				ifaces[i] = edgeSliceValue.Index(i).Interface()
 			}
 
-			before, _ := ctx.Arguments["before"].(string)
-			after, _ := ctx.Arguments["after"].(string)
-			edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, before, after, cursorLess)
+			edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, beforeCursor, afterCursor, cursorLess)
 
 			if first, ok := ctx.Arguments["first"].(int); ok {
-				if first < 0 {
-					return nil, fmt.Errorf("The `first` argument cannot be negative.")
-				}
 				if len(edges) > first {
 					edges = edges[:first]
 					hasNextPage = true
@@ -227,9 +263,6 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			}
 
 			if last, ok := ctx.Arguments["last"].(int); ok {
-				if last < 0 {
-					return nil, fmt.Errorf("The `last` argument cannot be negative.")
-				}
 				if len(edges) > last {
 					edges = edges[len(edges)-last:]
 					hasPreviousPage = true

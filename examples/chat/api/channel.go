@@ -49,10 +49,50 @@ func init() {
 					},
 				},
 			},
-			// TODO: version that doesn't use ResolveAllEdges
-			ResolveAllEdges: func(ctx *graphql.FieldContext) (interface{}, func(a, b interface{}) bool, error) {
+			CursorType: reflect.TypeOf(messageCursor{}),
+			// On an active server, it would get prohibitively expensive to fetch all messages each
+			// time the connection is selected. So we use ResolveEdges instead of ResolveAllEdges.
+			//
+			// The business layer of our example application exposes a simple time-based range
+			// getter. So to ensure that our results are complete, even in the unlikely event that
+			// there are many messages with the exact same timestamp, we may have to do up to 3
+			// queries.
+			ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
 				channel := ctx.Object.(*model.Channel)
-				messages, err := ctxSession(ctx.Context).GetMessagesByChannelIdAndTimeRange(channel.Id, channel.CreationTime, time.Now(), 0)
+				session := ctxSession(ctx.Context)
+
+				type Query struct {
+					Start time.Time
+					End   time.Time
+					Limit int
+				}
+				var queries []Query
+
+				middle := Query{channel.CreationTime, time.Now().Add(time.Hour), limit}
+
+				if after, ok := after.(messageCursor); ok {
+					queries = append(queries, Query{time.Unix(0, after.Nano), time.Unix(0, after.Nano), 0})
+					middle.Start = time.Unix(0, after.Nano+1)
+				}
+
+				if before, ok := before.(messageCursor); ok {
+					if after, ok := after.(messageCursor); !ok || after.Nano != before.Nano {
+						queries = append(queries, Query{time.Unix(0, before.Nano), time.Unix(0, before.Nano), 0})
+					}
+					middle.End = time.Unix(0, before.Nano-1)
+				}
+
+				queries = append(queries, middle)
+
+				var messages []*model.Message
+				for _, q := range queries {
+					if msgs, err := session.GetMessagesByChannelIdAndTimeRange(channel.Id, q.Start, q.End, q.Limit); err != nil {
+						return nil, nil, err
+					} else {
+						messages = append(messages, msgs...)
+					}
+				}
+
 				return messages, func(a, b interface{}) bool {
 					ac, bc := a.(messageCursor), b.(messageCursor)
 					return ac.Nano < bc.Nano || (ac.Nano == bc.Nano && ac.Id.Before(bc.Id))
@@ -122,6 +162,7 @@ func init() {
 				},
 			},
 		},
+		CursorType: reflect.TypeOf(cursor{}),
 		// If we assume the server will always have a relatively small number of channels, we can
 		// keep things simple using ResolveAllEdges.
 		ResolveAllEdges: func(ctx *graphql.FieldContext) (interface{}, func(a, b interface{}) bool, error) {
