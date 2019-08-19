@@ -53,12 +53,6 @@ func (c *Connection) Serve(conn *websocket.Conn) {
 	go c.writeLoop()
 }
 
-func (c *Connection) SendKeepAlive() error {
-	return c.sendMessage(&Message{
-		Type: MessageTypeConnectionKeepAlive,
-	})
-}
-
 func (c *Connection) SendData(id string, response *graphql.Response) error {
 	buf, err := jsoniter.Marshal(response)
 	if err != nil {
@@ -170,28 +164,51 @@ func (c *Connection) handleMessage(data []byte) {
 	}
 }
 
+var keepAlivePreparedMessage *websocket.PreparedMessage
+
+func init() {
+	data, err := jsoniter.Marshal(&Message{
+		Type: MessageTypeConnectionKeepAlive,
+	})
+	if err != nil {
+		panic(errors.Wrap(err, "error marshaling message"))
+	}
+	prepared, err := websocket.NewPreparedMessage(websocket.TextMessage, data)
+	if err != nil {
+		panic(errors.Wrap(err, "error preparing message"))
+	}
+	keepAlivePreparedMessage = prepared
+}
+
 func (c *Connection) writeLoop() {
 	defer c.finishClosing()
 	defer close(c.writeLoopDone)
 
 	defer c.conn.Close()
 
+	keepAliveTicker := time.NewTicker(15 * time.Second)
+	defer keepAliveTicker.Stop()
+
 	for {
+		var msg *websocket.PreparedMessage
 		select {
-		case msg, ok := <-c.outgoing:
+		case outgoing, ok := <-c.outgoing:
 			if !ok {
 				return
 			}
-
-			c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-
-			if err := c.conn.WritePreparedMessage(msg); err != nil {
-				if !websocket.IsCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseGoingAway) && err != websocket.ErrCloseSent {
-					c.Logger.Error(errors.Wrap(err, "websocket write error"))
-				}
-				return
-			}
+			msg = outgoing
+		case <-keepAliveTicker.C:
+			msg = keepAlivePreparedMessage
 		case <-c.close:
+			return
+		}
+
+		c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+
+		if err := c.conn.WritePreparedMessage(msg); err != nil {
+			if !websocket.IsCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseGoingAway) && err != websocket.ErrCloseSent {
+				c.Logger.Error(errors.Wrap(err, "websocket write error"))
+			}
 			return
 		}
 	}

@@ -1,9 +1,115 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>API-Fu Chat Example</title>
+        <style>
+            body {
+                height: 100%;
+                margin: 0;
+                font-family: sans-serif;
+                padding: 20px;
+            }
+            header {
+                margin: 0;
+            }
+            #graphiql {
+                border: 1px solid #606060;
+                height: 700px;
+            }
+        </style>
+
+        <script src="//cdn.jsdelivr.net/es6-promise/4.0.5/es6-promise.auto.min.js"></script>
+        <script src="//cdn.jsdelivr.net/fetch/0.9.0/fetch.min.js"></script>
+        <script src="//cdn.jsdelivr.net/react/15.4.2/react.min.js"></script>
+        <script src="//cdn.jsdelivr.net/react/15.4.2/react-dom.min.js"></script>
+
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/graphiql@0.12.0/graphiql.min.css" />
+        <script src="//cdn.jsdelivr.net/npm/graphiql@0.12.0/graphiql.min.js"></script>
+        <script src="//cdn.jsdelivr.net/npm/subscriptions-transport-ws@0.9.16/browser/client.js"></script>
     </head>
     <body>
-        <a href="/graphiql.html">GraphiQL</a>
+        <header>
+            <form>
+                <p>
+                    Handle: <input id="handle" autocomplete="username" type="text" oninput="storeInputValue(this);" />
+                    Password: <input id="password" autocomplete="current-password" type="password" oninput="storeInputValue(this);" />
+                    <input type="radio" id="fetcher-http" name="fetcher" onclick="handleFetcherChange(this);" value="http" />
+                    <label for="fetcher-http">HTTP</label>
+                    <input type="radio" id="fetcher-websocket" name="fetcher" onclick="handleFetcherChange(this);" value="websocket" />
+                    <label for="fetcher-websocket">WebSocket</label>
+                </p>
+            </form>
+
+            <script type="text/javascript">
+                function storeInputValue(e) {
+                    localStorage.setItem(e.id, e.value);
+                }
+
+                function restoreInputValue(id) {
+                    var v = localStorage.getItem(id);
+                    if (v !== null) {
+                        document.getElementById(id).value = v;
+                    }
+                }
+
+                document.getElementById(localStorage.getItem('fetcher') || 'fetcher-http').checked = true;
+
+                restoreInputValue('handle');
+                restoreInputValue('password');
+
+                function handleFetcherChange(e) {
+                    localStorage.setItem('fetcher', e.id);
+                }
+            </script>
+        </header>
+        <div id="graphiql">Loading...</div>
+        <script>
+            function httpGraphQLFetcher(params) {
+                var headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                };
+
+                const handle = document.getElementById('handle').value;
+                const password = document.getElementById('password').value;
+                if (handle && password) {
+                    headers['Authorization'] = 'Basic ' + window.btoa(handle + ":" + password);
+                }
+
+                const l = window.location;
+                return fetch('/graphql', {
+                    method: 'post',
+                    headers: headers,
+                    body: JSON.stringify(params),
+                })
+                    .then(response => response.text())
+                    .then(responseBody => {
+                        try {
+                            return JSON.parse(responseBody);
+                        } catch (error) {
+                            return responseBody;
+                        }
+                    });
+            }
+
+            let l = window.location;
+            let wsURL = ((l.protocol === 'https:') ? 'wss://' : 'ws://') + l.host + '/graphql-ws';
+            let websocketClient = new window.SubscriptionsTransportWs.SubscriptionClient(wsURL, {
+                lazy: true,
+                reconnect: true,
+                timeout: 45000,
+            });
+
+            ReactDOM.render(
+                React.createElement(GraphiQL, {
+                    fetcher: params => {
+                        if (document.getElementById('fetcher-http').checked) {
+                            return httpGraphQLFetcher(params);
+                        }
+                        return websocketClient.request(params);
+                    },
+                }),
+                document.getElementById('graphiql')
+            );
+        </script>
     </body>
 </html>

@@ -1,15 +1,20 @@
 package apifu
 
 import (
+	"net/http"
 	"reflect"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/ccbrown/api-fu/graphql"
 )
 
 type Config struct {
-	SerializeNodeId   func(typeId int, id interface{}) string
-	DeserializeNodeId func(string) (typeId int, id interface{})
+	Logger               logrus.FieldLogger
+	WebSocketOriginCheck func(r *http.Request) bool
+	SerializeNodeId      func(typeId int, id interface{}) string
+	DeserializeNodeId    func(string) (typeId int, id interface{})
 
 	initOnce              sync.Once
 	nodeTypesByModel      map[reflect.Type]*NodeType

@@ -59,6 +59,11 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	api.withSession(api.fu.ServeGraphQL)(w, r)
 }
 
+func (api *API) ServeGraphQLWS(w http.ResponseWriter, r *http.Request) {
+	api.init()
+	api.withSession(api.fu.ServeGraphQLWS)(w, r)
+}
+
 type sessionContextKeyType int
 
 var sessionContextKey sessionContextKeyType

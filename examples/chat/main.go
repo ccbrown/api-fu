@@ -48,6 +48,7 @@ func main() {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/graphql", api.ServeGraphQL)
+	router.HandleFunc("/graphql-ws", api.ServeGraphQLWS)
 	router.NotFoundHandler = http.HandlerFunc(ui.ServeHTTP)
 
 	cors := handlers.CORS(

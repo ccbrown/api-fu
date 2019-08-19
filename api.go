@@ -5,15 +5,22 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/ccbrown/api-fu/graphql"
+	"github.com/ccbrown/api-fu/graphqlws"
 )
 
 type API struct {
 	schema *graphql.Schema
 	config *Config
+	logger logrus.FieldLogger
+
+	graphqlWSConnectionsMutex sync.Mutex
+	graphqlWSConnections      map[*graphqlws.Connection]struct{}
 }
 
 func normalizeModelType(t reflect.Type) reflect.Type {
@@ -28,9 +35,15 @@ func NewAPI(cfg *Config) (*API, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error building graphql schema")
 	}
+	logger := cfg.Logger
+	if logger == nil {
+		logger = logrus.StandardLogger()
+	}
 	return &API{
-		config: cfg,
-		schema: schema,
+		config:               cfg,
+		schema:               schema,
+		logger:               logger,
+		graphqlWSConnections: map[*graphqlws.Connection]struct{}{},
 	}, nil
 }
 
@@ -45,7 +58,7 @@ func ctxAPI(ctx context.Context) *API {
 func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(context.WithValue(r.Context(), apiContextKey, api))
 
-	req, err, code := graphql.NewRequestFromHTTP(r)
+	req, code, err := graphql.NewRequestFromHTTP(r)
 	if err != nil {
 		http.Error(w, err.Error(), code)
 		return

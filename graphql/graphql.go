@@ -71,7 +71,7 @@ type Request struct {
 	IdleHandler    func()
 }
 
-func NewRequestFromHTTP(r *http.Request) (req *Request, err error, suggestedCode int) {
+func NewRequestFromHTTP(r *http.Request) (req *Request, code int, err error) {
 	req = &Request{
 		Context: r.Context(),
 	}
@@ -79,14 +79,14 @@ func NewRequestFromHTTP(r *http.Request) (req *Request, err error, suggestedCode
 	switch r.Method {
 	case http.MethodGet:
 		if query := r.URL.Query().Get("query"); query == "" {
-			return nil, fmt.Errorf("the query parameter is required"), http.StatusBadRequest
+			return nil, http.StatusBadRequest, fmt.Errorf("the query parameter is required")
 		} else {
 			req.Query = query
 		}
 
 		if variables := r.URL.Query().Get("variables"); variables != "" {
 			if err := json.Unmarshal([]byte(variables), &req.VariableValues); err != nil {
-				return nil, fmt.Errorf("malformed variables parameter"), http.StatusBadRequest
+				return nil, http.StatusBadRequest, fmt.Errorf("malformed variables parameter")
 			}
 		}
 
@@ -105,7 +105,7 @@ func NewRequestFromHTTP(r *http.Request) (req *Request, err error, suggestedCode
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				return nil, fmt.Errorf("malformed request body"), http.StatusBadRequest
+				return nil, http.StatusBadRequest, fmt.Errorf("malformed request body")
 			}
 
 			req.Query = body.Query
@@ -115,13 +115,13 @@ func NewRequestFromHTTP(r *http.Request) (req *Request, err error, suggestedCode
 			body, _ := ioutil.ReadAll(r.Body)
 			req.Query = string(body)
 		default:
-			return nil, fmt.Errorf("invalid content-type"), http.StatusBadRequest
+			return nil, http.StatusBadRequest, fmt.Errorf("invalid content-type")
 		}
 	default:
-		return nil, fmt.Errorf("method not allowed"), http.StatusMethodNotAllowed
+		return nil, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed")
 	}
 
-	return req, nil, http.StatusOK
+	return req, http.StatusOK, nil
 }
 
 type Location struct {
