@@ -133,6 +133,16 @@ type Error struct {
 	Message   string        `json:"message"`
 	Locations []Location    `json:"locations,omitempty"`
 	Path      []interface{} `json:"path,omitempty"`
+
+	// To populate this field, your resolvers can return errors that implement ExtendedError.
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+// If a resolver returns an error that implements this interface, the error's extensions property
+// will be populated.
+type ExtendedError interface {
+	error
+	Extensions() map[string]interface{}
 }
 
 type Response struct {
@@ -193,11 +203,15 @@ func Execute(r *Request) *Response {
 			locations[i].Line = loc.Line
 			locations[i].Column = loc.Column
 		}
-		ret.Errors = append(ret.Errors, &Error{
+		retErr := &Error{
 			Message:   err.Message,
 			Locations: locations,
 			Path:      err.Path,
-		})
+		}
+		if ext, ok := err.Unwrap().(ExtendedError); ok {
+			retErr.Extensions = ext.Extensions()
+		}
+		ret.Errors = append(ret.Errors, retErr)
 	}
 	return ret
 }
