@@ -1,4 +1,4 @@
-# api-fu
+# api-fu [![Documentation](https://godoc.org/github.com/ccbrown/api-fu?status.svg)](https://godoc.org/github.com/ccbrown/api-fu)
 
 **api-fu** (noun)
   1. (informal) Mastery of APIs.
