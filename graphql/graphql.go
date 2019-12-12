@@ -27,6 +27,7 @@ type NonNullType = schema.NonNullType
 type ListType = schema.ListType
 
 type FieldContext = schema.FieldContext
+type EnumValueDefinition = schema.EnumValueDefinition
 type InputValueDefinition = schema.InputValueDefinition
 type FieldDefinition = schema.FieldDefinition
 type DirectiveDefinition = schema.DirectiveDefinition
