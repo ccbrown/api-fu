@@ -14,12 +14,24 @@ func fieldValue(object interface{}, name string) interface{} {
 	return v.FieldByName(name).Interface()
 }
 
-func NonNullNodeID(fieldName string) *graphql.FieldDefinition {
+func OwnID(fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(graphql.IDType),
 		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 			cfg := ctxAPI(ctx.Context).config
 			modelType := normalizeModelType(reflect.TypeOf(ctx.Object))
+			nodeType := cfg.nodeTypesByModel[modelType]
+			return cfg.SerializeNodeId(nodeType.Id, fieldValue(ctx.Object, fieldName)), nil
+		},
+	}
+}
+
+func NonNullNodeID(modelType reflect.Type, fieldName string) *graphql.FieldDefinition {
+	return &graphql.FieldDefinition{
+		Type: graphql.NewNonNullType(graphql.IDType),
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			cfg := ctxAPI(ctx.Context).config
+			modelType = normalizeModelType(modelType)
 			nodeType := cfg.nodeTypesByModel[modelType]
 			return cfg.SerializeNodeId(nodeType.Id, fieldValue(ctx.Object, fieldName)), nil
 		},

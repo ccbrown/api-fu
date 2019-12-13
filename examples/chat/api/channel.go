@@ -27,7 +27,7 @@ func init() {
 	}
 
 	channelType.Fields = map[string]*graphql.FieldDefinition{
-		"id":           apifu.NonNullNodeID("Id"),
+		"id":           apifu.OwnID("Id"),
 		"name":         apifu.NonNullString("Name"),
 		"creationTime": apifu.NonNullDateTime("CreationTime"),
 		"creator":      apifu.Node(userType, "CreatorUserId"),
