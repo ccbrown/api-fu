@@ -15,6 +15,7 @@ type Config struct {
 	WebSocketOriginCheck func(r *http.Request) bool
 	SerializeNodeId      func(typeId int, id interface{}) string
 	DeserializeNodeId    func(string) (typeId int, id interface{})
+	AdditionalNodeFields map[string]*graphql.FieldDefinition
 
 	initOnce              sync.Once
 	nodeTypesByModel      map[reflect.Type]*NodeType
@@ -39,6 +40,9 @@ func (cfg *Config) init() {
 					Type: graphql.NewNonNullType(graphql.IDType),
 				},
 			},
+		}
+		for k, v := range cfg.AdditionalNodeFields {
+			cfg.nodeInterface.Fields[k] = v
 		}
 
 		cfg.query = &graphql.ObjectType{
