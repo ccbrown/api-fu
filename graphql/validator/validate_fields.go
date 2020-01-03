@@ -208,16 +208,27 @@ func valuesAreIdentical(a, b ast.Value) bool {
 }
 
 func validateSameResponseShape(fieldA, fieldB *ast.Field, fragmentDefinitions map[string]*ast.FragmentDefinition, typeInfo *TypeInfo) *Error {
-	fieldDefA := typeInfo.FieldDefinitions[fieldA]
-	fieldDefB := typeInfo.FieldDefinitions[fieldB]
-	if fieldDefA == nil {
-		return newSecondaryError(fieldA, "no type info for field")
-	} else if fieldDefB == nil {
-		return newSecondaryError(fieldB, "no type info for field")
+	var typeA, typeB schema.Type
+
+	if fieldA.Name.Name == "__typename" {
+		typeA = schema.NewNonNullType(schema.StringType)
+	} else {
+		fieldDefA := typeInfo.FieldDefinitions[fieldA]
+		if fieldDefA == nil {
+			return newSecondaryError(fieldA, "no type info for field")
+		}
+		typeA = fieldDefA.Type
 	}
 
-	typeA := fieldDefA.Type
-	typeB := fieldDefB.Type
+	if fieldB.Name.Name == "__typename" {
+		typeB = schema.NewNonNullType(schema.StringType)
+	} else {
+		fieldDefB := typeInfo.FieldDefinitions[fieldB]
+		if fieldDefB == nil {
+			return newSecondaryError(fieldB, "no type info for field")
+		}
+		typeB = fieldDefB.Type
+	}
 
 	for {
 		if schema.IsNonNullType(typeA) || schema.IsNonNullType(typeB) {

@@ -18,6 +18,8 @@ func TestFields_SelectionsOnObjectsInterfacesAndUnions(t *testing.T) {
 	assert.Empty(t, validateSource(t, `{union{__typename}}`))
 	assert.Len(t, validateSource(t, `{union{a}}`), 1)
 
+	assert.Empty(t, validateSource(t, `{union{__typename, ... on UnionObjectA {__typename}}}`))
+
 	assert.Empty(t, validateSource(t, `{__schema{__typename}}`))
 	assert.Empty(t, validateSource(t, `{__type(name:"foo"){__typename}}`))
 	assert.Len(t, validateSource(t, `{__type(name:"foo"){asdf}}`), 1)
