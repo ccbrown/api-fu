@@ -47,6 +47,20 @@ func NonNullString(fieldName string) *graphql.FieldDefinition {
 	}
 }
 
+// Returns a field that resolves to a string if the field's value is non-empty. Otherwise, the field
+// resolves to nil.
+func NonEmptyString(fieldName string) *graphql.FieldDefinition {
+	return &graphql.FieldDefinition{
+		Type: graphql.StringType,
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			if s := fieldValue(ctx.Object, fieldName); s != "" {
+				return s, nil
+			}
+			return nil, nil
+		},
+	}
+}
+
 func NonNullBoolean(fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(graphql.BooleanType),
