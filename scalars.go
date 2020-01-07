@@ -9,6 +9,12 @@ import (
 
 func parseDateTime(v interface{}) interface{} {
 	switch v := v.(type) {
+	case []byte:
+		t := time.Time{}
+		if err := t.UnmarshalText(v); err == nil {
+			return t
+		}
+		return nil
 	case string:
 		return parseDateTime([]byte(v))
 	}
