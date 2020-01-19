@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strconv"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -65,8 +66,15 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Schema = api.schema
 
+	body, err := json.Marshal(graphql.Execute(req))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(graphql.Execute(req))
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.Write(body)
 }
 
 func isNil(v interface{}) bool {
