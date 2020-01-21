@@ -115,6 +115,14 @@ func init() {
 				},
 			},
 		},
+		"nonNullIntListArgField": &schema.FieldDefinition{
+			Type: schema.NewListType(schema.IntType),
+			Arguments: map[string]*schema.InputValueDefinition{
+				"intListArg": &schema.InputValueDefinition{
+					Type: schema.NewNonNullType(schema.NewListType(schema.IntType)),
+				},
+			},
+		},
 		"intListArgField": &schema.FieldDefinition{
 			Type: schema.NewListType(schema.IntType),
 			Arguments: map[string]*schema.InputValueDefinition{

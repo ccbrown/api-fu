@@ -39,3 +39,7 @@ func TestVariables_UsagesAllowed(t *testing.T) {
 	assert.Empty(t, validateSource(t, `query ($s: String) {object(object:{defaultedString: $s, requiredString: ""}){scalar}}`))
 	assert.Len(t, validateSource(t, `query ($s: String) {object(object:{requiredString: $s}){scalar}}`), 1)
 }
+
+func TestVariables_InList(t *testing.T) {
+	assert.Empty(t, validateSource(t, `query Foo($n: Int!) {nonNullIntListArgField(intListArg: [$n])}`))
+}

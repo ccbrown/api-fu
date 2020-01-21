@@ -50,3 +50,14 @@ func IsNonNullType(t Type) bool {
 	_, ok := t.(*NonNullType)
 	return ok
 }
+
+func NullableType(t Type) Type {
+	for {
+		if nnt, ok := t.(*NonNullType); ok {
+			t = nnt.Unwrap()
+		} else {
+			break
+		}
+	}
+	return t
+}

@@ -62,13 +62,13 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 
 		switch node := node.(type) {
 		case *ast.ListValue:
-			if expected, ok := ret.ExpectedTypes[node].(*schema.ListType); ok {
+			if expected, ok := schema.NullableType(ret.ExpectedTypes[node]).(*schema.ListType); ok {
 				for _, value := range node.Values {
 					ret.ExpectedTypes[value] = expected.Type
 				}
 			}
 		case *ast.ObjectValue:
-			if expected, ok := ret.ExpectedTypes[node].(*schema.InputObjectType); ok {
+			if expected, ok := schema.NullableType(ret.ExpectedTypes[node]).(*schema.InputObjectType); ok {
 				for _, field := range node.Fields {
 					if expected, ok := expected.Fields[field.Name.Name]; ok {
 						ret.ExpectedTypes[field.Value] = expected.Type
