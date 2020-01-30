@@ -148,7 +148,7 @@ type ExtendedError interface {
 
 type Response struct {
 	Data   *interface{} `json:"data,omitempty"`
-	Errors []*Error     `json:"error,omitempty"`
+	Errors []*Error     `json:"errors,omitempty"`
 }
 
 func Execute(r *Request) *Response {
