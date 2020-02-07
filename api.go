@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ccbrown/api-fu/graphql"
+	"github.com/ccbrown/api-fu/graphql/executor"
 	"github.com/ccbrown/api-fu/graphqlws"
 )
 
@@ -56,8 +57,65 @@ func ctxAPI(ctx context.Context) *API {
 	return ctx.Value(apiContextKey).(*API)
 }
 
+type asyncResolution struct {
+	Result executor.ResolveResult
+	Dest   executor.ResolvePromise
+}
+
+type apiRequest struct {
+	asyncResolutions chan asyncResolution
+}
+
+func (r *apiRequest) IdleHandler() {
+	resolution := <-r.asyncResolutions
+	resolution.Dest <- resolution.Result
+	for {
+		select {
+		case resolution := <-r.asyncResolutions:
+			resolution.Dest <- resolution.Result
+		default:
+			return
+		}
+	}
+}
+
+type apiRequestContextKeyType int
+
+var apiRequestContextKey apiRequestContextKeyType
+
+func ctxAPIRequest(ctx context.Context) *apiRequest {
+	return ctx.Value(apiRequestContextKey).(*apiRequest)
+}
+
+// Async causes the given resolver to be executed within a new goroutine. It will be executed
+// concurrently with other asynchronous resolvers if possible.
+func Async(resolve func(ctx *graphql.FieldContext) (interface{}, error)) func(ctx *graphql.FieldContext) (interface{}, error) {
+	return func(ctx *graphql.FieldContext) (interface{}, error) {
+		apiRequest := ctxAPIRequest(ctx.Context)
+		if apiRequest.asyncResolutions == nil {
+			apiRequest.asyncResolutions = make(chan asyncResolution)
+		}
+		ch := make(executor.ResolvePromise, 1)
+		go func() {
+			v, err := resolve(ctx)
+			result := executor.ResolveResult{
+				Value: v,
+				Error: err,
+			}
+			apiRequest.asyncResolutions <- asyncResolution{
+				Result: result,
+				Dest:   ch,
+			}
+		}()
+		return ch, nil
+	}
+}
+
 func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
-	r = r.WithContext(context.WithValue(r.Context(), apiContextKey, api))
+	ctx := context.WithValue(r.Context(), apiContextKey, api)
+	apiRequest := &apiRequest{}
+	ctx = context.WithValue(ctx, apiRequestContextKey, apiRequest)
+	r = r.WithContext(ctx)
 
 	req, code, err := graphql.NewRequestFromHTTP(r)
 	if err != nil {
@@ -65,6 +123,7 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Schema = api.schema
+	req.IdleHandler = apiRequest.IdleHandler
 
 	body, err := json.Marshal(graphql.Execute(req))
 	if err != nil {
