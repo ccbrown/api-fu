@@ -49,6 +49,9 @@ func NewListType(t Type) *ListType {
 	return schema.NewListType(t)
 }
 
+type ResolveResult = executor.ResolveResult
+type ResolvePromise = executor.ResolvePromise
+
 type Schema = schema.Schema
 type SchemaDefinition = schema.SchemaDefinition
 

@@ -21,19 +21,23 @@ func init() {
 	// If this is not executed asynchronously alongside a matching asyncReceiver, it will deadlock.
 	testCfg.AddQueryField("asyncSender", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
-		Resolve: Async(func(ctx *graphql.FieldContext) (interface{}, error) {
-			asyncChannel <- struct{}{}
-			return true, nil
-		}),
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			return Go(ctx.Context, func() (interface{}, error) {
+				asyncChannel <- struct{}{}
+				return true, nil
+			}), nil
+		},
 	})
 
 	// If this is not executed asynchronously alongside a matching asyncSender, it will deadlock.
 	testCfg.AddQueryField("asyncReceiver", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
-		Resolve: Async(func(ctx *graphql.FieldContext) (interface{}, error) {
-			<-asyncChannel
-			return true, nil
-		}),
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			return Go(ctx.Context, func() (interface{}, error) {
+				<-asyncChannel
+				return true, nil
+			}), nil
+		},
 	})
 }
 
@@ -46,7 +50,7 @@ func executeGraphQL(t *testing.T, api *API, query string) *http.Response {
 	return w.Result()
 }
 
-func TestAsync(t *testing.T) {
+func TestGo(t *testing.T) {
 	api, err := NewAPI(&testCfg)
 	require.NoError(t, err)
 

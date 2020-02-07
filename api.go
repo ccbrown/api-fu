@@ -12,7 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ccbrown/api-fu/graphql"
-	"github.com/ccbrown/api-fu/graphql/executor"
 	"github.com/ccbrown/api-fu/graphqlws"
 )
 
@@ -58,23 +57,30 @@ func ctxAPI(ctx context.Context) *API {
 }
 
 type asyncResolution struct {
-	Result executor.ResolveResult
-	Dest   executor.ResolvePromise
+	Result graphql.ResolveResult
+	Dest   graphql.ResolvePromise
 }
 
 type apiRequest struct {
-	asyncResolutions chan asyncResolution
+	asyncResolutions        chan asyncResolution
+	chainedAsyncResolutions map[graphql.ResolvePromise]struct{}
 }
 
 func (r *apiRequest) IdleHandler() {
-	resolution := <-r.asyncResolutions
-	resolution.Dest <- resolution.Result
 	for {
-		select {
-		case resolution := <-r.asyncResolutions:
-			resolution.Dest <- resolution.Result
-		default:
-			return
+		resolution := <-r.asyncResolutions
+		resolution.Dest <- resolution.Result
+		if _, ok := r.chainedAsyncResolutions[resolution.Dest]; ok {
+			delete(r.chainedAsyncResolutions, resolution.Dest)
+			continue
+		}
+		for {
+			select {
+			case resolution := <-r.asyncResolutions:
+				resolution.Dest <- resolution.Result
+			default:
+				return
+			}
 		}
 	}
 }
@@ -87,28 +93,40 @@ func ctxAPIRequest(ctx context.Context) *apiRequest {
 	return ctx.Value(apiRequestContextKey).(*apiRequest)
 }
 
-// Async causes the given resolver to be executed within a new goroutine. It will be executed
-// concurrently with other asynchronous resolvers if possible.
-func Async(resolve func(ctx *graphql.FieldContext) (interface{}, error)) func(ctx *graphql.FieldContext) (interface{}, error) {
-	return func(ctx *graphql.FieldContext) (interface{}, error) {
-		apiRequest := ctxAPIRequest(ctx.Context)
-		if apiRequest.asyncResolutions == nil {
-			apiRequest.asyncResolutions = make(chan asyncResolution)
+func chain(ctx context.Context, p graphql.ResolvePromise, f func(interface{}) (interface{}, error)) graphql.ResolvePromise {
+	apiRequest := ctxAPIRequest(ctx)
+	if apiRequest.chainedAsyncResolutions == nil {
+		apiRequest.chainedAsyncResolutions = map[graphql.ResolvePromise]struct{}{}
+	}
+	apiRequest.chainedAsyncResolutions[p] = struct{}{}
+	return Go(ctx, func() (interface{}, error) {
+		result := <-p
+		if !isNil(result.Error) {
+			return nil, result.Error
 		}
-		ch := make(executor.ResolvePromise, 1)
-		go func() {
-			v, err := resolve(ctx)
-			result := executor.ResolveResult{
+		return f(result.Value)
+	})
+}
+
+// When used within the context of a resolve function, completes resolution asynchronously and
+// concurrently with any other asynchronous resolutions.
+func Go(ctx context.Context, f func() (interface{}, error)) graphql.ResolvePromise {
+	apiRequest := ctxAPIRequest(ctx)
+	if apiRequest.asyncResolutions == nil {
+		apiRequest.asyncResolutions = make(chan asyncResolution)
+	}
+	ch := make(graphql.ResolvePromise, 1)
+	go func() {
+		v, err := f()
+		apiRequest.asyncResolutions <- asyncResolution{
+			Result: graphql.ResolveResult{
 				Value: v,
 				Error: err,
-			}
-			apiRequest.asyncResolutions <- asyncResolution{
-				Result: result,
-				Dest:   ch,
-			}
-		}()
-		return ch, nil
-	}
+			},
+			Dest: ch,
+		}
+	}()
+	return ch
 }
 
 func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
