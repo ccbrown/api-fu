@@ -56,8 +56,84 @@ func ctxAPI(ctx context.Context) *API {
 	return ctx.Value(apiContextKey).(*API)
 }
 
+type asyncResolution struct {
+	Result graphql.ResolveResult
+	Dest   graphql.ResolvePromise
+}
+
+type apiRequest struct {
+	asyncResolutions        chan asyncResolution
+	chainedAsyncResolutions map[graphql.ResolvePromise]struct{}
+}
+
+func (r *apiRequest) IdleHandler() {
+	for {
+		resolution := <-r.asyncResolutions
+		resolution.Dest <- resolution.Result
+		if _, ok := r.chainedAsyncResolutions[resolution.Dest]; ok {
+			delete(r.chainedAsyncResolutions, resolution.Dest)
+			continue
+		}
+		for {
+			select {
+			case resolution := <-r.asyncResolutions:
+				resolution.Dest <- resolution.Result
+			default:
+				return
+			}
+		}
+	}
+}
+
+type apiRequestContextKeyType int
+
+var apiRequestContextKey apiRequestContextKeyType
+
+func ctxAPIRequest(ctx context.Context) *apiRequest {
+	return ctx.Value(apiRequestContextKey).(*apiRequest)
+}
+
+func chain(ctx context.Context, p graphql.ResolvePromise, f func(interface{}) (interface{}, error)) graphql.ResolvePromise {
+	apiRequest := ctxAPIRequest(ctx)
+	if apiRequest.chainedAsyncResolutions == nil {
+		apiRequest.chainedAsyncResolutions = map[graphql.ResolvePromise]struct{}{}
+	}
+	apiRequest.chainedAsyncResolutions[p] = struct{}{}
+	return Go(ctx, func() (interface{}, error) {
+		result := <-p
+		if !isNil(result.Error) {
+			return nil, result.Error
+		}
+		return f(result.Value)
+	})
+}
+
+// When used within the context of a resolve function, completes resolution asynchronously and
+// concurrently with any other asynchronous resolutions.
+func Go(ctx context.Context, f func() (interface{}, error)) graphql.ResolvePromise {
+	apiRequest := ctxAPIRequest(ctx)
+	if apiRequest.asyncResolutions == nil {
+		apiRequest.asyncResolutions = make(chan asyncResolution)
+	}
+	ch := make(graphql.ResolvePromise, 1)
+	go func() {
+		v, err := f()
+		apiRequest.asyncResolutions <- asyncResolution{
+			Result: graphql.ResolveResult{
+				Value: v,
+				Error: err,
+			},
+			Dest: ch,
+		}
+	}()
+	return ch
+}
+
 func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
-	r = r.WithContext(context.WithValue(r.Context(), apiContextKey, api))
+	ctx := context.WithValue(r.Context(), apiContextKey, api)
+	apiRequest := &apiRequest{}
+	ctx = context.WithValue(ctx, apiRequestContextKey, apiRequest)
+	r = r.WithContext(ctx)
 
 	req, code, err := graphql.NewRequestFromHTTP(r)
 	if err != nil {
@@ -65,6 +141,7 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Schema = api.schema
+	req.IdleHandler = apiRequest.IdleHandler
 
 	body, err := json.Marshal(graphql.Execute(req))
 	if err != nil {

@@ -18,8 +18,11 @@ type graphqlWSHandler struct {
 }
 
 func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[string]interface{}, operationName string) {
+	ctx := context.WithValue(h.Context, apiContextKey, h.API)
+	ctx = context.WithValue(ctx, apiRequestContextKey, &apiRequest{})
+
 	response := graphql.Execute(&graphql.Request{
-		Context:        context.WithValue(h.Context, apiContextKey, h.API),
+		Context:        ctx,
 		Query:          query,
 		Schema:         h.API.schema,
 		OperationName:  operationName,

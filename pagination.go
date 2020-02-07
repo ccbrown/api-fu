@@ -241,55 +241,62 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				return nil, err
 			}
 
-			edgeSliceValue := reflect.ValueOf(edgeSlice)
-			if edgeSliceValue.Kind() != reflect.Slice {
-				return nil, fmt.Errorf("unexpected non-slice type %T for edges", edgeSlice)
-			}
-
-			ifaces := make([]interface{}, edgeSliceValue.Len())
-			for i := range ifaces {
-				ifaces[i] = edgeSliceValue.Index(i).Interface()
-			}
-
-			edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, beforeCursor, afterCursor, cursorLess)
-
-			if first, ok := ctx.Arguments["first"].(int); ok {
-				if len(edges) > first {
-					edges = edges[:first]
-					hasNextPage = true
-				} else {
-					hasNextPage = false
+			completeConnection := func(edgeSlice interface{}) (interface{}, error) {
+				edgeSliceValue := reflect.ValueOf(edgeSlice)
+				if edgeSliceValue.Kind() != reflect.Slice {
+					return nil, fmt.Errorf("unexpected non-slice type %T for edges", edgeSlice)
 				}
+
+				ifaces := make([]interface{}, edgeSliceValue.Len())
+				for i := range ifaces {
+					ifaces[i] = edgeSliceValue.Index(i).Interface()
+				}
+
+				edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, beforeCursor, afterCursor, cursorLess)
+
+				if first, ok := ctx.Arguments["first"].(int); ok {
+					if len(edges) > first {
+						edges = edges[:first]
+						hasNextPage = true
+					} else {
+						hasNextPage = false
+					}
+				}
+
+				if last, ok := ctx.Arguments["last"].(int); ok {
+					if len(edges) > last {
+						edges = edges[len(edges)-last:]
+						hasPreviousPage = true
+					} else {
+						hasPreviousPage = false
+					}
+				}
+
+				ret := &connection{
+					Edges: edges,
+					PageInfo: PageInfo{
+						HasPreviousPage: hasPreviousPage,
+						HasNextPage:     hasNextPage,
+					},
+				}
+				if len(edges) > 0 {
+					var err error
+					ret.PageInfo.StartCursor, err = serializeCursor(edges[0].Cursor)
+					if err != nil {
+						return nil, errors.Wrap(err, "error serializing start cursor")
+					}
+					ret.PageInfo.EndCursor, err = serializeCursor(edges[len(edges)-1].Cursor)
+					if err != nil {
+						return nil, errors.Wrap(err, "error serializing end cursor")
+					}
+				}
+				return ret, nil
 			}
 
-			if last, ok := ctx.Arguments["last"].(int); ok {
-				if len(edges) > last {
-					edges = edges[len(edges)-last:]
-					hasPreviousPage = true
-				} else {
-					hasPreviousPage = false
-				}
+			if edgeSlice, ok := edgeSlice.(graphql.ResolvePromise); ok {
+				return chain(ctx.Context, edgeSlice, completeConnection), nil
 			}
-
-			ret := &connection{
-				Edges: edges,
-				PageInfo: PageInfo{
-					HasPreviousPage: hasPreviousPage,
-					HasNextPage:     hasNextPage,
-				},
-			}
-			if len(edges) > 0 {
-				var err error
-				ret.PageInfo.StartCursor, err = serializeCursor(edges[0].Cursor)
-				if err != nil {
-					return nil, errors.Wrap(err, "error serializing start cursor")
-				}
-				ret.PageInfo.EndCursor, err = serializeCursor(edges[len(edges)-1].Cursor)
-				if err != nil {
-					return nil, errors.Wrap(err, "error serializing end cursor")
-				}
-			}
-			return ret, nil
+			return completeConnection(edgeSlice)
 		},
 	}
 }
