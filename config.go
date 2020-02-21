@@ -106,6 +106,13 @@ func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 	return objectType
 }
 
+// Adds a named type to the schema. This is generally only required for interface implementations
+// that aren't explicitly referenced elsewhere in the schema.
+func (cfg *Config) AddNamedType(t graphql.NamedType) {
+	cfg.init()
+	cfg.additionalTypes = append(cfg.additionalTypes, t)
+}
+
 func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
 	cfg.init()
 
