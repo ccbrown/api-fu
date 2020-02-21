@@ -51,3 +51,15 @@ func NonNullDateTime(fieldName string) *graphql.FieldDefinition {
 		},
 	}
 }
+
+func NonZeroDateTime(fieldName string) *graphql.FieldDefinition {
+	return &graphql.FieldDefinition{
+		Type: DateTimeType,
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			if t := fieldValue(ctx.Object, fieldName).(time.Time); !t.IsZero() {
+				return t, nil
+			}
+			return nil, nil
+		},
+	}
+}

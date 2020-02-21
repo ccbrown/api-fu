@@ -153,10 +153,11 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
 	}
 
 	resolveValue, resolveErr := fieldDef.Resolve(&schema.FieldContext{
-		Context:   e.Context,
-		Schema:    e.Schema,
-		Object:    initialValue,
-		Arguments: argumentValues,
+		Context:     e.Context,
+		Schema:      e.Schema,
+		Object:      initialValue,
+		Arguments:   argumentValues,
+		IsSubscribe: true,
 	})
 	if !isNil(resolveErr) {
 		return nil, &Error{

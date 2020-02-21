@@ -15,6 +15,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/validator"
 )
 
+type Directive = schema.Directive
 type Type = schema.Type
 type NamedType = schema.NamedType
 type ObjectType = schema.ObjectType
@@ -73,6 +74,17 @@ type Request struct {
 	VariableValues map[string]interface{}
 	InitialValue   interface{}
 	IdleHandler    func()
+}
+
+func (r *Request) executorRequest(doc *ast.Document) *executor.Request {
+	return &executor.Request{
+		Document:       doc,
+		Schema:         r.Schema,
+		OperationName:  r.OperationName,
+		VariableValues: r.VariableValues,
+		InitialValue:   r.InitialValue,
+		IdleHandler:    r.IdleHandler,
+	}
 }
 
 func NewRequestFromHTTP(r *http.Request) (req *Request, code int, err error) {
@@ -154,68 +166,97 @@ type Response struct {
 	Errors []*Error     `json:"errors,omitempty"`
 }
 
+func IsSubscription(doc *ast.Document, operationName string) bool {
+	return executor.IsSubscription(doc, operationName)
+}
+
+func ParseAndValidate(query string, schema *Schema) (*ast.Document, []*Error) {
+	var errors []*Error
+	parsed, parseErrs := parser.ParseDocument([]byte(query))
+	if len(parseErrs) > 0 {
+		for _, err := range parseErrs {
+			errors = append(errors, &Error{
+				Message: "Syntax error: " + err.Message,
+				Locations: []Location{
+					Location{
+						Line:   err.Location.Line,
+						Column: err.Location.Column,
+					},
+				},
+			})
+		}
+		return nil, errors
+	}
+	if validationErrs := validator.ValidateDocument(parsed, schema); len(validationErrs) > 0 {
+		for _, err := range validationErrs {
+			locations := make([]Location, len(err.Locations))
+			for i, loc := range err.Locations {
+				locations[i].Line = loc.Line
+				locations[i].Column = loc.Column
+			}
+			errors = append(errors, &Error{
+				Message:   "Validation error: " + err.Message,
+				Locations: locations,
+			})
+		}
+		return nil, errors
+	}
+	return parsed, nil
+}
+
+func newErrorFromExecutorError(err *executor.Error) *Error {
+	locations := make([]Location, len(err.Locations))
+	for i, loc := range err.Locations {
+		locations[i].Line = loc.Line
+		locations[i].Column = loc.Column
+	}
+	retErr := &Error{
+		Message:   err.Message,
+		Locations: locations,
+		Path:      err.Path,
+	}
+	if ext, ok := err.Unwrap().(ExtendedError); ok {
+		retErr.Extensions = ext.Extensions()
+	}
+	return retErr
+}
+
+func Subscribe(r *Request) (interface{}, []*Error) {
+	doc := r.Document
+	if doc == nil {
+		var errors []*Error
+		doc, errors = ParseAndValidate(r.Query, r.Schema)
+		if len(errors) > 0 {
+			return nil, errors
+		}
+	}
+
+	ret, err := executor.Subscribe(r.Context, r.executorRequest(doc))
+	if err != nil {
+		return nil, []*Error{newErrorFromExecutorError(err)}
+	}
+	return ret, nil
+}
+
 func Execute(r *Request) *Response {
 	ret := &Response{}
 	doc := r.Document
 	if doc == nil {
-		parsed, parseErrs := parser.ParseDocument([]byte(r.Query))
-		if len(parseErrs) > 0 {
-			for _, err := range parseErrs {
-				ret.Errors = append(ret.Errors, &Error{
-					Message: "Syntax error: " + err.Message,
-					Locations: []Location{
-						Location{
-							Line:   err.Location.Line,
-							Column: err.Location.Column,
-						},
-					},
-				})
+		var errors []*Error
+		doc, errors = ParseAndValidate(r.Query, r.Schema)
+		if len(errors) > 0 {
+			return &Response{
+				Errors: errors,
 			}
-			return ret
 		}
-		if validationErrs := validator.ValidateDocument(parsed, r.Schema); len(validationErrs) > 0 {
-			for _, err := range validationErrs {
-				locations := make([]Location, len(err.Locations))
-				for i, loc := range err.Locations {
-					locations[i].Line = loc.Line
-					locations[i].Column = loc.Column
-				}
-				ret.Errors = append(ret.Errors, &Error{
-					Message:   "Validation error: " + err.Message,
-					Locations: locations,
-				})
-			}
-			return ret
-		}
-		doc = parsed
 	}
 
-	data, errs := executor.ExecuteRequest(r.Context, &executor.Request{
-		Document:       doc,
-		Schema:         r.Schema,
-		OperationName:  r.OperationName,
-		VariableValues: r.VariableValues,
-		InitialValue:   r.InitialValue,
-		IdleHandler:    r.IdleHandler,
-	})
+	data, errs := executor.ExecuteRequest(r.Context, r.executorRequest(doc))
 	var dataInterface interface{}
 	dataInterface = data
 	ret.Data = &dataInterface
 	for _, err := range errs {
-		locations := make([]Location, len(err.Locations))
-		for i, loc := range err.Locations {
-			locations[i].Line = loc.Line
-			locations[i].Column = loc.Column
-		}
-		retErr := &Error{
-			Message:   err.Message,
-			Locations: locations,
-			Path:      err.Path,
-		}
-		if ext, ok := err.Unwrap().(ExtendedError); ok {
-			retErr.Extensions = ext.Extensions()
-		}
-		ret.Errors = append(ret.Errors, retErr)
+		ret.Errors = append(ret.Errors, newErrorFromExecutorError(err))
 	}
 	return ret
 }
