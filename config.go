@@ -24,6 +24,7 @@ type Config struct {
 	nodeInterface         *graphql.InterfaceType
 	query                 *graphql.ObjectType
 	mutation              *graphql.ObjectType
+	subscription          *graphql.ObjectType
 	additionalTypes       []graphql.NamedType
 }
 
@@ -68,6 +69,7 @@ func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
 	return graphql.NewSchema(&graphql.SchemaDefinition{
 		Query:           cfg.query,
 		Mutation:        cfg.mutation,
+		Subscription:    cfg.subscription,
 		AdditionalTypes: cfg.additionalTypes,
 		Directives: map[string]*graphql.DirectiveDefinition{
 			"include": graphql.IncludeDirective,
@@ -119,6 +121,40 @@ func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
 	}
 
 	cfg.mutation.Fields[name] = def
+}
+
+// When a subscription is started, your resolver will be invoked with ctx.IsSubscribe set to true.
+// When this happens, you should return a pointer to a SubscriptionSourceStream (or an error). For
+// example:
+//
+//     Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+//         if ctx.IsSubscribe {
+//             ticker := time.NewTicker(time.Second)
+//             return &apifu.SubscriptionSourceStream{
+//                 EventChannel: ticker.C,
+//                 Stop:         ticker.Stop,
+//             }, nil
+//         } else if ctx.Object != nil {
+//             return ctx.Object, nil
+//         } else {
+//             return nil, fmt.Errorf("Subscriptions are not supported using this protocol.")
+//         }
+//     },
+func (cfg *Config) AddSubscription(name string, def *graphql.FieldDefinition) {
+	cfg.init()
+
+	if cfg.subscription == nil {
+		cfg.subscription = &graphql.ObjectType{
+			Name:   "Subscription",
+			Fields: map[string]*graphql.FieldDefinition{},
+		}
+	}
+
+	if _, ok := cfg.subscription.Fields[name]; ok {
+		panic("a subscription with that name already exists")
+	}
+
+	cfg.subscription.Fields[name] = def
 }
 
 func (cfg *Config) AddQueryField(name string, def *graphql.FieldDefinition) {

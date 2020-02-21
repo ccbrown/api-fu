@@ -26,6 +26,8 @@ type Connection struct {
 	finishClosingOnce sync.Once
 }
 
+// ConnectionHandle methods may be invoked on a separate goroutine, but invocations will never be
+// made concurrently.
 type ConnectionHandler interface {
 	// Called when the client wants to start an operation. If the operation is a query or mutation,
 	// the handler should immediately call SendData followed by SendComplete. If the operation is a

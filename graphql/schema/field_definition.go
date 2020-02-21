@@ -11,6 +11,11 @@ type FieldContext struct {
 	Schema    *Schema
 	Object    interface{}
 	Arguments map[string]interface{}
+
+	// True if this is a subscription field being invoked for a subscribe operation. Subselections
+	// of this field will not be executed, and the return value will be returned immediately to the
+	// caller of Subscribe.
+	IsSubscribe bool
 }
 
 type FieldDefinition struct {
