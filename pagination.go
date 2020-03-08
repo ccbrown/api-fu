@@ -113,10 +113,10 @@ type PageInfo struct {
 var PageInfoType = &graphql.ObjectType{
 	Name: "PageInfo",
 	Fields: map[string]*graphql.FieldDefinition{
-		"hasPreviousPage": NonNullBoolean("HasPreviousPage"),
-		"hasNextPage":     NonNullBoolean("HasNextPage"),
-		"startCursor":     NonNullString("StartCursor"),
-		"endCursor":       NonNullString("EndCursor"),
+		"hasPreviousPage": NonNull(graphql.BooleanType, "HasPreviousPage"),
+		"hasNextPage":     NonNull(graphql.BooleanType, "HasNextPage"),
+		"startCursor":     NonNull(graphql.StringType, "StartCursor"),
+		"endCursor":       NonNull(graphql.StringType, "EndCursor"),
 	},
 }
 

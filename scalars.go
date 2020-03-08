@@ -43,15 +43,6 @@ var DateTimeType = &graphql.ScalarType{
 	},
 }
 
-func NonNullDateTime(fieldName string) *graphql.FieldDefinition {
-	return &graphql.FieldDefinition{
-		Type: graphql.NewNonNullType(DateTimeType),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-			return fieldValue(ctx.Object, fieldName), nil
-		},
-	}
-}
-
 func NonZeroDateTime(fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: DateTimeType,

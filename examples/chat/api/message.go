@@ -21,9 +21,9 @@ var messageType = fuCfg.AddNodeType(&apifu.NodeType{
 func init() {
 	messageType.Fields = map[string]*graphql.FieldDefinition{
 		"id":      apifu.OwnID("Id"),
-		"time":    apifu.NonNullDateTime("Time"),
+		"time":    apifu.NonNull(apifu.DateTimeType, "Time"),
 		"user":    apifu.Node(userType, "UserId"),
-		"body":    apifu.NonNullString("Body"),
+		"body":    apifu.NonNull(graphql.StringType, "Body"),
 		"channel": apifu.Node(channelType, "ChannelId"),
 	}
 }

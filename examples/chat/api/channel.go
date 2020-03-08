@@ -28,8 +28,8 @@ func init() {
 
 	channelType.Fields = map[string]*graphql.FieldDefinition{
 		"id":           apifu.OwnID("Id"),
-		"name":         apifu.NonNullString("Name"),
-		"creationTime": apifu.NonNullDateTime("CreationTime"),
+		"name":         apifu.NonNull(graphql.StringType, "Name"),
+		"creationTime": apifu.NonNull(apifu.DateTimeType, "CreationTime"),
 		"creator":      apifu.Node(userType, "CreatorUserId"),
 		"messagesConnection": apifu.Connection(&apifu.ConnectionConfig{
 			NamePrefix:  "ChannelMessages",

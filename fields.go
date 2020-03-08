@@ -38,15 +38,6 @@ func NonNullNodeID(modelType reflect.Type, fieldName string) *graphql.FieldDefin
 	}
 }
 
-func NonNullString(fieldName string) *graphql.FieldDefinition {
-	return &graphql.FieldDefinition{
-		Type: graphql.NewNonNullType(graphql.StringType),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-			return fieldValue(ctx.Object, fieldName), nil
-		},
-	}
-}
-
 // Returns a field that resolves to a string if the field's value is non-empty. Otherwise, the field
 // resolves to nil.
 func NonEmptyString(fieldName string) *graphql.FieldDefinition {
@@ -61,18 +52,9 @@ func NonEmptyString(fieldName string) *graphql.FieldDefinition {
 	}
 }
 
-func NonNullBoolean(fieldName string) *graphql.FieldDefinition {
+func NonNull(t graphql.Type, fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
-		Type: graphql.NewNonNullType(graphql.BooleanType),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-			return fieldValue(ctx.Object, fieldName), nil
-		},
-	}
-}
-
-func NonNullInt(fieldName string) *graphql.FieldDefinition {
-	return &graphql.FieldDefinition{
-		Type: graphql.NewNonNullType(graphql.IntType),
+		Type: graphql.NewNonNullType(t),
 		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 			return fieldValue(ctx.Object, fieldName), nil
 		},

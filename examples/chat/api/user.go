@@ -18,7 +18,7 @@ var userType = fuCfg.AddNodeType(&apifu.NodeType{
 	},
 	Fields: map[string]*graphql.FieldDefinition{
 		"id":     apifu.OwnID("Id"),
-		"handle": apifu.NonNullString("Handle"),
+		"handle": apifu.NonNull(graphql.StringType, "Handle"),
 	},
 })
 
