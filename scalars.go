@@ -1,6 +1,8 @@
 package apifu
 
 import (
+	"math"
+	"strconv"
 	"time"
 
 	"github.com/ccbrown/api-fu/graphql"
@@ -53,4 +55,70 @@ func NonZeroDateTime(fieldName string) *graphql.FieldDefinition {
 			return nil, nil
 		},
 	}
+}
+
+const (
+	maxSafeInteger = 9007199254740991
+	minSafeInteger = -9007199254740991
+)
+
+func coerceLongInt(v interface{}) interface{} {
+	switch v := v.(type) {
+	case bool:
+		if v {
+			return int64(1)
+		}
+		return int64(0)
+	case int8:
+		return int64(v)
+	case uint8:
+		return int64(v)
+	case int16:
+		return int64(v)
+	case uint16:
+		return int64(v)
+	case int32:
+		return int64(v)
+	case uint32:
+		return int64(v)
+	case int64:
+		if v >= minSafeInteger && v <= maxSafeInteger {
+			return v
+		}
+	case uint64:
+		if v <= maxSafeInteger {
+			return v
+		}
+	case int:
+		if v >= minSafeInteger && v <= maxSafeInteger {
+			return v
+		}
+	case uint:
+		if v <= maxSafeInteger {
+			return v
+		}
+	case float32:
+		return coerceLongInt(float64(v))
+	case float64:
+		if n := math.Trunc(v); n == v && n >= minSafeInteger && n <= maxSafeInteger {
+			return int(n)
+		}
+	}
+	return nil
+}
+
+var LongIntType = &graphql.ScalarType{
+	Name:        "LongInt",
+	Description: "LongInt represents a signed integer that may be longer than 32 bits, but still within JavaScript / IEEE-654's \"safe\" range.",
+	LiteralCoercion: func(v ast.Value) interface{} {
+		switch v := v.(type) {
+		case *ast.IntValue:
+			if n, err := strconv.ParseInt(v.Value, 10, 64); err == nil && n >= minSafeInteger && n <= maxSafeInteger {
+				return int(n)
+			}
+		}
+		return nil
+	},
+	VariableValueCoercion: coerceLongInt,
+	ResultCoercion:        coerceLongInt,
 }

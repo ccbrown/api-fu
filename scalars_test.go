@@ -14,3 +14,17 @@ func TestDateTimeType(t *testing.T) {
 		Value: "2019-12-01T01:23:45.6Z",
 	}))
 }
+
+func TestLongIntType(t *testing.T) {
+	assert.Equal(t, 9007199254740991, LongIntType.LiteralCoercion(&ast.IntValue{
+		Value: "9007199254740991",
+	}))
+
+	assert.Nil(t, LongIntType.LiteralCoercion(&ast.IntValue{
+		Value: "9007199254740992",
+	}))
+
+	assert.Equal(t, -9007199254740991, LongIntType.LiteralCoercion(&ast.IntValue{
+		Value: "-9007199254740991",
+	}))
+}
