@@ -43,7 +43,7 @@ type ConnectionConfig struct {
 
 	// If you use ResolveEdges, you can optionally provide ResolveTotalCount to add a totalCount
 	// field to the connection. If you use ResolveAllEdges, there is no need to provide this.
-	ResolveTotalCount func(ctx *graphql.FieldContext) (int, error)
+	ResolveTotalCount func(ctx *graphql.FieldContext) (interface{}, error)
 
 	// CursorType allows the connection to deserialize cursors. It is required for all connections.
 	CursorType reflect.Type
@@ -130,9 +130,9 @@ type edge struct {
 }
 
 type connection struct {
-	ResolveTotalCount func() (int, error)
+	ResolveTotalCount func() (interface{}, error)
 	Edges             []edge
-	PageInfo          PageInfo
+	ResolvePageInfo   func() (interface{}, error)
 }
 
 func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
@@ -168,8 +168,13 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Name:        config.NamePrefix + "Connection",
 		Description: config.Description,
 		Fields: map[string]*graphql.FieldDefinition{
-			"edges":    NonNull(graphql.NewListType(graphql.NewNonNullType(edgeType)), "Edges"),
-			"pageInfo": NonNull(PageInfoType, "PageInfo"),
+			"edges": NonNull(graphql.NewListType(graphql.NewNonNullType(edgeType)), "Edges"),
+			"pageInfo": &graphql.FieldDefinition{
+				Type: graphql.NewNonNullType(PageInfoType),
+				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					return ctx.Object.(*connection).ResolvePageInfo()
+				},
+			},
 		},
 	}
 
@@ -239,78 +244,109 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				} else {
 					limit = -(ctx.Arguments["last"].(int) + 1)
 				}
-				edgeSlice, cursorLess, err = config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
+				if limit == 1 || limit == -1 {
+					// no edges. don't do anything unless pageInfo is requested
+					return &connection{
+						ResolveTotalCount: func() (interface{}, error) {
+							return config.ResolveTotalCount(ctx)
+						},
+						Edges: []edge{},
+						ResolvePageInfo: func() (interface{}, error) {
+							edgeSlice, cursorLess, err = config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
+							if !isNil(err) {
+								return nil, err
+							}
+							conn, err := completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
+							if !isNil(err) {
+								return nil, err
+							}
+							if promise, ok := conn.(graphql.ResolvePromise); ok {
+								return chain(ctx.Context, promise, func(conn interface{}) (interface{}, error) {
+									return conn.(*connection).ResolvePageInfo()
+								}), nil
+							}
+							return conn.(*connection).ResolvePageInfo()
+						},
+					}, nil
+				} else {
+					edgeSlice, cursorLess, err = config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
+				}
 			}
 			if !isNil(err) {
 				return nil, err
 			}
 
-			completeConnection := func(edgeSlice interface{}) (interface{}, error) {
-				edgeSliceValue := reflect.ValueOf(edgeSlice)
-				if edgeSliceValue.Kind() != reflect.Slice {
-					return nil, fmt.Errorf("unexpected non-slice type %T for edges", edgeSlice)
-				}
-
-				resolveTotalCount := func() (int, error) {
-					return edgeSliceValue.Len(), nil
-				}
-				if config.ResolveTotalCount != nil {
-					resolveTotalCount = func() (int, error) {
-						return config.ResolveTotalCount(ctx)
-					}
-				}
-
-				ifaces := make([]interface{}, edgeSliceValue.Len())
-				for i := range ifaces {
-					ifaces[i] = edgeSliceValue.Index(i).Interface()
-				}
-
-				edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, beforeCursor, afterCursor, cursorLess)
-
-				if first, ok := ctx.Arguments["first"].(int); ok {
-					if len(edges) > first {
-						edges = edges[:first]
-						hasNextPage = true
-					} else {
-						hasNextPage = false
-					}
-				}
-
-				if last, ok := ctx.Arguments["last"].(int); ok {
-					if len(edges) > last {
-						edges = edges[len(edges)-last:]
-						hasPreviousPage = true
-					} else {
-						hasPreviousPage = false
-					}
-				}
-
-				ret := &connection{
-					ResolveTotalCount: resolveTotalCount,
-					Edges:             edges,
-					PageInfo: PageInfo{
-						HasPreviousPage: hasPreviousPage,
-						HasNextPage:     hasNextPage,
-					},
-				}
-				if len(edges) > 0 {
-					var err error
-					ret.PageInfo.StartCursor, err = serializeCursor(edges[0].Cursor)
-					if err != nil {
-						return nil, errors.Wrap(err, "error serializing start cursor")
-					}
-					ret.PageInfo.EndCursor, err = serializeCursor(edges[len(edges)-1].Cursor)
-					if err != nil {
-						return nil, errors.Wrap(err, "error serializing end cursor")
-					}
-				}
-				return ret, nil
-			}
-
-			if edgeSlice, ok := edgeSlice.(graphql.ResolvePromise); ok {
-				return chain(ctx.Context, edgeSlice, completeConnection), nil
-			}
-			return completeConnection(edgeSlice)
+			return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
 		},
 	}
+}
+
+func completeConnection(config *ConnectionConfig, ctx *graphql.FieldContext, beforeCursor, afterCursor interface{}, cursorLess func(a, b interface{}) bool, edgeSlice interface{}) (interface{}, error) {
+	if edgeSlice, ok := edgeSlice.(graphql.ResolvePromise); ok {
+		return chain(ctx.Context, edgeSlice, func(edgeSlice interface{}) (interface{}, error) {
+			return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
+		}), nil
+	}
+
+	edgeSliceValue := reflect.ValueOf(edgeSlice)
+	if edgeSliceValue.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("unexpected non-slice type %T for edges", edgeSlice)
+	}
+
+	resolveTotalCount := func() (interface{}, error) {
+		return edgeSliceValue.Len(), nil
+	}
+	if config.ResolveTotalCount != nil {
+		resolveTotalCount = func() (interface{}, error) {
+			return config.ResolveTotalCount(ctx)
+		}
+	}
+
+	ifaces := make([]interface{}, edgeSliceValue.Len())
+	for i := range ifaces {
+		ifaces[i] = edgeSliceValue.Index(i).Interface()
+	}
+
+	edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, beforeCursor, afterCursor, cursorLess)
+
+	if first, ok := ctx.Arguments["first"].(int); ok {
+		if len(edges) > first {
+			edges = edges[:first]
+			hasNextPage = true
+		} else {
+			hasNextPage = false
+		}
+	}
+
+	if last, ok := ctx.Arguments["last"].(int); ok {
+		if len(edges) > last {
+			edges = edges[len(edges)-last:]
+			hasPreviousPage = true
+		} else {
+			hasPreviousPage = false
+		}
+	}
+
+	pageInfo := &PageInfo{
+		HasPreviousPage: hasPreviousPage,
+		HasNextPage:     hasNextPage,
+	}
+	if len(edges) > 0 {
+		var err error
+		pageInfo.StartCursor, err = serializeCursor(edges[0].Cursor)
+		if err != nil {
+			return nil, errors.Wrap(err, "error serializing start cursor")
+		}
+		pageInfo.EndCursor, err = serializeCursor(edges[len(edges)-1].Cursor)
+		if err != nil {
+			return nil, errors.Wrap(err, "error serializing end cursor")
+		}
+	}
+	return &connection{
+		ResolveTotalCount: resolveTotalCount,
+		Edges:             edges,
+		ResolvePageInfo: func() (interface{}, error) {
+			return pageInfo, nil
+		},
+	}, nil
 }

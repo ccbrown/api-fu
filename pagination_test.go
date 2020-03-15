@@ -1,6 +1,7 @@
 package apifu
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
 	"reflect"
@@ -26,7 +27,7 @@ func TestConnection(t *testing.T) {
 				return false
 			}, nil
 		},
-		ResolveTotalCount: func(ctx *graphql.FieldContext) (int, error) {
+		ResolveTotalCount: func(ctx *graphql.FieldContext) (interface{}, error) {
 			return 1000, nil
 		},
 		CursorType: reflect.TypeOf(""),
@@ -119,6 +120,126 @@ func TestConnection(t *testing.T) {
 					"hasNextPage": true,
 					"hasPreviousPage": false,
 					"startCursor": "oTA"
+				},
+				"totalCount": 1000
+			}
+		}
+	}`, string(body))
+}
+
+func TestConnection_ZeroArg_WithoutPageInfo(t *testing.T) {
+	config := &Config{}
+	config.AddQueryField("connection", Connection(&ConnectionConfig{
+		NamePrefix: "Test",
+		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
+			return nil, nil, fmt.Errorf("the edge resolver should not be invoked")
+		},
+		ResolveTotalCount: func(ctx *graphql.FieldContext) (interface{}, error) {
+			return 1000, nil
+		},
+		CursorType: reflect.TypeOf(""),
+		EdgeCursor: func(edge interface{}) interface{} {
+			return strconv.Itoa(edge.(int))
+		},
+		EdgeFields: map[string]*graphql.FieldDefinition{
+			"node": &graphql.FieldDefinition{
+				Type: graphql.IntType,
+				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					return ctx.Object, nil
+				},
+			},
+		},
+	}))
+
+	api, err := NewAPI(config)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("POST", "/", strings.NewReader(`{
+		connection(first: 0) {
+			edges {
+				node
+			}
+			totalCount
+		}
+	}`))
+	req.Header.Set("Content-Type", "application/graphql")
+	w := httptest.NewRecorder()
+
+	api.ServeGraphQL(w, req)
+
+	resp := w.Result()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	assert.JSONEq(t, `{
+		"data": {
+			"connection": {
+				"edges": [],
+				"totalCount": 1000
+			}
+		}
+	}`, string(body))
+}
+
+func TestConnection_ZeroArg_WithPageInfo(t *testing.T) {
+	config := &Config{}
+	config.AddQueryField("connection", Connection(&ConnectionConfig{
+		NamePrefix: "Test",
+		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
+			return Go(ctx.Context, func() (interface{}, error) {
+					return make([]int, limit), nil
+				}), func(a, b interface{}) bool {
+					return false
+				}, nil
+		},
+		ResolveTotalCount: func(ctx *graphql.FieldContext) (interface{}, error) {
+			return 1000, nil
+		},
+		CursorType: reflect.TypeOf(""),
+		EdgeCursor: func(edge interface{}) interface{} {
+			return strconv.Itoa(edge.(int))
+		},
+		EdgeFields: map[string]*graphql.FieldDefinition{
+			"node": &graphql.FieldDefinition{
+				Type: graphql.IntType,
+				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					return ctx.Object, nil
+				},
+			},
+		},
+	}))
+
+	api, err := NewAPI(config)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("POST", "/", strings.NewReader(`{
+		connection(first: 0) {
+			edges {
+				node
+			}
+			totalCount
+			pageInfo {
+				hasNextPage
+				startCursor
+				endCursor
+			}
+		}
+	}`))
+	req.Header.Set("Content-Type", "application/graphql")
+	w := httptest.NewRecorder()
+
+	api.ServeGraphQL(w, req)
+
+	resp := w.Result()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	assert.JSONEq(t, `{
+		"data": {
+			"connection": {
+				"edges": [],
+				"pageInfo": {
+					"endCursor": "",
+					"hasNextPage": true,
+					"startCursor": ""
 				},
 				"totalCount": 1000
 			}
