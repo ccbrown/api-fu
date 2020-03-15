@@ -41,6 +41,10 @@ type ConnectionConfig struct {
 	// scenarios where the spec allows them to be false for performance reasons.
 	ResolveEdges func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
 
+	// If you use ResolveEdges, you can optionally provide ResolveTotalCount to add a totalCount
+	// field to the connection. If you use ResolveAllEdges, there is no need to provide this.
+	ResolveTotalCount func(ctx *graphql.FieldContext) (int, error)
+
 	// CursorType allows the connection to deserialize cursors. It is required for all connections.
 	CursorType reflect.Type
 
@@ -126,8 +130,9 @@ type edge struct {
 }
 
 type connection struct {
-	Edges    []edge
-	PageInfo PageInfo
+	ResolveTotalCount func(ctx *graphql.FieldContext) (int, error)
+	Edges             []edge
+	PageInfo          PageInfo
 }
 
 func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
@@ -163,19 +168,18 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Name:        config.NamePrefix + "Connection",
 		Description: config.Description,
 		Fields: map[string]*graphql.FieldDefinition{
-			"edges": &graphql.FieldDefinition{
-				Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edgeType))),
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-					return ctx.Object.(*connection).Edges, nil
-				},
-			},
-			"pageInfo": &graphql.FieldDefinition{
-				Type: graphql.NewNonNullType(PageInfoType),
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-					return ctx.Object.(*connection).PageInfo, nil
-				},
-			},
+			"edges":    NonNull(graphql.NewListType(graphql.NewNonNullType(edgeType)), "Edges"),
+			"pageInfo": NonNull(PageInfoType, "PageInfo"),
 		},
+	}
+
+	if config.ResolveAllEdges != nil || config.ResolveTotalCount != nil {
+		connectionType.Fields["totalCount"] = &graphql.FieldDefinition{
+			Type: graphql.NewNonNullType(graphql.IntType),
+			Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				return ctx.Object.(*connection).ResolveTotalCount(ctx)
+			},
+		}
 	}
 
 	return &graphql.FieldDefinition{
@@ -247,6 +251,13 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 					return nil, fmt.Errorf("unexpected non-slice type %T for edges", edgeSlice)
 				}
 
+				resolveTotalCount := func(ctx *graphql.FieldContext) (int, error) {
+					return edgeSliceValue.Len(), nil
+				}
+				if config.ResolveTotalCount != nil {
+					resolveTotalCount = config.ResolveTotalCount
+				}
+
 				ifaces := make([]interface{}, edgeSliceValue.Len())
 				for i := range ifaces {
 					ifaces[i] = edgeSliceValue.Index(i).Interface()
@@ -273,7 +284,8 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				}
 
 				ret := &connection{
-					Edges: edges,
+					ResolveTotalCount: resolveTotalCount,
+					Edges:             edges,
 					PageInfo: PageInfo{
 						HasPreviousPage: hasPreviousPage,
 						HasNextPage:     hasNextPage,

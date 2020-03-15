@@ -1,0 +1,127 @@
+package apifu
+
+import (
+	"io/ioutil"
+	"net/http/httptest"
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/ccbrown/api-fu/graphql"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestConnection(t *testing.T) {
+	config := &Config{}
+	config.AddQueryField("connection", Connection(&ConnectionConfig{
+		NamePrefix: "Test",
+		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
+			ret := make([]int, limit)
+			for i := range ret {
+				ret[i] = i
+			}
+			return ret, func(a, b interface{}) bool {
+				return false
+			}, nil
+		},
+		ResolveTotalCount: func(ctx *graphql.FieldContext) (int, error) {
+			return 1000, nil
+		},
+		CursorType: reflect.TypeOf(""),
+		EdgeCursor: func(edge interface{}) interface{} {
+			return strconv.Itoa(edge.(int))
+		},
+		EdgeFields: map[string]*graphql.FieldDefinition{
+			"node": &graphql.FieldDefinition{
+				Type: graphql.IntType,
+				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					return ctx.Object, nil
+				},
+			},
+		},
+	}))
+
+	api, err := NewAPI(config)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("POST", "/", strings.NewReader(`{
+		connection(first: 10) {
+			edges {
+				node
+				cursor
+			}
+			pageInfo {
+				hasPreviousPage
+				hasNextPage
+				startCursor
+				endCursor
+			}
+			totalCount
+		}
+	}`))
+	req.Header.Set("Content-Type", "application/graphql")
+	w := httptest.NewRecorder()
+
+	api.ServeGraphQL(w, req)
+
+	resp := w.Result()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	assert.JSONEq(t, `{
+		"data": {
+			"connection": {
+				"edges": [
+					{
+						"cursor": "oTA",
+						"node": 0
+					},
+					{
+						"cursor": "oTE",
+						"node": 1
+					},
+					{
+						"cursor": "oTI",
+						"node": 2
+					},
+					{
+						"cursor": "oTM",
+						"node": 3
+					},
+					{
+						"cursor": "oTQ",
+						"node": 4
+					},
+					{
+						"cursor": "oTU",
+						"node": 5
+					},
+					{
+						"cursor": "oTY",
+						"node": 6
+					},
+					{
+						"cursor": "oTc",
+						"node": 7
+					},
+					{
+						"cursor": "oTg",
+						"node": 8
+					},
+					{
+						"cursor": "oTk",
+						"node": 9
+					}
+				],
+				"pageInfo": {
+					"endCursor": "oTk",
+					"hasNextPage": true,
+					"hasPreviousPage": false,
+					"startCursor": "oTA"
+				},
+				"totalCount": 1000
+			}
+		}
+	}`, string(body))
+}
