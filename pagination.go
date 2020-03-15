@@ -130,7 +130,7 @@ type edge struct {
 }
 
 type connection struct {
-	ResolveTotalCount func(ctx *graphql.FieldContext) (int, error)
+	ResolveTotalCount func() (int, error)
 	Edges             []edge
 	PageInfo          PageInfo
 }
@@ -177,7 +177,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		connectionType.Fields["totalCount"] = &graphql.FieldDefinition{
 			Type: graphql.NewNonNullType(graphql.IntType),
 			Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-				return ctx.Object.(*connection).ResolveTotalCount(ctx)
+				return ctx.Object.(*connection).ResolveTotalCount()
 			},
 		}
 	}
@@ -251,11 +251,13 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 					return nil, fmt.Errorf("unexpected non-slice type %T for edges", edgeSlice)
 				}
 
-				resolveTotalCount := func(ctx *graphql.FieldContext) (int, error) {
+				resolveTotalCount := func() (int, error) {
 					return edgeSliceValue.Len(), nil
 				}
 				if config.ResolveTotalCount != nil {
-					resolveTotalCount = config.ResolveTotalCount
+					resolveTotalCount = func() (int, error) {
+						return config.ResolveTotalCount(ctx)
+					}
 				}
 
 				ifaces := make([]interface{}, edgeSliceValue.Len())
