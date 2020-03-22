@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/vmihailenco/msgpack"
@@ -18,7 +20,11 @@ type ConnectionConfig struct {
 	// "ExampleEdge".
 	NamePrefix string
 
+	// An optional description for the connection.
 	Description string
+
+	// An optional map of additional arguments to add to the connection.
+	Arguments map[string]*graphql.InputValueDefinition
 
 	// If getting all edges for the connection is cheap, you can just provide ResolveAllEdges.
 	// ResolveAllEdges should return a slice value, with one item for each edge, and a function that
@@ -187,7 +193,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		}
 	}
 
-	return &graphql.FieldDefinition{
+	ret := &graphql.FieldDefinition{
 		Type: connectionType,
 		Arguments: map[string]*graphql.InputValueDefinition{
 			"first": &graphql.InputValueDefinition{
@@ -279,6 +285,12 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
 		},
 	}
+
+	for name, def := range config.Arguments {
+		ret.Arguments[name] = def
+	}
+
+	return ret
 }
 
 func completeConnection(config *ConnectionConfig, ctx *graphql.FieldContext, beforeCursor, afterCursor interface{}, cursorLess func(a, b interface{}) bool, edgeSlice interface{}) (interface{}, error) {
@@ -349,4 +361,135 @@ func completeConnection(config *ConnectionConfig, ctx *graphql.FieldContext, bef
 			return pageInfo, nil
 		},
 	}, nil
+}
+
+type TimeBasedCursor struct {
+	Nano int64
+	Id   string
+}
+
+func NewTimeBasedCursor(t time.Time, id string) TimeBasedCursor {
+	return TimeBasedCursor{
+		Nano: t.UnixNano(),
+		Id:   id,
+	}
+}
+
+func timeBasedCursorLess(a, b interface{}) bool {
+	ac, bc := a.(TimeBasedCursor), b.(TimeBasedCursor)
+	return ac.Nano < bc.Nano || (ac.Nano == bc.Nano && strings.Compare(ac.Id, bc.Id) < 0)
+}
+
+type TimeBasedConnectionConfig struct {
+	// An optional description for the connection.
+	Description string
+
+	// A required prefix for the type names. For a field named "friendsConnection" on a User type,
+	// the recommended prefix would be "UserFriends". This will result in types named
+	// "UserFriendsConnection" and "UserFriendsEdge".
+	NamePrefix string
+
+	// This function should return a TimeBasedCursor for the given edge.
+	EdgeCursor func(edge interface{}) TimeBasedCursor
+
+	// Returns the fields for the edge. This should always at least include a "node" field.
+	EdgeFields map[string]*graphql.FieldDefinition
+
+	// The getter for the edges. If limit is zero, all edges within the given range should be
+	// returned. If limit is greater than zero, up to limit edges at the start of the range should
+	// be returned. If limit is less than zero, up to -limit edge at the end of the range should be
+	// returned.
+	EdgeGetter func(ctx *graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error)
+
+	// An optional map of additional arguments to add to the connection.
+	Arguments map[string]*graphql.InputValueDefinition
+
+	// To support the "totalCount" connection field, you can provide this method.
+	ResolveTotalCount func(ctx *graphql.FieldContext) (interface{}, error)
+}
+
+// Creates a new connection for edges sorted by time. In addition to the standard first, last,
+// after, and before fields, the connection will have atOrAfterTime and beforeTime fields, which can
+// be used to query a specific time range.
+func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefinition {
+	arguments := map[string]*graphql.InputValueDefinition{
+		"atOrAfterTime": &graphql.InputValueDefinition{
+			Type: DateTimeType,
+		},
+		"beforeTime": &graphql.InputValueDefinition{
+			Type: DateTimeType,
+		},
+	}
+	for name, def := range config.Arguments {
+		arguments[name] = def
+	}
+
+	description := "Provides nodes sorted by time."
+	if config.Description != "" {
+		description = config.Description
+	}
+
+	return Connection(&ConnectionConfig{
+		NamePrefix:  config.NamePrefix,
+		Arguments:   arguments,
+		Description: description,
+		EdgeCursor: func(edge interface{}) interface{} {
+			return config.EdgeCursor(edge)
+		},
+		EdgeFields:        config.EdgeFields,
+		CursorType:        reflect.TypeOf(TimeBasedCursor{}),
+		ResolveTotalCount: config.ResolveTotalCount,
+		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
+			type Query struct {
+				Min   time.Time
+				Max   time.Time
+				Limit int
+			}
+			var queries []Query
+
+			atOrAfterTime := time.Time{}
+			if t, ok := ctx.Arguments["atOrAfterTime"].(time.Time); ok {
+				atOrAfterTime = t
+			}
+
+			beforeTime := time.Now().Add(365 * 24 * time.Hour)
+			if t, ok := ctx.Arguments["beforeTime"].(time.Time); ok {
+				beforeTime = t
+			}
+
+			middle := Query{atOrAfterTime, beforeTime.Add(-time.Nanosecond), limit}
+
+			if after, ok := after.(TimeBasedCursor); ok {
+				queries = append(queries, Query{time.Unix(0, after.Nano), time.Unix(0, after.Nano), 0})
+				if t := time.Unix(0, after.Nano+1); t.After(middle.Min) {
+					middle.Min = t
+				}
+			}
+
+			if before, ok := before.(TimeBasedCursor); ok {
+				if after, ok := after.(TimeBasedCursor); !ok || after.Nano != before.Nano {
+					queries = append(queries, Query{time.Unix(0, before.Nano), time.Unix(0, before.Nano), 0})
+				}
+				if t := time.Unix(0, before.Nano-1); t.Before(middle.Max) {
+					middle.Max = t
+				}
+			}
+
+			queries = append(queries, middle)
+
+			var edges []interface{}
+			for _, q := range queries {
+				if queryEdges, err := config.EdgeGetter(ctx, q.Min, q.Max, q.Limit); err != nil {
+					return nil, nil, err
+				} else {
+					v := reflect.ValueOf(queryEdges)
+					for i := 0; i < v.Len(); i++ {
+						edges = append(edges, v.Index(i).Interface())
+					}
+				}
+			}
+
+			return edges, timeBasedCursorLess, err
+		},
+	})
 }
