@@ -11,7 +11,7 @@
 
 ## Features
 
-* Supports all features of the latest GraphQL spec (June 2018 Edition), including null literals, error extensions, subscriptions, and directives.
+* Supports all features of the [latest GraphQL spec](https://spec.graphql.org/June2018/), including null literals, error extensions, subscriptions, and directives.
 * Supports efficient batching and concurrency without the use of goroutines.
 * Provides implementations for commonly used scalar types, such as date-time and long (but JavaScript safe) integers.
 * Implements handlers for HTTP and the [Apollo graphql-ws protocol](https://github.com/apollographql/subscriptions-transport-ws).
