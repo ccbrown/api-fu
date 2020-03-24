@@ -5,6 +5,11 @@ This is a CLI tool that can be used to generate types for use by client code. If
 ```go
 package main
 
+// Wrapper to mark queries for gql-client-gen.
+func gql(s string) string {
+	return s
+}
+
 func main() {
 	println(gql(`query FindIssueID {
 	  repository(owner:"octocat", name:"Hello-World") {
@@ -40,10 +45,6 @@ Will generate output like this:
 
 ```go
 package main
-
-func gql(s string) string {
-	return s
-}
 
 type FindIssueIDData struct {
 	Repository *struct {

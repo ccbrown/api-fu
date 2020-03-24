@@ -194,7 +194,7 @@ func (s *generateState) processFile(path string) []error {
 
 func Generate(schema *schema.Schema, pkg string, inputGlobs []string, wrapper string) (string, []error) {
 	state := &generateState{
-		output:      "package " + pkg + "\n\nfunc " + wrapper + "(s string) string {\nreturn s\n}\n\n",
+		output:      "package " + pkg + "\n\n",
 		schema:      schema,
 		wrapper:     wrapper,
 		outputEnums: map[string]struct{}{},
