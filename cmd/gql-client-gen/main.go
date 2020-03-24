@@ -76,7 +76,7 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 		if !nonNull {
 			ret = "*" + ret
 		}
-	case *schema.ObjectType, *schema.InterfaceType:
+	case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		fields := map[string]string{}
 		for _, sel := range selections {
 			switch sel := sel.(type) {
