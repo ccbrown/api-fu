@@ -224,7 +224,7 @@ var IDType = &ScalarType{
 	},
 }
 
-var builtinTypes = map[string]*ScalarType{
+var BuiltInTypes = map[string]*ScalarType{
 	"Int":     IntType,
 	"Float":   FloatType,
 	"String":  StringType,

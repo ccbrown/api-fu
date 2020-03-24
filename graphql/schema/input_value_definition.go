@@ -23,5 +23,10 @@ func (d *InputValueDefinition) shallowValidate() error {
 	} else if !d.Type.IsInputType() {
 		return fmt.Errorf("%v cannot be used as an input value type", d.Type)
 	}
+	if d.DefaultValue != nil && d.DefaultValue != Null {
+		if obj, ok := d.Type.(*InputObjectType); ok && obj.ResultCoercion == nil {
+			return fmt.Errorf("assigning a default value to a %v requires it to define a result coercion function", d.Type)
+		}
+	}
 	return nil
 }

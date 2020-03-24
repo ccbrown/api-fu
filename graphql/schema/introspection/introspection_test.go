@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ccbrown/api-fu/graphql/executor"
 	"github.com/ccbrown/api-fu/graphql/parser"
 	"github.com/ccbrown/api-fu/graphql/schema"
 	"github.com/ccbrown/api-fu/graphql/schema/introspection"
-	"github.com/stretchr/testify/require"
 )
 
 var petType = &schema.InterfaceType{

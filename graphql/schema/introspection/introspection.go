@@ -1,7 +1,6 @@
 package introspection
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/ccbrown/api-fu/graphql/schema"
@@ -522,9 +521,9 @@ var InputValueType = &schema.ObjectType{
 		"defaultValue": &schema.FieldDefinition{
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
-				if v := ctx.Object.(inputValue).Definition.DefaultValue; v != nil {
-					b, err := json.Marshal(v)
-					return string(b), err
+				def := ctx.Object.(inputValue).Definition
+				if v := def.DefaultValue; v != nil {
+					return marshalValue(def.Type, v)
 				}
 				return nil, nil
 			},

@@ -79,7 +79,7 @@ func New(def *SchemaDefinition) (*Schema, error) {
 				err = fmt.Errorf("illegal type name: %v", name)
 			} else if existing, ok := schema.namedTypes[name]; ok && existing != namedType {
 				err = fmt.Errorf("multiple definitions for named type: %v", name)
-			} else if builtin, ok := builtinTypes[name]; ok && namedType != builtin {
+			} else if builtin, ok := BuiltInTypes[name]; ok && namedType != builtin {
 				err = fmt.Errorf("%v builtin may not be overridden", name)
 			} else if existing != nil {
 				// already visited

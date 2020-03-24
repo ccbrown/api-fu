@@ -45,7 +45,7 @@ func validateCoercion(from ast.Value, to schema.Type, allowItemToListCoercion bo
 
 	switch to := to.(type) {
 	case *schema.ScalarType:
-		if to.LiteralCoercion(from) == nil {
+		if to.LiteralCoercion != nil && to.LiteralCoercion(from) == nil {
 			ret = append(ret, newError(from, "cannot coerce to %v", to))
 		}
 	case *schema.ListType:
