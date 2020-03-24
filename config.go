@@ -64,7 +64,7 @@ func (cfg *Config) init() {
 				},
 				"nodes": &graphql.FieldDefinition{
 					Type:        graphql.NewListType(cfg.nodeInterface),
-					Description: "Gets nodes for multiple ids. Non-existent nodes are not returned and the order of the returned nodes is arbitrary, so clients should check the ids of the returned nodes.",
+					Description: "Gets nodes for multiple ids. Non-existent nodes are not returned and the order of the returned nodes is arbitrary, so clients should check their ids.",
 					Arguments: map[string]*graphql.InputValueDefinition{
 						"ids": &graphql.InputValueDefinition{
 							Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(graphql.IDType))),
