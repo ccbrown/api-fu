@@ -18,6 +18,7 @@ type Config struct {
 	AdditionalNodeFields map[string]*graphql.FieldDefinition
 
 	initOnce              sync.Once
+	nodeObjectTypesByName map[string]*graphql.ObjectType
 	nodeTypesByModel      map[reflect.Type]*NodeType
 	nodeTypesById         map[int]*NodeType
 	nodeTypesByObjectType map[*graphql.ObjectType]*NodeType
@@ -30,6 +31,7 @@ type Config struct {
 
 func (cfg *Config) init() {
 	cfg.initOnce.Do(func() {
+		cfg.nodeObjectTypesByName = make(map[string]*graphql.ObjectType)
 		cfg.nodeTypesByModel = make(map[reflect.Type]*NodeType)
 		cfg.nodeTypesById = make(map[int]*NodeType)
 		cfg.nodeTypesByObjectType = make(map[*graphql.ObjectType]*NodeType)
@@ -78,6 +80,10 @@ func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
 	})
 }
 
+func (cfg *Config) NodeObjectType(name string) *graphql.ObjectType {
+	return cfg.nodeObjectTypesByName[name]
+}
+
 func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 	cfg.init()
 
@@ -102,6 +108,7 @@ func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 	}
 	cfg.additionalTypes = append(cfg.additionalTypes, objectType)
 	cfg.nodeTypesByObjectType[objectType] = t
+	cfg.nodeObjectTypesByName[t.Name] = objectType
 
 	return objectType
 }
