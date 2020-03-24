@@ -62,6 +62,22 @@ func (cfg *Config) init() {
 						return ctxAPI(ctx.Context).resolveNodeByGlobalId(ctx.Context, ctx.Arguments["id"].(string))
 					},
 				},
+				"nodes": &graphql.FieldDefinition{
+					Type:        graphql.NewListType(cfg.nodeInterface),
+					Description: "Gets nodes for multiple ids. Non-existent nodes are not returned and the order of the returned nodes is arbitrary, so clients should check the ids of the returned nodes.",
+					Arguments: map[string]*graphql.InputValueDefinition{
+						"ids": &graphql.InputValueDefinition{
+							Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(graphql.IDType))),
+						},
+					},
+					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+						var ids []string
+						for _, id := range ctx.Arguments["ids"].([]interface{}) {
+							ids = append(ids, id.(string))
+						}
+						return ctxAPI(ctx.Context).resolveNodesByGlobalIds(ctx.Context, ids)
+					},
+				},
 			},
 		}
 	})

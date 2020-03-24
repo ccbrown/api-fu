@@ -1,9 +1,12 @@
 package apifu
 
 import (
+	"context"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -13,11 +16,20 @@ import (
 	"github.com/ccbrown/api-fu/graphql"
 )
 
-var testCfg = Config{}
+func executeGraphQL(t *testing.T, api *API, query string) *http.Response {
+	w := httptest.NewRecorder()
+	r, err := http.NewRequest("POST", "", strings.NewReader(query))
+	r.Header.Set("Content-Type", "application/graphql")
+	require.NoError(t, err)
+	api.ServeGraphQL(w, r)
+	return w.Result()
+}
 
-var asyncChannel = make(chan struct{})
+func TestGo(t *testing.T) {
+	var asyncChannel = make(chan struct{})
 
-func init() {
+	var testCfg Config
+
 	// If this is not executed asynchronously alongside a matching asyncReceiver, it will deadlock.
 	testCfg.AddQueryField("asyncSender", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
@@ -39,18 +51,7 @@ func init() {
 			}), nil
 		},
 	})
-}
 
-func executeGraphQL(t *testing.T, api *API, query string) *http.Response {
-	w := httptest.NewRecorder()
-	r, err := http.NewRequest("POST", "", strings.NewReader(query))
-	r.Header.Set("Content-Type", "application/graphql")
-	require.NoError(t, err)
-	api.ServeGraphQL(w, r)
-	return w.Result()
-}
-
-func TestGo(t *testing.T) {
 	api, err := NewAPI(&testCfg)
 	require.NoError(t, err)
 
@@ -64,4 +65,64 @@ func TestGo(t *testing.T) {
 	body, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"data":{"s":true,"r":true}}`, string(body))
+}
+
+func TestNodes(t *testing.T) {
+	const nodeTypeId = 10
+
+	testCfg := Config{
+		SerializeNodeId: func(typeId int, id interface{}) string {
+			assert.Equal(t, nodeTypeId, typeId)
+			return id.(string)
+		},
+		DeserializeNodeId: func(id string) (int, interface{}) {
+			return nodeTypeId, id
+		},
+	}
+
+	type node struct {
+		Id string
+	}
+
+	testCfg.AddNodeType(&NodeType{
+		Id:    nodeTypeId,
+		Name:  "TestNode",
+		Model: reflect.TypeOf(node{}),
+		GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
+			var ret []*node
+			for _, id := range ids.([]string) {
+				if id == "a" || id == "b" {
+					ret = append(ret, &node{
+						Id: id,
+					})
+				}
+			}
+			return ret, nil
+		},
+		Fields: map[string]*graphql.FieldDefinition{
+			"id": OwnID("Id"),
+		},
+	})
+
+	api, err := NewAPI(&testCfg)
+	require.NoError(t, err)
+
+	resp := executeGraphQL(t, api, `{
+		nodes(ids: ["a", "b", "c", "d"]) {
+			id
+		}
+	}`)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result struct {
+		Data struct {
+			Nodes []node
+		}
+		Errors []struct{}
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.Empty(t, result.Errors)
+
+	assert.ElementsMatch(t, []node{node{Id: "a"}, node{Id: "b"}}, result.Data.Nodes)
 }

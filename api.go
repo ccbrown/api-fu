@@ -171,6 +171,34 @@ func (api *API) resolveNodeByGlobalId(ctx context.Context, id string) (interface
 	return api.resolveNodeById(ctx, nodeType, modelId)
 }
 
+func (api *API) resolveNodesByGlobalIds(ctx context.Context, ids []string) ([]interface{}, error) {
+	modelIds := map[int][]interface{}{}
+	for _, id := range ids {
+		typeId, modelId := api.config.DeserializeNodeId(id)
+		modelIds[typeId] = append(modelIds[typeId], modelId)
+	}
+	var ret []interface{}
+	for typeId, modelIds := range modelIds {
+		nodeType, ok := api.config.nodeTypesById[typeId]
+		if !ok {
+			continue
+		}
+		ids := reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(modelIds[0])), len(modelIds), len(modelIds))
+		for i, modelId := range modelIds {
+			ids.Index(i).Set(reflect.ValueOf(modelId))
+		}
+		nodes, err := nodeType.GetByIds(ctx, ids.Interface())
+		if !isNil(err) {
+			return nil, err
+		}
+		nodesValue := reflect.ValueOf(nodes)
+		for i := 0; i < nodesValue.Len(); i++ {
+			ret = append(ret, nodesValue.Index(i).Interface())
+		}
+	}
+	return ret, nil
+}
+
 func (api *API) resolveNodeById(ctx context.Context, nodeType *NodeType, modelId interface{}) (interface{}, error) {
 	// TODO: batching and concurrency
 
