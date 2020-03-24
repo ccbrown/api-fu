@@ -154,6 +154,10 @@ type Error struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
+func (err *Error) Error() string {
+	return err.Message
+}
+
 // If a resolver returns an error that implements this interface, the error's extensions property
 // will be populated.
 type ExtendedError interface {

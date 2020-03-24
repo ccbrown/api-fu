@@ -16,6 +16,7 @@
 * Provides implementations for commonly used scalar types, such as date-time and long (but JavaScript safe) integers.
 * Implements handlers for HTTP and the [Apollo graphql-ws protocol](https://github.com/apollographql/subscriptions-transport-ws).
 * Provides easy-to-use helpers for creating connections adhering to the [Relay Cursor Connections Specification](https://facebook.github.io/relay/graphql/connections.htm).
+* CLI for generating client-side type definitions and validating queries in source code.
 
 ## API Design Guidelines
 
