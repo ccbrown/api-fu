@@ -86,7 +86,7 @@ func TestNodes(t *testing.T) {
 
 	testCfg.AddNodeType(&NodeType{
 		Id:    nodeTypeId,
-		Name:  "TelemetryPacket",
+		Name:  "TestNode",
 		Model: reflect.TypeOf(node{}),
 		GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
 			var ret []*node
