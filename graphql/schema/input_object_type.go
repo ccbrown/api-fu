@@ -17,6 +17,14 @@ type InputObjectType struct {
 	// Otherwise the objects will remain as maps. This function is called after all fields are fully
 	// coerced.
 	InputCoercion func(map[string]interface{}) (interface{}, error)
+
+	// Normally input objects only need to be coerced from inputs. However, if an argument of this
+	// type is given a default value, we need to be able to do the reverse in order to serialize it
+	// for introspection queries.
+	//
+	// For most use-cases, this function is optional. If it is required, but nil, you will get an
+	// error when you attempt to create the schema.
+	ResultCoercion func(interface{}) (map[string]interface{}, error)
 }
 
 func (t *InputObjectType) String() string {
