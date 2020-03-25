@@ -23,6 +23,7 @@ func main() {
 
 	println(gql(`query User {
 	  node(id:"MDQ6VXNlcjU4MzIzMQ==") {
+	   __typename
 	   ... on User {
 		  name
 		  login

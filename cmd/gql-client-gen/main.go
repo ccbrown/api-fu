@@ -22,15 +22,17 @@ import (
 )
 
 type generateState struct {
-	output      string
-	schema      *schema.Schema
-	wrapper     string
-	outputEnums map[string]struct{}
+	output             string
+	schema             *schema.Schema
+	wrapper            string
+	outputStructCount  int
+	outputEnums        map[string]struct{}
+	requiresJSONImport bool
 }
 
-func (s *generateState) generateType(t schema.Type, selections []ast.Selection, nonNull bool) string {
+func (s *generateState) generateType(t schema.Type, selections []ast.Selection, nonNull bool, fragTypes map[string]string) (string, error) {
 	if t, ok := t.(*schema.NonNullType); ok {
-		return s.generateType(t.Type, selections, true)
+		return s.generateType(t.Type, selections, true, fragTypes)
 	}
 
 	ret := "interface{}"
@@ -56,7 +58,11 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 			ret = "*" + ret
 		}
 	case *schema.ListType:
-		ret = "[]" + s.generateType(t.Type, selections, false)
+		gen, err := s.generateType(t.Type, selections, false, fragTypes)
+		if err != nil {
+			return "", err
+		}
+		ret = "[]" + gen
 	case *schema.EnumType:
 		if _, ok := s.outputEnums[t.Name]; !ok {
 			s.output += "type " + t.Name + " string\n\nconst (\n"
@@ -78,14 +84,44 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 		}
 	case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		fields := map[string]string{}
+
+		hasTypename := false
+		for _, sel := range selections {
+			if field, ok := sel.(*ast.Field); ok {
+				if field.Name.Name == "__typename" {
+					hasTypename = true
+					break
+				}
+			}
+		}
+
+		// type => field names
+		typeConditions := map[string][]string{}
+
 		for _, sel := range selections {
 			switch sel := sel.(type) {
 			case *ast.FragmentSpread:
+				if !hasTypename {
+					if _, ok := t.(*schema.ObjectType); !ok {
+						return "", fmt.Errorf("__typename is required by fragment spread")
+					}
+				}
 				name := sel.FragmentName.Name
-				fields[name] = name + "Fragment"
+				fields[name] = "*" + name + "Fragment `json:\"-\"`"
+				typeConditions[fragTypes[name]] = append(typeConditions[fragTypes[name]], name)
 			case *ast.InlineFragment:
+				if !hasTypename {
+					if _, ok := t.(*schema.ObjectType); !ok {
+						return "", fmt.Errorf("__typename is required by inline fragment")
+					}
+				}
 				cond := s.schema.NamedTypes()[sel.TypeCondition.Name.Name]
-				fields[cond.TypeName()] = s.generateType(cond, sel.SelectionSet.Selections, false)
+				gen, err := s.generateType(cond, sel.SelectionSet.Selections, false, fragTypes)
+				if err != nil {
+					return "", err
+				}
+				fields[cond.TypeName()] = gen + " `json:\"-\"`"
+				typeConditions[cond.TypeName()] = append(typeConditions[cond.TypeName()], cond.TypeName())
 			case *ast.Field:
 				var selections []ast.Selection
 				if sel.SelectionSet != nil {
@@ -96,11 +132,19 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 					k = sel.Alias.Name
 				}
 				k = strings.Title(k)
-				switch t := t.(type) {
-				case *schema.ObjectType:
-					fields[k] = s.generateType(t.Fields[sel.Name.Name].Type, selections, false)
-				case *schema.InterfaceType:
-					fields[k] = s.generateType(t.Fields[sel.Name.Name].Type, selections, false)
+				if sel.Name.Name == "__typename" {
+					fields["Typename__"] = "string `json:\"__typename\"`"
+				} else {
+					var err error
+					switch t := t.(type) {
+					case *schema.ObjectType:
+						fields[k], err = s.generateType(t.Fields[sel.Name.Name].Type, selections, false, fragTypes)
+					case *schema.InterfaceType:
+						fields[k], err = s.generateType(t.Fields[sel.Name.Name].Type, selections, false, fragTypes)
+					}
+					if err != nil {
+						return "", err
+					}
 				}
 			}
 		}
@@ -111,12 +155,72 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 		}
 		ret = "struct {\n" + strings.Join(parts, "") + "}"
 
+		if len(typeConditions) > 0 {
+			s.requiresJSONImport = true
+			tName := t.(schema.NamedType).TypeName()
+			name := "sel" + tName + strconv.Itoa(s.outputStructCount)
+			s.output += `
+				type ` + name + ` ` + ret + `
+
+				func (s *` + name + `) UnmarshalJSON(b []byte) error {
+					var base ` + ret + `
+					if err := json.Unmarshal(b, &base); err != nil {
+						return err
+					}
+					*s = base
+			`
+			for typeCond, fields := range typeConditions {
+				isKnown := typeCond == tName
+				if obj, ok := t.(*schema.ObjectType); ok && !isKnown {
+					for _, iface := range obj.ImplementedInterfaces {
+						if iface.Name == typeCond {
+							isKnown = true
+							break
+						}
+					}
+				}
+				if isKnown {
+					for _, field := range fields {
+						s.output += `if err := json.Unmarshal(b, &s.` + field + `); err != nil {
+								return err
+							}
+						`
+					}
+					continue
+				}
+
+				typeCondType := s.schema.NamedTypes()[typeCond]
+				var okTypes []string
+				switch t := typeCondType.(type) {
+				case *schema.InterfaceType:
+					for _, t := range s.schema.InterfaceImplementations(t.Name) {
+						okTypes = append(okTypes, t.Name)
+					}
+				case *schema.ObjectType:
+					okTypes = []string{t.Name}
+				}
+
+				for _, field := range fields {
+					s.output += `switch base.Typename__ {
+						case "` + strings.Join(okTypes, `", "`) + `":
+							if err := json.Unmarshal(b, &s.` + field + `); err != nil {
+								return err
+							}
+						}
+					`
+				}
+			}
+			s.output += "return nil\n}\n\n"
+			ret = name
+			s.outputStructCount++
+		}
+
 		if !nonNull {
 			ret = "*" + ret
 		}
 	}
 
-	return ret
+	return ret, nil
 }
 
 func (s *generateState) processQuery(q string) []error {
@@ -127,6 +231,13 @@ func (s *generateState) processQuery(q string) []error {
 			ret = append(ret, err)
 		}
 		return ret
+	}
+
+	fragTypes := map[string]string{}
+	for _, op := range doc.Definitions {
+		if def, ok := op.(*ast.FragmentDefinition); ok {
+			fragTypes[def.Name.Name] = def.TypeCondition.Name.Name
+		}
 	}
 
 	for _, op := range doc.Definitions {
@@ -142,11 +253,21 @@ func (s *generateState) processQuery(q string) []error {
 				}
 			}
 			if op.Name != nil {
-				s.output += "type " + op.Name.Name + "Data " + s.generateType(t, op.SelectionSet.Selections, true) + "\n\n"
+				gen, err := s.generateType(t, op.SelectionSet.Selections, true, fragTypes)
+				if err != nil {
+					ret = append(ret, err)
+					continue
+				}
+				s.output += "type " + op.Name.Name + "Data " + gen + "\n\n"
 			}
 		case *ast.FragmentDefinition:
 			if op.Name != nil {
-				s.output += "type " + op.Name.Name + "Fragment " + s.generateType(s.schema.NamedTypes()[op.TypeCondition.Name.Name], op.SelectionSet.Selections, true) + "\n\n"
+				gen, err := s.generateType(s.schema.NamedTypes()[op.TypeCondition.Name.Name], op.SelectionSet.Selections, true, fragTypes)
+				if err != nil {
+					ret = append(ret, err)
+					continue
+				}
+				s.output += "type " + op.Name.Name + "Fragment " + gen + "\n\n"
 			}
 		}
 	}
@@ -194,7 +315,6 @@ func (s *generateState) processFile(path string) []error {
 
 func Generate(schema *schema.Schema, pkg string, inputGlobs []string, wrapper string) (string, []error) {
 	state := &generateState{
-		output:      "package " + pkg + "\n\n",
 		schema:      schema,
 		wrapper:     wrapper,
 		outputEnums: map[string]struct{}{},
@@ -217,6 +337,13 @@ func Generate(schema *schema.Schema, pkg string, inputGlobs []string, wrapper st
 	if len(errs) > 0 {
 		return "", errs
 	}
+
+	tmp := state.output
+	state.output = "package " + pkg + "\n\n"
+	if state.requiresJSONImport {
+		state.output += "import \"encoding/json\"\n\n"
+	}
+	state.output += tmp
 
 	out, err := format.Source([]byte(state.output))
 	if err != nil {
