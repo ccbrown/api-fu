@@ -53,7 +53,7 @@ println(gql(`query User {
 }`))
 ```
 
-Will generate something like...:
+Will generate something like...
 
 ```go
 type selNode0 struct {
