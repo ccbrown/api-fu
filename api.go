@@ -2,12 +2,12 @@ package apifu
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"reflect"
 	"strconv"
 	"sync"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -143,7 +143,7 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	req.Schema = api.schema
 	req.IdleHandler = apiRequest.IdleHandler
 
-	body, err := json.Marshal(graphql.Execute(req))
+	body, err := jsoniter.Marshal(graphql.Execute(req))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
