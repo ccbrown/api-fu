@@ -213,7 +213,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			if first, ok := ctx.Arguments["first"].(int); ok {
 				if first < 0 {
 					return nil, fmt.Errorf("The `first` argument cannot be negative.")
-				} else if _, ok := ctx.Arguments["last"]; ok {
+				} else if _, ok := ctx.Arguments["last"].(int); ok {
 					return nil, fmt.Errorf("You cannot provide both `first` and `last` arguments.")
 				}
 			} else if last, ok := ctx.Arguments["last"].(int); ok {

@@ -18,26 +18,6 @@ func main() {
 		}
 	  }
 	}`))
-
-	println(gql(`mutation AddReactionToIssue {
-	  addReaction(input:{subjectId:"MDU6SXNzdWUyMzEzOTE1NTE=",content:HOORAY}) {
-		reaction {
-		  content
-		}
-		subject {
-		  id
-		}
-	  }
-	}`))
-
-	println(gql(`query User {
-	  node(id:"MDQ6VXNlcjU4MzIzMQ==") {
-	   ... on User {
-		  name
-		  login
-		}
-	  }
-	}`))
 }
 ```
 
@@ -53,39 +33,61 @@ type FindIssueIDData struct {
 		}
 	}
 }
-
-type ReactionContent string
-
-const (
-	ReactionContentHooray     ReactionContent = "HOORAY"
-	ReactionContentConfused   ReactionContent = "CONFUSED"
-	ReactionContentHeart      ReactionContent = "HEART"
-	ReactionContentRocket     ReactionContent = "ROCKET"
-	ReactionContentEyes       ReactionContent = "EYES"
-	ReactionContentThumbsUp   ReactionContent = "THUMBS_UP"
-	ReactionContentThumbsDown ReactionContent = "THUMBS_DOWN"
-	ReactionContentLaugh      ReactionContent = "LAUGH"
-)
-
-type AddReactionToIssueData struct {
-	AddReaction *struct {
-		Reaction *struct {
-			Content ReactionContent
-		}
-		Subject *struct {
-			Id string
-		}
-	}
-}
-
-type UserData struct {
-	Node *struct {
-		User *struct {
-			Name  *string
-			Login string
-		}
-	}
-}
 ```
 
 It will generate types for all named queries and mutations as well as all named fragments.
+
+## Inline Fragments and Fragment Spreads
+
+Types can also be generated for queries that involve fragments with type conditions. In these cases, your queries must select `__typename` so the generated types can know which spreads to unmarshal. For example:
+
+```go
+println(gql(`query User {
+  node(id:"MDQ6VXNlcjU4MzIzMQ==") {
+   __typename
+   ... on User {
+      name
+      login
+    }
+  }
+}`))
+```
+
+Will generate something like...
+
+```go
+type selNode0 struct {
+	Typename__ string `json:"__typename"`
+	User       *struct {
+		Name  *string
+		Login string
+	} `json:"-"`
+}
+
+func (s *selNode0) UnmarshalJSON(b []byte) error {
+	var base struct {
+		Typename__ string `json:"__typename"`
+		User       *struct {
+			Name  *string
+			Login string
+		} `json:"-"`
+	}
+	if err := json.Unmarshal(b, &base); err != nil {
+		return err
+	}
+	*s = base
+	switch base.Typename__ {
+	case "User":
+		if err := json.Unmarshal(b, &s.User); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type UserData struct {
+	Node *selNode0
+}
+```
+
+After unmarshaling, `UserData.Node.User` will be nil or non-nil depending on the type of the node returned.
