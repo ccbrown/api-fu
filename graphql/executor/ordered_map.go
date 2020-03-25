@@ -1,8 +1,9 @@
 package executor
 
 import (
-	"bytes"
-	"encoding/json"
+	"unsafe"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 type OrderedMap struct {
@@ -37,17 +38,28 @@ func (m *OrderedMap) Keys() []string {
 }
 
 func (m *OrderedMap) MarshalJSON() ([]byte, error) {
-	pairs := make([][]byte, len(m.order))
+	return jsoniter.Marshal(m)
+}
+
+type orderedMapEncoder struct{}
+
+func (e *orderedMapEncoder) IsEmpty(ptr unsafe.Pointer) bool {
+	m := *((*OrderedMap)(ptr))
+	return m.Len() == 0
+}
+func (e *orderedMapEncoder) Encode(ptr unsafe.Pointer, stream *jsoniter.Stream) {
+	m := *((*OrderedMap)(ptr))
+	stream.WriteObjectStart()
 	for i, key := range m.order {
-		keyJSON, err := json.Marshal(key)
-		if err != nil {
-			return nil, err
+		if i != 0 {
+			stream.WriteMore()
 		}
-		valueJSON, err := json.Marshal(m.m[key])
-		if err != nil {
-			return nil, err
-		}
-		pairs[i] = bytes.Join([][]byte{keyJSON, valueJSON}, []byte{':'})
+		stream.WriteObjectField(key)
+		stream.WriteVal(m.m[key])
 	}
-	return append(append([]byte{'{'}, bytes.Join(pairs, []byte{','})...), '}'), nil
+	stream.WriteObjectEnd()
+}
+
+func init() {
+	jsoniter.RegisterTypeEncoder("executor.OrderedMap", &orderedMapEncoder{})
 }
