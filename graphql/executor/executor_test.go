@@ -483,3 +483,59 @@ func TestGetOperation(t *testing.T) {
 	assert.NotNil(t, op)
 	assert.Nil(t, err)
 }
+
+var sink interface{}
+
+func BenchmarkExecuteRequest(b *testing.B) {
+	var objectType = &schema.ObjectType{
+		Name: "Object",
+	}
+
+	objectType.Fields = map[string]*schema.FieldDefinition{
+		"string": &schema.FieldDefinition{
+			Type: schema.StringType,
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				return "foo", nil
+			},
+		},
+		"objects": &schema.FieldDefinition{
+			Type: schema.NewListType(objectType),
+			Arguments: map[string]*schema.InputValueDefinition{
+				"count": &schema.InputValueDefinition{
+					Type: schema.NewNonNullType(schema.IntType),
+				},
+			},
+			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+				return make([]struct{}, ctx.Arguments["count"].(int)), nil
+			},
+		},
+	}
+
+	s, err := schema.New(&schema.SchemaDefinition{
+		Query: objectType,
+	})
+	require.NoError(b, err)
+	doc, parseErrs := parser.ParseDocument([]byte(`{
+		string
+		objects(count: 20) {
+			string
+			objects(count: 100) {
+				string
+			}
+		}
+	}`))
+	require.Empty(b, parseErrs)
+	require.Empty(b, validator.ValidateDocument(doc, s))
+
+	r := &Request{
+		Document: doc,
+		Schema:   s,
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		sink, _ = ExecuteRequest(context.Background(), r)
+	}
+}

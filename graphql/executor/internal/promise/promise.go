@@ -9,7 +9,7 @@ type Promise struct {
 	isRejected bool
 	err        error
 
-	next         []*Promise
+	next         *Promise
 	dependencies []*Promise
 
 	source func(resolve func(interface{}), reject func(error))
@@ -34,23 +34,51 @@ func New(f func(resolve func(interface{}), reject func(error))) *Promise {
 // returns a value, it'll be passed as input to the next handler in the chain. If the handler
 // returns another promise, the next handler in the chain will receive that promise's value when it
 // is fulfilled.
+//
+// Invoking this function consumes the receiver. In fact, in many cases, the receiver is simply
+// modified and returned.
 func (p *Promise) Then(onResolved func(value interface{}) interface{}) *Promise {
+	if p.isResolved {
+		next := onResolved(p.value)
+		if promise, ok := next.(*Promise); ok {
+			return promise
+		}
+		p.value = next
+		return p
+	} else if p.isRejected {
+		return p
+	}
 	newPromise := &Promise{
 		parent:     p,
 		onResolved: onResolved,
 	}
-	p.next = append(p.next, newPromise)
+	p.next = newPromise
 	return newPromise
 }
 
 // Returns a Promise and deals with rejected cases only. The Promise returned by Catch is rejected
 // if onRejected returns a Promise which is itself rejected; otherwise, it is resolved.
+//
+// Invoking this function consumes the receiver. In fact, in many cases, the receiver is simply
+// modified and returned.
 func (p *Promise) Catch(onRejected func(err error) interface{}) *Promise {
+	if p.isResolved {
+		return p
+	} else if p.isRejected {
+		next := onRejected(p.err)
+		if promise, ok := next.(*Promise); ok {
+			return promise
+		}
+		p.isRejected = false
+		p.isResolved = true
+		p.value = next
+		return p
+	}
 	newPromise := &Promise{
 		parent:     p,
 		onRejected: onRejected,
 	}
-	p.next = append(p.next, newPromise)
+	p.next = newPromise
 	return newPromise
 }
 
@@ -96,11 +124,11 @@ func (p *Promise) Schedule() (didProgress bool) {
 					}
 					didProgress = true
 					if promise, ok := p.value.(*Promise); ok {
-						for _, next := range p.next {
-							next.parent = promise
+						if p.next != nil {
+							p.next.parent = promise
 						}
-						promise.next = append(promise.next, p.next...)
-						p.next = []*Promise{promise}
+						promise.next = p.next
+						p.next = promise
 					}
 				} else {
 					didProgress = p.parent.Schedule()
@@ -108,8 +136,8 @@ func (p *Promise) Schedule() (didProgress bool) {
 			}
 		}
 		if p.isResolved {
-			for _, next := range p.next {
-				if next.Schedule() {
+			if p.next != nil {
+				if p.next.Schedule() {
 					didProgress = true
 				}
 			}
@@ -122,16 +150,18 @@ func (p *Promise) Schedule() (didProgress bool) {
 
 // Returns a Promise object that is resolved with the given value.
 func Resolve(value interface{}) *Promise {
-	return New(func(resolve func(interface{}), reject func(error)) {
-		resolve(value)
-	})
+	return &Promise{
+		isResolved: true,
+		value:      value,
+	}
 }
 
 // Returns a Promise that is rejected with the given reason.
 func Reject(reason error) *Promise {
-	return New(func(resolve func(interface{}), reject func(error)) {
-		reject(reason)
-	})
+	return &Promise{
+		isRejected: true,
+		err:        reason,
+	}
 }
 
 // All returns a single Promise that resolves when all of the promises in the argument have resolved
@@ -142,13 +172,7 @@ func All(iterable interface{}) *Promise {
 	result := make([]interface{}, v.Len())
 	var rejectReason error
 	remaining := 0
-	all := New(func(resolve func(interface{}), reject func(error)) {
-		if rejectReason != nil {
-			reject(rejectReason)
-		} else if remaining == 0 {
-			resolve(result)
-		}
-	})
+	var dependencies []*Promise
 	for i := 0; i < v.Len(); i++ {
 		value := v.Index(i).Interface()
 		promise, ok := value.(*Promise)
@@ -157,10 +181,15 @@ func All(iterable interface{}) *Promise {
 			continue
 		} else if promise == nil {
 			continue
+		} else if promise.isResolved {
+			result[i] = promise.value
+			continue
+		} else if promise.isRejected {
+			return promise
 		}
 		i := i
 		remaining++
-		all.dependencies = append(all.dependencies, promise.Then(func(value interface{}) interface{} {
+		dependencies = append(dependencies, promise.Then(func(value interface{}) interface{} {
 			result[i] = value
 			remaining--
 			return nil
@@ -169,5 +198,16 @@ func All(iterable interface{}) *Promise {
 			return nil
 		}))
 	}
+	if remaining == 0 {
+		return Resolve(result)
+	}
+	all := New(func(resolve func(interface{}), reject func(error)) {
+		if rejectReason != nil {
+			reject(rejectReason)
+		} else if remaining == 0 {
+			resolve(result)
+		}
+	})
+	all.dependencies = dependencies
 	return all
 }

@@ -18,8 +18,6 @@ func TestOrderedMapEncoding(t *testing.T) {
 	assert.Equal(t, `{"foo":"bar","foo2":"bar2"}`, string(buf))
 }
 
-var sink interface{}
-
 func BenchmarkOrderedMapEncoding(b *testing.B) {
 	m := NewOrderedMap()
 	for i := 0; i < 2000; i++ {
