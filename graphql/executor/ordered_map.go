@@ -6,35 +6,56 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+type OrderedMapItem struct {
+	Key   string
+	Value interface{}
+}
+
 type OrderedMap struct {
-	m     map[string]interface{}
-	order []string
+	m     map[string]int
+	items []OrderedMapItem
 }
 
 func NewOrderedMap() *OrderedMap {
 	return &OrderedMap{
-		m: map[string]interface{}{},
+		m: map[string]int{},
 	}
 }
 
-func (m *OrderedMap) Set(key string, value interface{}) {
-	if _, ok := m.m[key]; !ok {
-		m.order = append(m.order, key)
+func NewOrderedMapWithCapacity(n int) *OrderedMap {
+	return &OrderedMap{
+		m:     make(map[string]int, n),
+		items: make([]OrderedMapItem, 0, n),
 	}
-	m.m[key] = value
+}
+
+// Sets the value for a given key. The order of the key-value pairs is based on the first time a key
+// is set for the map. Overwriting an existing value does not change the order.
+func (m *OrderedMap) Set(key string, value interface{}) {
+	if idx, ok := m.m[key]; !ok {
+		m.m[key] = len(m.items)
+		m.items = append(m.items, OrderedMapItem{
+			Key:   key,
+			Value: value,
+		})
+	} else {
+		m.items[idx].Value = value
+	}
 }
 
 func (m *OrderedMap) Get(key string) (interface{}, bool) {
-	v, ok := m.m[key]
-	return v, ok
+	if idx, ok := m.m[key]; ok {
+		return m.items[idx].Value, true
+	}
+	return nil, false
 }
 
 func (m *OrderedMap) Len() int {
 	return len(m.m)
 }
 
-func (m *OrderedMap) Keys() []string {
-	return m.order
+func (m *OrderedMap) Items() []OrderedMapItem {
+	return m.items
 }
 
 func (m *OrderedMap) MarshalJSON() ([]byte, error) {
@@ -50,12 +71,12 @@ func (e *orderedMapEncoder) IsEmpty(ptr unsafe.Pointer) bool {
 func (e *orderedMapEncoder) Encode(ptr unsafe.Pointer, stream *jsoniter.Stream) {
 	m := *((*OrderedMap)(ptr))
 	stream.WriteObjectStart()
-	for i, key := range m.order {
+	for i, kv := range m.items {
 		if i != 0 {
 			stream.WriteMore()
 		}
-		stream.WriteObjectField(key)
-		stream.WriteVal(m.m[key])
+		stream.WriteObjectField(kv.Key)
+		stream.WriteVal(kv.Value)
 	}
 	stream.WriteObjectEnd()
 }

@@ -131,14 +131,14 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
 		return nil, newError(e.Operation, "This schema cannot perform subscriptions.")
 	}
 
-	groupedFieldSet := NewOrderedMap()
+	groupedFieldSet := NewOrderedMapWithCapacity(1)
 	e.collectFields(subscriptionType, e.Operation.SelectionSet.Selections, nil, groupedFieldSet)
 
 	if groupedFieldSet.Len() != 1 {
 		return nil, newError(e.Operation.SelectionSet, "Subscriptions must contain exactly one root field selection.")
 	}
 
-	responseKey := groupedFieldSet.Keys()[0]
+	responseKey := groupedFieldSet.Items()[0].Key
 	v, _ := groupedFieldSet.Get(responseKey)
 	fields := v.([]*ast.Field)
 	field := fields[0]
@@ -215,15 +215,17 @@ func (e *executor) wait(p *promise.Promise) (interface{}, error) {
 
 // executeSelections returns a promise for an *OrderedMap
 func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path *path, forceSerial bool) *promise.Promise {
-	groupedFieldSet := NewOrderedMap()
+	groupedFieldSet := NewOrderedMapWithCapacity(len(selections))
 	e.collectFields(objectType, selections, nil, groupedFieldSet)
 
-	resultMap := NewOrderedMap()
-	promises := []*promise.Promise{}
+	// re-use groupedFieldSet to maintain the correct order and avoid additional allocations
+	resultMap := groupedFieldSet
 
-	for _, responseKey := range groupedFieldSet.Keys() {
-		v, _ := groupedFieldSet.Get(responseKey)
-		fields := v.([]*ast.Field)
+	var promises []*promise.Promise
+
+	for _, kv := range groupedFieldSet.Items() {
+		responseKey := kv.Key
+		fields := kv.Value.([]*ast.Field)
 		fieldName := fields[0].Name.Name
 
 		if fieldName == "__typename" {
