@@ -20,6 +20,7 @@ jobs:
         go build .
     - name: Test
       run: |
-        go test -v -race -short ./...
-        go test -v ./...
+        ./go.test.sh
         go vet
+    - name: Upload Coverage
+      uses: codecov/codecov-action@v1
