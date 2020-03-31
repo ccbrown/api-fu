@@ -15,6 +15,8 @@ import (
 	"github.com/ccbrown/api-fu/graphqlws"
 )
 
+// API is responsible for serving your API traffic. Construct an API by creating a Config, then
+// calling NewAPI.
 type API struct {
 	schema *graphql.Schema
 	config *Config
@@ -129,8 +131,7 @@ func chain(ctx context.Context, p graphql.ResolvePromise, f func(interface{}) (i
 	})
 }
 
-// When used within the context of a resolve function, completes resolution asynchronously and
-// concurrently with any other asynchronous resolutions.
+// Go completes resolution asynchronously and concurrently with any other asynchronous resolutions.
 func Go(ctx context.Context, f func() (interface{}, error)) graphql.ResolvePromise {
 	apiRequest := ctxAPIRequest(ctx)
 	if apiRequest.asyncResolutions == nil {
@@ -156,7 +157,7 @@ type batch struct {
 	dests    []chan graphql.ResolveResult
 }
 
-// Batches up the resolver invocations into a single call. As queries are executed, whenever
+// Batch batches up the resolver invocations into a single call. As queries are executed, whenever
 // resolution gets "stuck", all pending batch resolvers will be triggered concurrently. Batch
 // resolvers must return one result for every field context it receives.
 func Batch(f func([]*graphql.FieldContext) []graphql.ResolveResult) func(*graphql.FieldContext) (interface{}, error) {

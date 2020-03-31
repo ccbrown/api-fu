@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ccbrown/api-fu/graphql"
 	"github.com/stretchr/testify/assert"
@@ -245,4 +246,168 @@ func TestConnection_ZeroArg_WithPageInfo(t *testing.T) {
 			}
 		}
 	}`, string(body))
+}
+
+func TestTimeBasedConnection(t *testing.T) {
+	edges := make([]time.Time, 10)
+	for i := range edges {
+		edges[i] = time.Date(2020, time.January, 01, 0, 0, i, 0, time.UTC)
+	}
+
+	config := &Config{}
+	config.AddQueryField("connection", TimeBasedConnection(&TimeBasedConnectionConfig{
+		NamePrefix:  "Test",
+		Description: "Test",
+		EdgeGetter: func(ctx *graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error) {
+			var ret []time.Time
+			for _, edge := range edges {
+				if !edge.Before(minTime) && !edge.After(maxTime) {
+					ret = append(ret, edge)
+				}
+			}
+			return ret, nil
+		},
+		EdgeCursor: func(edge interface{}) TimeBasedCursor {
+			return NewTimeBasedCursor(edge.(time.Time), "")
+		},
+		EdgeFields: map[string]*graphql.FieldDefinition{
+			"node": {
+				Type: DateTimeType,
+				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					return ctx.Object, nil
+				},
+			},
+		},
+	}))
+
+	api, err := NewAPI(config)
+	require.NoError(t, err)
+
+	for name, tc := range map[string]struct {
+		Query        string
+		ExpectedJSON string
+	}{
+		"All": {
+			Query: `{
+				connection(first: 100) {
+					edges {
+						node
+					}
+				}
+			}`,
+			ExpectedJSON: `{
+				"data":{
+					"connection":{
+						"edges":[
+							{"node":"2020-01-01T00:00:00Z"},
+							{"node":"2020-01-01T00:00:01Z"},
+							{"node":"2020-01-01T00:00:02Z"},
+							{"node":"2020-01-01T00:00:03Z"},
+							{"node":"2020-01-01T00:00:04Z"},
+							{"node":"2020-01-01T00:00:05Z"},
+							{"node":"2020-01-01T00:00:06Z"},
+							{"node":"2020-01-01T00:00:07Z"},
+							{"node":"2020-01-01T00:00:08Z"},
+							{"node":"2020-01-01T00:00:09Z"}
+						]
+					}
+				}
+			}`,
+		},
+		"AtOrAfterTime": {
+			Query: `{
+				connection(first: 100, atOrAfterTime: "2020-01-01T00:00:05Z") {
+					edges {
+						node
+					}
+				}
+			}`,
+			ExpectedJSON: `{
+				"data":{
+					"connection":{
+						"edges":[
+							{"node":"2020-01-01T00:00:05Z"},
+							{"node":"2020-01-01T00:00:06Z"},
+							{"node":"2020-01-01T00:00:07Z"},
+							{"node":"2020-01-01T00:00:08Z"},
+							{"node":"2020-01-01T00:00:09Z"}
+						]
+					}
+				}
+			}`,
+		},
+		"BeforeTime": {
+			Query: `{
+				connection(first: 100, beforeTime: "2020-01-01T00:00:05Z") {
+					edges {
+						node
+					}
+				}
+			}`,
+			ExpectedJSON: `{
+				"data":{
+					"connection":{
+						"edges":[
+							{"node":"2020-01-01T00:00:00Z"},
+							{"node":"2020-01-01T00:00:01Z"},
+							{"node":"2020-01-01T00:00:02Z"},
+							{"node":"2020-01-01T00:00:03Z"},
+							{"node":"2020-01-01T00:00:04Z"}
+						]
+					}
+				}
+			}`,
+		},
+		"After": {
+			Query: `{
+				connection(first: 2, after: "gqROYW5v0xXlmjan9SgAoklkoA") {
+					edges {
+						node
+					}
+				}
+			}`,
+			ExpectedJSON: `{
+				"data":{
+					"connection":{
+						"edges":[
+							{"node":"2020-01-01T00:00:05Z"},
+							{"node":"2020-01-01T00:00:06Z"}
+						]
+					}
+				}
+			}`,
+		},
+		"Before": {
+			Query: `{
+				connection(last: 2, before: "gqROYW5v0xXlmjan9SgAoklkoA") {
+					edges {
+						node
+					}
+				}
+			}`,
+			ExpectedJSON: `{
+				"data":{
+					"connection":{
+						"edges":[
+							{"node":"2020-01-01T00:00:02Z"},
+							{"node":"2020-01-01T00:00:03Z"}
+						]
+					}
+				}
+			}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/", strings.NewReader(tc.Query))
+			req.Header.Set("Content-Type", "application/graphql")
+			w := httptest.NewRecorder()
+
+			api.ServeGraphQL(w, req)
+
+			resp := w.Result()
+			body, _ := ioutil.ReadAll(resp.Body)
+
+			assert.JSONEq(t, tc.ExpectedJSON, string(body))
+		})
+	}
 }

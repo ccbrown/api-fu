@@ -7,6 +7,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -376,12 +377,14 @@ func LoadSchema(path string) (*schema.Schema, error) {
 	return schema.New(def)
 }
 
-func main() {
-	pkg := pflag.String("pkg", "", "the package name of the generated output")
-	input := pflag.StringArrayP("input", "i", nil, "the input files to search")
-	schemaPath := pflag.String("schema", "", "the path to the schema json file")
-	wrapper := pflag.String("wrapper", "gql", "the wrapper name to look for")
-	pflag.Parse()
+func Run(w io.Writer, args ...string) {
+	flags := pflag.NewFlagSet(os.Args[0], pflag.ExitOnError)
+
+	pkg := flags.String("pkg", "", "the package name of the generated output")
+	input := flags.StringArrayP("input", "i", nil, "the input files to search")
+	schemaPath := flags.String("schema", "", "the path to the schema json file")
+	wrapper := flags.String("wrapper", "gql", "the wrapper name to look for")
+	flags.Parse(args)
 
 	if *pkg == "" {
 		fmt.Fprintln(os.Stderr, "the --pkg flag is required")
@@ -407,5 +410,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Fprint(os.Stdout, output)
+	fmt.Fprint(w, output)
+}
+
+func main() {
+	Run(os.Stdout, os.Args[1:]...)
 }
