@@ -59,6 +59,7 @@ func (cfg *Config) init() {
 						},
 					},
 					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+						// TODO: batching?
 						return ctxAPI(ctx.Context).resolveNodeByGlobalId(ctx.Context, ctx.Arguments["id"].(string))
 					},
 				},

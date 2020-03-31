@@ -64,16 +64,37 @@ type asyncResolution struct {
 type apiRequest struct {
 	asyncResolutions        chan asyncResolution
 	chainedAsyncResolutions map[graphql.ResolvePromise]struct{}
+	batches                 map[*int]*batch
 }
 
 func (r *apiRequest) IdleHandler() {
 	for {
-		resolution := <-r.asyncResolutions
-		resolution.Dest <- resolution.Result
-		if _, ok := r.chainedAsyncResolutions[resolution.Dest]; ok {
-			delete(r.chainedAsyncResolutions, resolution.Dest)
-			continue
+		if len(r.batches) > 0 {
+			// Go ahead and resolve all the batches.
+			var wg sync.WaitGroup
+			for _, b := range r.batches {
+				wg.Add(1)
+				b := b
+				go func() {
+					defer wg.Done()
+					for i, result := range b.resolver(b.items) {
+						b.dests[i] <- result
+					}
+				}()
+			}
+			wg.Wait()
+			r.batches = map[*int]*batch{}
+		} else {
+			// Block until we've fully resolved something.
+			resolution := <-r.asyncResolutions
+			resolution.Dest <- resolution.Result
+			if _, ok := r.chainedAsyncResolutions[resolution.Dest]; ok {
+				delete(r.chainedAsyncResolutions, resolution.Dest)
+				continue
+			}
 		}
+
+		// Move along anything else that we happen to also be done resolving.
 		for {
 			select {
 			case resolution := <-r.asyncResolutions:
@@ -127,6 +148,37 @@ func Go(ctx context.Context, f func() (interface{}, error)) graphql.ResolvePromi
 		}
 	}()
 	return ch
+}
+
+type batch struct {
+	resolver func([]*graphql.FieldContext) []graphql.ResolveResult
+	items    []*graphql.FieldContext
+	dests    []chan graphql.ResolveResult
+}
+
+// Batches up the resolver invocations into a single call. As queries are executed, whenever
+// resolution gets "stuck", all pending batch resolvers will be triggered concurrently. Batch
+// resolvers must return one result for every field context it receives.
+func Batch(f func([]*graphql.FieldContext) []graphql.ResolveResult) func(*graphql.FieldContext) (interface{}, error) {
+	var x int
+	key := &x
+	return func(ctx *graphql.FieldContext) (interface{}, error) {
+		apiRequest := ctxAPIRequest(ctx.Context)
+		b, ok := apiRequest.batches[key]
+		if !ok {
+			b = &batch{
+				resolver: f,
+			}
+			if apiRequest.batches == nil {
+				apiRequest.batches = map[*int]*batch{}
+			}
+			apiRequest.batches[key] = b
+		}
+		ch := make(graphql.ResolvePromise, 1)
+		b.items = append(b.items, ctx)
+		b.dests = append(b.dests, ch)
+		return ch, nil
+	}
 }
 
 func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
@@ -200,8 +252,6 @@ func (api *API) resolveNodesByGlobalIds(ctx context.Context, ids []string) ([]in
 }
 
 func (api *API) resolveNodeById(ctx context.Context, nodeType *NodeType, modelId interface{}) (interface{}, error) {
-	// TODO: batching and concurrency
-
 	ids := reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(modelId)), 1, 1)
 	ids.Index(0).Set(reflect.ValueOf(modelId))
 	nodes, err := nodeType.GetByIds(ctx, ids.Interface())

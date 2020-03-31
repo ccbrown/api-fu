@@ -67,6 +67,46 @@ func TestGo(t *testing.T) {
 	assert.JSONEq(t, `{"data":{"s":true,"r":true}}`, string(body))
 }
 
+func TestBatch(t *testing.T) {
+	var testCfg Config
+
+	testCfg.AddQueryField("batched1", &graphql.FieldDefinition{
+		Type: graphql.IntType,
+		Resolve: Batch(func(ctx []*graphql.FieldContext) []graphql.ResolveResult {
+			assert.Len(t, ctx, 1)
+			return []graphql.ResolveResult{
+				{Value: 1, Error: nil},
+			}
+		}),
+	})
+
+	testCfg.AddQueryField("batched2", &graphql.FieldDefinition{
+		Type: graphql.IntType,
+		Resolve: Batch(func(ctx []*graphql.FieldContext) []graphql.ResolveResult {
+			assert.Len(t, ctx, 2)
+			return []graphql.ResolveResult{
+				{Value: 1, Error: nil},
+				{Value: 2, Error: nil},
+			}
+		}),
+	})
+
+	api, err := NewAPI(&testCfg)
+	require.NoError(t, err)
+
+	resp := executeGraphQL(t, api, `{
+		b11: batched1
+		b21: batched2
+		b22: batched2
+	}`)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"data":{"b11":1,"b21":1,"b22":2}}`, string(body))
+}
+
 func TestNodes(t *testing.T) {
 	const nodeTypeId = 10
 
