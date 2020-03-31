@@ -67,11 +67,11 @@ See the examples directory for more complete example code.
 
 ## Features
 
-### Supports all features of the [latest GraphQL spec](https://spec.graphql.org/June2018/).
+### ✅ Supports all features of the [latest GraphQL spec](https://spec.graphql.org/June2018/).
 
 This includes null literals, error extensions, subscriptions, and directives.
 
-### Supports efficient batching and concurrency without the use of goroutines.
+### ⚡️ Supports efficient batching and concurrency without the use of goroutines.
 
 The `graphql` package supports virtually any batching or concurrency pattern using low level primitives.
 
@@ -101,11 +101,11 @@ fuCfg.AddQueryField("myField", &graphql.FieldDefinition{
 })
 ```
 
-### Provides implementations for commonly used scalar types.
+### 💡 Provides implementations for commonly used scalar types.
 
 For example, the `apifu` package provides date-time and long (but JavaScript safe) integers.
 
-### Implements handlers for HTTP and the [Apollo graphql-ws protocol](https://github.com/apollographql/subscriptions-transport-ws).
+### 📡 Implements handlers for HTTP and the [Apollo graphql-ws protocol](https://github.com/apollographql/subscriptions-transport-ws).
 
 Once you've build your API, all you have to do is:
 
@@ -119,7 +119,7 @@ Or:
 fu.ServeGraphQLWS(w, r)
 ```
 
-### Provides easy-to-use helpers for creating connections adhering to the [Relay Cursor Connections Specification](https://facebook.github.io/relay/graphql/connections.htm).
+### 📖 Provides easy-to-use helpers for creating connections adhering to the [Relay Cursor Connections Specification](https://facebook.github.io/relay/graphql/connections.htm).
 
 Just provide a name, cursor constructor, edge fields, and edge getter:
 
@@ -146,9 +146,9 @@ Just provide a name, cursor constructor, edge fields, and edge getter:
 }
 ```
 
-### CLI for generating client-side type definitions and validating queries in source code.
+### 🛠 Can generate Apollo-like client-side type definitions and validate queries in source code.
 
-The `gql-client-gen` tool can be used to generate types for use in client-side code. The generated types intelligently unmarshal inline fragments and fragment spreads based on `__typename` values.
+The `gql-client-gen` tool can be used to generate types for use in client-side code as well as validate queries at compile-time. The generated types intelligently unmarshal inline fragments and fragment spreads based on `__typename` values.
 
 See [cmd/gql-client-gen](cmd/gql-client-gen) for details.
 
