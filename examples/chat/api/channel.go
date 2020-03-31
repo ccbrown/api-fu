@@ -38,7 +38,7 @@ func init() {
 				return apifu.NewTimeBasedCursor(message.Time, string(message.Id))
 			},
 			EdgeFields: map[string]*graphql.FieldDefinition{
-				"node": &graphql.FieldDefinition{
+				"node": {
 					Type: graphql.NewNonNullType(messageType),
 					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 						return ctx.Object, nil
@@ -57,7 +57,7 @@ func init() {
 		Type: &graphql.ObjectType{
 			Name: "CreateChannelResult",
 			Fields: map[string]*graphql.FieldDefinition{
-				"channel": &graphql.FieldDefinition{
+				"channel": {
 					Type: graphql.NewNonNullType(channelType),
 					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 						return ctx.Object, nil
@@ -66,11 +66,11 @@ func init() {
 			},
 		},
 		Arguments: map[string]*graphql.InputValueDefinition{
-			"channel": &graphql.InputValueDefinition{
+			"channel": {
 				Type: graphql.NewNonNullType(&graphql.InputObjectType{
 					Name: "ChannelInput",
 					Fields: map[string]*graphql.InputValueDefinition{
-						"name": &graphql.InputValueDefinition{
+						"name": {
 							Type: graphql.NewNonNullType(graphql.StringType),
 						},
 					},
@@ -105,7 +105,7 @@ func init() {
 			}
 		},
 		EdgeFields: map[string]*graphql.FieldDefinition{
-			"node": &graphql.FieldDefinition{
+			"node": {
 				Type: graphql.NewNonNullType(channelType),
 				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil

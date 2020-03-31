@@ -33,7 +33,7 @@ func init() {
 		Type: &graphql.ObjectType{
 			Name: "CreateMessageResult",
 			Fields: map[string]*graphql.FieldDefinition{
-				"message": &graphql.FieldDefinition{
+				"message": {
 					Type: graphql.NewNonNullType(messageType),
 					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 						return ctx.Object, nil
@@ -42,14 +42,14 @@ func init() {
 			},
 		},
 		Arguments: map[string]*graphql.InputValueDefinition{
-			"message": &graphql.InputValueDefinition{
+			"message": {
 				Type: graphql.NewNonNullType(&graphql.InputObjectType{
 					Name: "MessageInput",
 					Fields: map[string]*graphql.InputValueDefinition{
-						"channelId": &graphql.InputValueDefinition{
+						"channelId": {
 							Type: graphql.NewNonNullType(graphql.IDType),
 						},
-						"body": &graphql.InputValueDefinition{
+						"body": {
 							Type: graphql.NewNonNullType(graphql.StringType),
 						},
 					},

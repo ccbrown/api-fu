@@ -27,7 +27,7 @@ func init() {
 		Type: &graphql.ObjectType{
 			Name: "CreateUserResult",
 			Fields: map[string]*graphql.FieldDefinition{
-				"user": &graphql.FieldDefinition{
+				"user": {
 					Type: graphql.NewNonNullType(userType),
 					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 						return ctx.Object, nil
@@ -36,14 +36,14 @@ func init() {
 			},
 		},
 		Arguments: map[string]*graphql.InputValueDefinition{
-			"user": &graphql.InputValueDefinition{
+			"user": {
 				Type: graphql.NewNonNullType(&graphql.InputObjectType{
 					Name: "UserInput",
 					Fields: map[string]*graphql.InputValueDefinition{
-						"handle": &graphql.InputValueDefinition{
+						"handle": {
 							Type: graphql.NewNonNullType(graphql.StringType),
 						},
-						"password": &graphql.InputValueDefinition{
+						"password": {
 							Type: graphql.NewNonNullType(graphql.StringType),
 						},
 					},

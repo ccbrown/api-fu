@@ -10,6 +10,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql"
 )
 
+// Config defines the schema and other parameters for an API.
 type Config struct {
 	Logger               logrus.FieldLogger
 	WebSocketOriginCheck func(r *http.Request) bool
@@ -101,6 +102,7 @@ func (cfg *Config) NodeObjectType(name string) *graphql.ObjectType {
 	return cfg.nodeObjectTypesByName[name]
 }
 
+// AddNodeType registers the given node type and returned the object type created for the node.
 func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 	cfg.init()
 
@@ -130,13 +132,14 @@ func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 	return objectType
 }
 
-// Adds a named type to the schema. This is generally only required for interface implementations
-// that aren't explicitly referenced elsewhere in the schema.
+// AddNamedType adds a named type to the schema. This is generally only required for interface
+// implementations that aren't explicitly referenced elsewhere in the schema.
 func (cfg *Config) AddNamedType(t graphql.NamedType) {
 	cfg.init()
 	cfg.additionalTypes = append(cfg.additionalTypes, t)
 }
 
+// AddMutation adds a mutation to your schema.
 func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
 	cfg.init()
 
@@ -188,6 +191,7 @@ func (cfg *Config) AddSubscription(name string, def *graphql.FieldDefinition) {
 	cfg.subscription.Fields[name] = def
 }
 
+// AddQueryField adds a field to your schema's query object.
 func (cfg *Config) AddQueryField(name string, def *graphql.FieldDefinition) {
 	cfg.init()
 
