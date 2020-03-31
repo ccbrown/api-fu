@@ -30,19 +30,19 @@ func coerceInt(v interface{}) interface{} {
 		}
 	case int64:
 		if v >= math.MinInt32 && v <= math.MaxInt32 {
-			return v
+			return int(v)
 		}
 	case uint64:
 		if v <= math.MaxInt32 {
-			return v
+			return int(v)
 		}
 	case int:
 		if v >= math.MinInt32 && v <= math.MaxInt32 {
-			return v
+			return int(v)
 		}
 	case uint:
 		if v <= math.MaxInt32 {
-			return v
+			return int(v)
 		}
 	case float32:
 		return coerceInt(float64(v))
@@ -110,11 +110,11 @@ var FloatType = &ScalarType{
 		switch v := v.(type) {
 		case *ast.IntValue:
 			if n, err := strconv.ParseFloat(v.Value, 64); err == nil {
-				return int(n)
+				return n
 			}
 		case *ast.FloatValue:
 			if n, err := strconv.ParseFloat(v.Value, 64); err == nil {
-				return int(n)
+				return n
 			}
 		}
 		return nil

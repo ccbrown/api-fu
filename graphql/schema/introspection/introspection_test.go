@@ -91,6 +91,9 @@ var objectType = &schema.ObjectType{
 		"nonNullInt": {
 			Type: schema.NewNonNullType(schema.IntType),
 		},
+		"enum": {
+			Type: fooBarEnumType,
+		},
 	},
 }
 
