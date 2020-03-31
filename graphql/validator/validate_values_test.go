@@ -59,10 +59,10 @@ func TestValues_OfCorrectType(t *testing.T) {
 func TestValues_ValidateCoercion(t *testing.T) {
 	inputObjectType := &schema.InputObjectType{
 		Fields: map[string]*schema.InputValueDefinition{
-			"a": &schema.InputValueDefinition{
+			"a": {
 				Type: schema.StringType,
 			},
-			"b": &schema.InputValueDefinition{
+			"b": {
 				Type: schema.NewNonNullType(schema.IntType),
 			},
 		},

@@ -182,7 +182,7 @@ func ParseAndValidate(query string, schema *Schema) (*ast.Document, []*Error) {
 			errors = append(errors, &Error{
 				Message: "Syntax error: " + err.Message,
 				Locations: []Location{
-					Location{
+					{
 						Line:   err.Location.Line,
 						Column: err.Location.Column,
 					},

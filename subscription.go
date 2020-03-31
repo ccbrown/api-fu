@@ -19,11 +19,11 @@ func (s *SubscriptionSourceStream) Run(ctx context.Context, onEvent func(interfa
 	eventChannel := reflect.ValueOf(s.EventChannel)
 	ctxChannel := reflect.ValueOf(ctx.Done())
 	selectCases := []reflect.SelectCase{
-		reflect.SelectCase{
+		{
 			Dir:  reflect.SelectRecv,
 			Chan: ctxChannel,
 		},
-		reflect.SelectCase{
+		{
 			Dir:  reflect.SelectRecv,
 			Chan: eventChannel,
 		},

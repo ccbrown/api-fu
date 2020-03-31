@@ -19,7 +19,7 @@ import (
 var petType = &schema.InterfaceType{
 	Name: "Pet",
 	Fields: map[string]*schema.FieldDefinition{
-		"nickname": &schema.FieldDefinition{
+		"nickname": {
 			Type: schema.StringType,
 		},
 	},
@@ -31,13 +31,13 @@ type cat struct{}
 var dogType = &schema.ObjectType{
 	Name: "Dog",
 	Fields: map[string]*schema.FieldDefinition{
-		"nickname": &schema.FieldDefinition{
+		"nickname": {
 			Type: schema.StringType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return "fido", nil
 			},
 		},
-		"barkVolume": &schema.FieldDefinition{
+		"barkVolume": {
 			Type: schema.IntType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return 10, nil
@@ -54,13 +54,13 @@ var dogType = &schema.ObjectType{
 var catType = &schema.ObjectType{
 	Name: "Cat",
 	Fields: map[string]*schema.FieldDefinition{
-		"nickname": &schema.FieldDefinition{
+		"nickname": {
 			Type: schema.StringType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return "fluffy", nil
 			},
 		},
-		"meowVolume": &schema.FieldDefinition{
+		"meowVolume": {
 			Type: schema.IntType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return 10, nil
@@ -86,25 +86,25 @@ var stringPromises []ResolvePromise
 
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
-		"intOne": &schema.FieldDefinition{
+		"intOne": {
 			Type: schema.IntType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return 1, nil
 			},
 		},
-		"pet": &schema.FieldDefinition{
+		"pet": {
 			Type: petType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return dog{}, nil
 			},
 		},
-		"intTwo": &schema.FieldDefinition{
+		"intTwo": {
 			Type: schema.IntType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return 2, nil
 			},
 		},
-		"asyncString": &schema.FieldDefinition{
+		"asyncString": {
 			Type: schema.StringType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				ch := make(ResolvePromise, 1)
@@ -112,31 +112,31 @@ func init() {
 				return ResolvePromise(ch), nil
 			},
 		},
-		"stringFoo": &schema.FieldDefinition{
+		"stringFoo": {
 			Type: schema.StringType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return "foo", nil
 			},
 		},
-		"object": &schema.FieldDefinition{
+		"object": {
 			Type: objectType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return &object{}, nil
 			},
 		},
-		"nonNullIntListWithNull": &schema.FieldDefinition{
+		"nonNullIntListWithNull": {
 			Type: schema.NewListType(schema.NewNonNullType(schema.IntType)),
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return []interface{}{1, nil, 3}, nil
 			},
 		},
-		"objectsWithError": &schema.FieldDefinition{
+		"objectsWithError": {
 			Type: schema.NewListType(objectType),
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
-				return []*object{&object{}, &object{Error: fmt.Errorf("error")}, &object{}}, nil
+				return []*object{{}, {Error: fmt.Errorf("error")}, {}}, nil
 			},
 		},
-		"intOneOrError": &schema.FieldDefinition{
+		"intOneOrError": {
 			Type: schema.IntType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				if err := ctx.Object.(*object).Error; err != nil {
@@ -145,25 +145,25 @@ func init() {
 				return 1, nil
 			},
 		},
-		"error": &schema.FieldDefinition{
+		"error": {
 			Type: schema.IntType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return nil, fmt.Errorf("error")
 			},
 		},
-		"nonNullError": &schema.FieldDefinition{
+		"nonNullError": {
 			Type: schema.NewNonNullType(schema.IntType),
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return nil, fmt.Errorf("error")
 			},
 		},
-		"badResolveValue": &schema.FieldDefinition{
+		"badResolveValue": {
 			Type: schema.IntType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return &struct{}{}, nil
 			},
 		},
-		"intListWithBadResolveValue": &schema.FieldDefinition{
+		"intListWithBadResolveValue": {
 			Type: schema.NewListType(schema.IntType),
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return []interface{}{1, &struct{}{}, 3}, nil
@@ -176,7 +176,7 @@ var theNumber int
 var mutationType = &schema.ObjectType{
 	Name: "Mutation",
 	Fields: map[string]*schema.FieldDefinition{
-		"asyncString": &schema.FieldDefinition{
+		"asyncString": {
 			Type: schema.StringType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				ch := make(ResolvePromise, 1)
@@ -184,11 +184,11 @@ var mutationType = &schema.ObjectType{
 				return ResolvePromise(ch), nil
 			},
 		},
-		"changeTheNumber": &schema.FieldDefinition{
+		"changeTheNumber": {
 			Type: &schema.ObjectType{
 				Name: "ChangeTheNumberResult",
 				Fields: map[string]*schema.FieldDefinition{
-					"theNumber": &schema.FieldDefinition{
+					"theNumber": {
 						Type: schema.NewNonNullType(schema.IntType),
 						Resolve: func(*schema.FieldContext) (interface{}, error) {
 							return theNumber, nil
@@ -197,7 +197,7 @@ var mutationType = &schema.ObjectType{
 				},
 			},
 			Arguments: map[string]*schema.InputValueDefinition{
-				"newNumber": &schema.InputValueDefinition{
+				"newNumber": {
 					Type: schema.NewNonNullType(schema.IntType),
 				},
 			},
@@ -215,7 +215,7 @@ func TestSubscribe(t *testing.T) {
 		Subscription: &schema.ObjectType{
 			Name: "Subscription",
 			Fields: map[string]*schema.FieldDefinition{
-				"int": &schema.FieldDefinition{
+				"int": {
 					Type: schema.NewNonNullType(schema.IntType),
 					Resolve: func(*schema.FieldContext) (interface{}, error) {
 						return 1, nil
@@ -300,7 +300,7 @@ func TestExecuteRequest(t *testing.T) {
 			Document:     `{intOne badResolveValue}`,
 			ExpectedData: `{"intOne":1,"badResolveValue":null}`,
 			ExpectedErrors: []*Error{
-				&Error{
+				{
 					Locations: []Location{{1, 9}},
 					Path:      []interface{}{"badResolveValue"},
 				},
@@ -310,7 +310,7 @@ func TestExecuteRequest(t *testing.T) {
 			Document:     `{intOne l:intListWithBadResolveValue}`,
 			ExpectedData: `{"intOne":1,"l":[1,null,3]}`,
 			ExpectedErrors: []*Error{
-				&Error{
+				{
 					Locations: []Location{{1, 9}},
 					Path:      []interface{}{"l", 1},
 				},
@@ -378,7 +378,7 @@ func TestExecuteRequest(t *testing.T) {
 			Document:     `{error error}`,
 			ExpectedData: `{"error":null}`,
 			ExpectedErrors: []*Error{
-				&Error{
+				{
 					Locations: []Location{{1, 2}, {1, 8}},
 					Path:      []interface{}{"error"},
 				},
@@ -388,7 +388,7 @@ func TestExecuteRequest(t *testing.T) {
 			Document:     `{object{nonNullError}}`,
 			ExpectedData: `{"object":null}`,
 			ExpectedErrors: []*Error{
-				&Error{
+				{
 					Locations: []Location{{1, 9}},
 					Path:      []interface{}{"object", "nonNullError"},
 				},
@@ -398,7 +398,7 @@ func TestExecuteRequest(t *testing.T) {
 			Document:     `{object{object{object{object{objs:objectsWithError{n:intOneOrError}}}}}}`,
 			ExpectedData: `{"object":{"object":{"object":{"object":{"objs":[{"n":1},{"n":null},{"n":1}]}}}}}`,
 			ExpectedErrors: []*Error{
-				&Error{
+				{
 					Locations: []Location{{1, 52}},
 					Path:      []interface{}{"object", "object", "object", "object", "objs", 1, "n"},
 				},
@@ -408,7 +408,7 @@ func TestExecuteRequest(t *testing.T) {
 			Document:     `{l:nonNullIntListWithNull}`,
 			ExpectedData: `{"l":null}`,
 			ExpectedErrors: []*Error{
-				&Error{
+				{
 					Locations: []Location{{1, 2}},
 					Path:      []interface{}{"l", 1},
 				},
@@ -492,16 +492,16 @@ func BenchmarkExecuteRequest(b *testing.B) {
 	}
 
 	objectType.Fields = map[string]*schema.FieldDefinition{
-		"string": &schema.FieldDefinition{
+		"string": {
 			Type: schema.StringType,
 			Resolve: func(*schema.FieldContext) (interface{}, error) {
 				return "foo", nil
 			},
 		},
-		"objects": &schema.FieldDefinition{
+		"objects": {
 			Type: schema.NewListType(objectType),
 			Arguments: map[string]*schema.InputValueDefinition{
-				"count": &schema.InputValueDefinition{
+				"count": {
 					Type: schema.NewNonNullType(schema.IntType),
 				},
 			},

@@ -14,7 +14,7 @@ import (
 var petType = &schema.InterfaceType{
 	Name: "Pet",
 	Fields: map[string]*schema.FieldDefinition{
-		"nickname": &schema.FieldDefinition{
+		"nickname": {
 			Type: schema.StringType,
 		},
 	},
@@ -23,7 +23,7 @@ var petType = &schema.InterfaceType{
 var nodeType = &schema.InterfaceType{
 	Name: "Node",
 	Fields: map[string]*schema.FieldDefinition{
-		"id": &schema.FieldDefinition{
+		"id": {
 			Type: schema.IDType,
 		},
 	},
@@ -32,7 +32,7 @@ var nodeType = &schema.InterfaceType{
 var unionMemberType = &schema.InterfaceType{
 	Name: "UnionMember",
 	Fields: map[string]*schema.FieldDefinition{
-		"scalar": &schema.FieldDefinition{
+		"scalar": {
 			Type: schema.StringType,
 		},
 	},
@@ -45,7 +45,7 @@ var objectType = &schema.ObjectType{
 var complexInputType = &schema.InputObjectType{
 	Name: "ComplexInput",
 	Fields: map[string]*schema.InputValueDefinition{
-		"name": &schema.InputValueDefinition{
+		"name": {
 			Type: schema.StringType,
 		},
 	},
@@ -54,10 +54,10 @@ var complexInputType = &schema.InputObjectType{
 var dogType = &schema.ObjectType{
 	Name: "Dog",
 	Fields: map[string]*schema.FieldDefinition{
-		"nickname": &schema.FieldDefinition{
+		"nickname": {
 			Type: schema.StringType,
 		},
-		"barkVolume": &schema.FieldDefinition{
+		"barkVolume": {
 			Type: schema.IntType,
 		},
 	},
@@ -68,91 +68,91 @@ var dogType = &schema.ObjectType{
 var fooBarEnumType = &schema.EnumType{
 	Name: "FooBarEnum",
 	Values: map[string]*schema.EnumValueDefinition{
-		"FOO": &schema.EnumValueDefinition{},
-		"BAR": &schema.EnumValueDefinition{},
+		"FOO": {},
+		"BAR": {},
 	},
 }
 
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
-		"booleanArgField": &schema.FieldDefinition{
+		"booleanArgField": {
 			Type: schema.BooleanType,
 			Arguments: map[string]*schema.InputValueDefinition{
-				"booleanArg": &schema.InputValueDefinition{
+				"booleanArg": {
 					Type: schema.BooleanType,
 				},
 			},
 		},
-		"intArgField": &schema.FieldDefinition{
+		"intArgField": {
 			Type: schema.IntType,
 			Arguments: map[string]*schema.InputValueDefinition{
-				"intArg": &schema.InputValueDefinition{
+				"intArg": {
 					Type: schema.IntType,
 				},
 			},
 		},
-		"enumArgField": &schema.FieldDefinition{
+		"enumArgField": {
 			Type: fooBarEnumType,
 			Arguments: map[string]*schema.InputValueDefinition{
-				"enumArg": &schema.InputValueDefinition{
+				"enumArg": {
 					Type: fooBarEnumType,
 				},
 			},
 		},
-		"floatArgField": &schema.FieldDefinition{
+		"floatArgField": {
 			Type: schema.FloatType,
 			Arguments: map[string]*schema.InputValueDefinition{
-				"floatArg": &schema.InputValueDefinition{
+				"floatArg": {
 					Type: schema.FloatType,
 				},
 			},
 		},
-		"intListListArgField": &schema.FieldDefinition{
+		"intListListArgField": {
 			Type: schema.NewListType(schema.NewListType(schema.IntType)),
 			Arguments: map[string]*schema.InputValueDefinition{
-				"intListListArg": &schema.InputValueDefinition{
+				"intListListArg": {
 					Type: schema.NewListType(schema.NewListType(schema.IntType)),
 				},
 			},
 		},
-		"nonNullIntListArgField": &schema.FieldDefinition{
+		"nonNullIntListArgField": {
 			Type: schema.NewListType(schema.IntType),
 			Arguments: map[string]*schema.InputValueDefinition{
-				"intListArg": &schema.InputValueDefinition{
+				"intListArg": {
 					Type: schema.NewNonNullType(schema.NewListType(schema.IntType)),
 				},
 			},
 		},
-		"intListArgField": &schema.FieldDefinition{
+		"intListArgField": {
 			Type: schema.NewListType(schema.IntType),
 			Arguments: map[string]*schema.InputValueDefinition{
-				"intListArg": &schema.InputValueDefinition{
+				"intListArg": {
 					Type: schema.NewListType(schema.IntType),
 				},
 			},
 		},
-		"findDog": &schema.FieldDefinition{
+		"findDog": {
 			Type: dogType,
 			Arguments: map[string]*schema.InputValueDefinition{
-				"complex": &schema.InputValueDefinition{
+				"complex": {
 					Type: complexInputType,
 				},
 			},
 		},
-		"pet": &schema.FieldDefinition{
+		"pet": {
 			Type: petType,
 		},
-		"dog": &schema.FieldDefinition{
+		"dog": {
 			Type: dogType,
 		},
-		"cat": &schema.FieldDefinition{
+		"cat": {
 			Type: &schema.ObjectType{
 				Name: "Cat",
 				Fields: map[string]*schema.FieldDefinition{
-					"nickname": &schema.FieldDefinition{
+					"nickname": {
 						Type: schema.StringType,
 					},
-					"meowVolume": &schema.FieldDefinition{
+					"meowVolume": {
 						Type: schema.IntType,
 					},
 				},
@@ -160,19 +160,19 @@ func init() {
 				IsTypeOf:              func(interface{}) bool { return false },
 			},
 		},
-		"node": &schema.FieldDefinition{
+		"node": {
 			Type: nodeType,
 			Arguments: map[string]*schema.InputValueDefinition{
-				"id": &schema.InputValueDefinition{
+				"id": {
 					Type: schema.NewNonNullType(schema.IDType),
 				},
 			},
 		},
-		"resource": &schema.FieldDefinition{
+		"resource": {
 			Type: &schema.ObjectType{
 				Name: "Resource",
 				Fields: map[string]*schema.FieldDefinition{
-					"id": &schema.FieldDefinition{
+					"id": {
 						Type: schema.IDType,
 					},
 				},
@@ -180,21 +180,21 @@ func init() {
 				IsTypeOf:              func(interface{}) bool { return false },
 			},
 		},
-		"objects": &schema.FieldDefinition{
+		"objects": {
 			Type: schema.NewListType(objectType),
 		},
-		"object": &schema.FieldDefinition{
+		"object": {
 			Type: objectType,
 			Arguments: map[string]*schema.InputValueDefinition{
-				"object": &schema.InputValueDefinition{
+				"object": {
 					Type: &schema.InputObjectType{
 						Name: "ObjectInput",
 						Fields: map[string]*schema.InputValueDefinition{
-							"defaultedString": &schema.InputValueDefinition{
+							"defaultedString": {
 								Type:         schema.NewNonNullType(schema.StringType),
 								DefaultValue: "foo",
 							},
-							"requiredString": &schema.InputValueDefinition{
+							"requiredString": {
 								Type: schema.NewNonNullType(schema.StringType),
 							},
 						},
@@ -202,50 +202,50 @@ func init() {
 				},
 			},
 		},
-		"object2": &schema.FieldDefinition{
+		"object2": {
 			Type: &schema.ObjectType{
 				Name: "Object2",
 				Fields: map[string]*schema.FieldDefinition{
-					"scalar": &schema.FieldDefinition{
+					"scalar": {
 						Type: schema.StringType,
 					},
 				},
 			},
 		},
-		"interface": &schema.FieldDefinition{
+		"interface": {
 			Type: &schema.InterfaceType{
 				Name: "Interface",
 				Fields: map[string]*schema.FieldDefinition{
-					"scalar": &schema.FieldDefinition{
+					"scalar": {
 						Type: schema.StringType,
 					},
 				},
 			},
 		},
-		"union": &schema.FieldDefinition{
+		"union": {
 			Type: &schema.UnionType{
 				Name: "Union",
 				MemberTypes: []*schema.ObjectType{
-					&schema.ObjectType{
+					{
 						Name: "UnionObjectA",
 						Fields: map[string]*schema.FieldDefinition{
-							"a": &schema.FieldDefinition{
+							"a": {
 								Type: schema.StringType,
 							},
-							"scalar": &schema.FieldDefinition{
+							"scalar": {
 								Type: schema.StringType,
 							},
 						},
 						ImplementedInterfaces: []*schema.InterfaceType{unionMemberType},
 						IsTypeOf:              func(interface{}) bool { return false },
 					},
-					&schema.ObjectType{
+					{
 						Name: "UnionObjectB",
 						Fields: map[string]*schema.FieldDefinition{
-							"b": &schema.FieldDefinition{
+							"b": {
 								Type: schema.StringType,
 							},
-							"scalar": &schema.FieldDefinition{
+							"scalar": {
 								Type: schema.StringType,
 							},
 						},
@@ -255,16 +255,16 @@ func init() {
 				},
 			},
 		},
-		"scalar": &schema.FieldDefinition{
+		"scalar": {
 			Type: schema.StringType,
 		},
-		"int": &schema.FieldDefinition{
+		"int": {
 			Type: schema.IntType,
 		},
-		"nonNullInt": &schema.FieldDefinition{
+		"nonNullInt": {
 			Type: schema.NewNonNullType(schema.IntType),
 		},
-		"int2": &schema.FieldDefinition{
+		"int2": {
 			Type: schema.IntType,
 		},
 	}

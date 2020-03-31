@@ -164,5 +164,5 @@ func TestNodes(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 	assert.Empty(t, result.Errors)
 
-	assert.ElementsMatch(t, []node{node{Id: "a"}, node{Id: "b"}}, result.Data.Nodes)
+	assert.ElementsMatch(t, []node{{Id: "a"}, {Id: "b"}}, result.Data.Nodes)
 }

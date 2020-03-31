@@ -15,7 +15,7 @@ import (
 var petType = &schema.InterfaceType{
 	Name: "Pet",
 	Fields: map[string]*schema.FieldDefinition{
-		"nickname": &schema.FieldDefinition{
+		"nickname": {
 			Type: schema.StringType,
 		},
 	},
@@ -24,10 +24,10 @@ var petType = &schema.InterfaceType{
 var dogType = &schema.ObjectType{
 	Name: "Dog",
 	Fields: map[string]*schema.FieldDefinition{
-		"nickname": &schema.FieldDefinition{
+		"nickname": {
 			Type: schema.StringType,
 		},
-		"barkVolume": &schema.FieldDefinition{
+		"barkVolume": {
 			Type: schema.IntType,
 		},
 	},
@@ -38,45 +38,45 @@ var dogType = &schema.ObjectType{
 var fooBarEnumType = &schema.EnumType{
 	Name: "FooBarEnum",
 	Values: map[string]*schema.EnumValueDefinition{
-		"FOO": &schema.EnumValueDefinition{},
-		"BAR": &schema.EnumValueDefinition{},
+		"FOO": {},
+		"BAR": {},
 	},
 }
 
 var objectType = &schema.ObjectType{
 	Name: "Object",
 	Fields: map[string]*schema.FieldDefinition{
-		"pet": &schema.FieldDefinition{
+		"pet": {
 			Type: petType,
 			Arguments: map[string]*schema.InputValueDefinition{
-				"booleanArg": &schema.InputValueDefinition{
+				"booleanArg": {
 					Type: schema.BooleanType,
 				},
 			},
 		},
-		"union": &schema.FieldDefinition{
+		"union": {
 			Type: &schema.UnionType{
 				Name: "Union",
 				MemberTypes: []*schema.ObjectType{
-					&schema.ObjectType{
+					{
 						Name: "UnionObjectA",
 						Fields: map[string]*schema.FieldDefinition{
-							"a": &schema.FieldDefinition{
+							"a": {
 								Type: schema.StringType,
 							},
-							"scalar": &schema.FieldDefinition{
+							"scalar": {
 								Type: schema.StringType,
 							},
 						},
 						IsTypeOf: func(interface{}) bool { return false },
 					},
-					&schema.ObjectType{
+					{
 						Name: "UnionObjectB",
 						Fields: map[string]*schema.FieldDefinition{
-							"b": &schema.FieldDefinition{
+							"b": {
 								Type: schema.StringType,
 							},
-							"scalar": &schema.FieldDefinition{
+							"scalar": {
 								Type: schema.StringType,
 							},
 						},
@@ -85,10 +85,10 @@ var objectType = &schema.ObjectType{
 				},
 			},
 		},
-		"int": &schema.FieldDefinition{
+		"int": {
 			Type: schema.IntType,
 		},
-		"nonNullInt": &schema.FieldDefinition{
+		"nonNullInt": {
 			Type: schema.NewNonNullType(schema.IntType),
 		},
 	},
@@ -98,7 +98,7 @@ func TestIntrospection(t *testing.T) {
 	s, err := schema.New(&schema.SchemaDefinition{
 		Query: objectType,
 		Directives: map[string]*schema.DirectiveDefinition{
-			"directive": &schema.DirectiveDefinition{
+			"directive": {
 				Locations: []schema.DirectiveLocation{schema.DirectiveLocationField, schema.DirectiveLocationFragmentSpread, schema.DirectiveLocationInlineFragment},
 			},
 		},
