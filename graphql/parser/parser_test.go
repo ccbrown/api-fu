@@ -47,7 +47,7 @@ func TestParseValue(t *testing.T) {
 		},
 		`{foo: "foo"}`: &ast.ObjectValue{
 			Fields: []*ast.ObjectField{
-				&ast.ObjectField{
+				{
 					Name: &ast.Name{
 						Name:         "foo",
 						NamePosition: token.Position{1, 2},

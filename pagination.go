@@ -143,7 +143,7 @@ type connection struct {
 
 func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	edgeFields := map[string]*graphql.FieldDefinition{
-		"cursor": &graphql.FieldDefinition{
+		"cursor": {
 			Type: graphql.NewNonNullType(graphql.StringType),
 			Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 				if s, err := serializeCursor(ctx.Object.(edge).Cursor); err != nil {
@@ -175,7 +175,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Description: config.Description,
 		Fields: map[string]*graphql.FieldDefinition{
 			"edges": NonNull(graphql.NewListType(graphql.NewNonNullType(edgeType)), "Edges"),
-			"pageInfo": &graphql.FieldDefinition{
+			"pageInfo": {
 				Type: graphql.NewNonNullType(PageInfoType),
 				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 					return ctx.Object.(*connection).ResolvePageInfo()
@@ -196,16 +196,16 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	ret := &graphql.FieldDefinition{
 		Type: connectionType,
 		Arguments: map[string]*graphql.InputValueDefinition{
-			"first": &graphql.InputValueDefinition{
+			"first": {
 				Type: graphql.IntType,
 			},
-			"last": &graphql.InputValueDefinition{
+			"last": {
 				Type: graphql.IntType,
 			},
-			"before": &graphql.InputValueDefinition{
+			"before": {
 				Type: graphql.StringType,
 			},
-			"after": &graphql.InputValueDefinition{
+			"after": {
 				Type: graphql.StringType,
 			},
 		},
@@ -413,10 +413,10 @@ type TimeBasedConnectionConfig struct {
 // be used to query a specific time range.
 func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefinition {
 	arguments := map[string]*graphql.InputValueDefinition{
-		"atOrAfterTime": &graphql.InputValueDefinition{
+		"atOrAfterTime": {
 			Type: DateTimeType,
 		},
-		"beforeTime": &graphql.InputValueDefinition{
+		"beforeTime": {
 			Type: DateTimeType,
 		},
 	}

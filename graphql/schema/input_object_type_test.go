@@ -12,10 +12,10 @@ import (
 func TestInputObjectType_Coercion(t *testing.T) {
 	inputType := &InputObjectType{
 		Fields: map[string]*InputValueDefinition{
-			"a": &InputValueDefinition{
+			"a": {
 				Type: StringType,
 			},
-			"b": &InputValueDefinition{
+			"b": {
 				Type: NewNonNullType(IntType),
 			},
 		},

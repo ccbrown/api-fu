@@ -18,7 +18,7 @@ func TestMarshalValue(t *testing.T) {
 		"InputObject": {
 			Type: &schema.InputObjectType{
 				Fields: map[string]*schema.InputValueDefinition{
-					"foo": &schema.InputValueDefinition{
+					"foo": {
 						Type: schema.IntType,
 					},
 				},
@@ -40,8 +40,8 @@ func TestMarshalValue(t *testing.T) {
 			Type: &schema.EnumType{
 				Name: "FooBarEnum",
 				Values: map[string]*schema.EnumValueDefinition{
-					"FOO": &schema.EnumValueDefinition{Value: 1},
-					"BAR": &schema.EnumValueDefinition{Value: 2},
+					"FOO": {Value: 1},
+					"BAR": {Value: 2},
 				},
 			},
 			Value:    1,

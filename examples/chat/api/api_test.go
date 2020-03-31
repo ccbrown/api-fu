@@ -33,6 +33,7 @@ func (api *API) execGraphQL(t *testing.T, query string, variables map[string]int
 		Query:     query,
 		Variables: variables,
 	})
+	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
 	r, err := http.NewRequest("POST", "http://example.com/graphql", bytes.NewReader(body))

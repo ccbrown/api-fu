@@ -18,16 +18,16 @@ var NamedTypes = map[string]schema.NamedType{
 }
 
 var MetaFields = map[string]*schema.FieldDefinition{
-	"__schema": &schema.FieldDefinition{
+	"__schema": {
 		Type: schema.NewNonNullType(SchemaType),
 		Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 			return ctx.Schema, nil
 		},
 	},
-	"__type": &schema.FieldDefinition{
+	"__type": {
 		Type: TypeType,
 		Arguments: map[string]*schema.InputValueDefinition{
-			"name": &schema.InputValueDefinition{
+			"name": {
 				Type: schema.NewNonNullType(schema.StringType),
 			},
 		},
@@ -63,7 +63,7 @@ type directive struct {
 var SchemaType = &schema.ObjectType{
 	Name: "__Schema",
 	Fields: map[string]*schema.FieldDefinition{
-		"types": &schema.FieldDefinition{
+		"types": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(TypeType))),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				namedTypes := ctx.Schema.NamedTypes()
@@ -76,25 +76,25 @@ var SchemaType = &schema.ObjectType{
 				return ret, nil
 			},
 		},
-		"queryType": &schema.FieldDefinition{
+		"queryType": {
 			Type: schema.NewNonNullType(TypeType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Schema.QueryType(), nil
 			},
 		},
-		"mutationType": &schema.FieldDefinition{
+		"mutationType": {
 			Type: TypeType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Schema.MutationType(), nil
 			},
 		},
-		"subscriptionType": &schema.FieldDefinition{
+		"subscriptionType": {
 			Type: TypeType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Schema.SubscriptionType(), nil
 			},
 		},
-		"directives": &schema.FieldDefinition{
+		"directives": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(DirectiveType))),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				directives := ctx.Schema.Directives()
@@ -129,28 +129,28 @@ const (
 var TypeKindType = &schema.EnumType{
 	Name: "__TypeKind",
 	Values: map[string]*schema.EnumValueDefinition{
-		"SCALAR": &schema.EnumValueDefinition{
+		"SCALAR": {
 			Value: typeKindScalar,
 		},
-		"OBJECT": &schema.EnumValueDefinition{
+		"OBJECT": {
 			Value: typeKindObject,
 		},
-		"INTERFACE": &schema.EnumValueDefinition{
+		"INTERFACE": {
 			Value: typeKindInterface,
 		},
-		"UNION": &schema.EnumValueDefinition{
+		"UNION": {
 			Value: typeKindUnion,
 		},
-		"ENUM": &schema.EnumValueDefinition{
+		"ENUM": {
 			Value: typeKindEnum,
 		},
-		"INPUT_OBJECT": &schema.EnumValueDefinition{
+		"INPUT_OBJECT": {
 			Value: typeKindInputObject,
 		},
-		"LIST": &schema.EnumValueDefinition{
+		"LIST": {
 			Value: typeKindList,
 		},
-		"NON_NULL": &schema.EnumValueDefinition{
+		"NON_NULL": {
 			Value: typeKindNonNull,
 		},
 	},
@@ -162,7 +162,7 @@ var TypeType = &schema.ObjectType{
 
 func init() {
 	TypeType.Fields = map[string]*schema.FieldDefinition{
-		"kind": &schema.FieldDefinition{
+		"kind": {
 			Type: schema.NewNonNullType(TypeKindType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				switch t := ctx.Object.(type) {
@@ -187,7 +187,7 @@ func init() {
 				}
 			},
 		},
-		"name": &schema.FieldDefinition{
+		"name": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				if t, ok := ctx.Object.(schema.NamedType); ok {
@@ -196,7 +196,7 @@ func init() {
 				return nil, nil
 			},
 		},
-		"description": &schema.FieldDefinition{
+		"description": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				description := ""
@@ -217,10 +217,10 @@ func init() {
 				return nullableString(description)
 			},
 		},
-		"fields": &schema.FieldDefinition{
+		"fields": {
 			Type: schema.NewListType(schema.NewNonNullType(FieldType)),
 			Arguments: map[string]*schema.InputValueDefinition{
-				"includeDeprecated": &schema.InputValueDefinition{
+				"includeDeprecated": {
 					Type:         schema.BooleanType,
 					DefaultValue: false,
 				},
@@ -248,7 +248,7 @@ func init() {
 				return ret, nil
 			},
 		},
-		"interfaces": &schema.FieldDefinition{
+		"interfaces": {
 			Type: schema.NewListType(schema.NewNonNullType(TypeType)),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				if t, ok := ctx.Object.(*schema.ObjectType); ok {
@@ -257,7 +257,7 @@ func init() {
 				return nil, nil
 			},
 		},
-		"possibleTypes": &schema.FieldDefinition{
+		"possibleTypes": {
 			Type: schema.NewListType(schema.NewNonNullType(TypeType)),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				switch t := ctx.Object.(type) {
@@ -270,10 +270,10 @@ func init() {
 				}
 			},
 		},
-		"enumValues": &schema.FieldDefinition{
+		"enumValues": {
 			Type: schema.NewListType(schema.NewNonNullType(EnumValueType)),
 			Arguments: map[string]*schema.InputValueDefinition{
-				"includeDeprecated": &schema.InputValueDefinition{
+				"includeDeprecated": {
 					Type:         schema.BooleanType,
 					DefaultValue: false,
 				},
@@ -295,7 +295,7 @@ func init() {
 				return nil, nil
 			},
 		},
-		"inputFields": &schema.FieldDefinition{
+		"inputFields": {
 			Type: schema.NewListType(schema.NewNonNullType(InputValueType)),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				if t, ok := ctx.Object.(*schema.InputObjectType); ok {
@@ -304,7 +304,7 @@ func init() {
 				return nil, nil
 			},
 		},
-		"ofType": &schema.FieldDefinition{
+		"ofType": {
 			Type: TypeType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				switch t := ctx.Object.(type) {
@@ -323,58 +323,58 @@ func init() {
 var DirectiveLocationType = &schema.EnumType{
 	Name: "__DirectiveLocation",
 	Values: map[string]*schema.EnumValueDefinition{
-		"QUERY": &schema.EnumValueDefinition{
+		"QUERY": {
 			Value: schema.DirectiveLocationQuery,
 		},
-		"MUTATION": &schema.EnumValueDefinition{
+		"MUTATION": {
 			Value: schema.DirectiveLocationMutation,
 		},
-		"SUBSCRIPTION": &schema.EnumValueDefinition{
+		"SUBSCRIPTION": {
 			Value: schema.DirectiveLocationSubscription,
 		},
-		"FIELD": &schema.EnumValueDefinition{
+		"FIELD": {
 			Value: schema.DirectiveLocationField,
 		},
-		"FRAGMENT_DEFINITION": &schema.EnumValueDefinition{
+		"FRAGMENT_DEFINITION": {
 			Value: schema.DirectiveLocationFragmentDefinition,
 		},
-		"FRAGMENT_SPREAD": &schema.EnumValueDefinition{
+		"FRAGMENT_SPREAD": {
 			Value: schema.DirectiveLocationFragmentSpread,
 		},
-		"INLINE_FRAGMENT": &schema.EnumValueDefinition{
+		"INLINE_FRAGMENT": {
 			Value: schema.DirectiveLocationInlineFragment,
 		},
-		"SCHEMA": &schema.EnumValueDefinition{
+		"SCHEMA": {
 			Value: schema.DirectiveLocationSchema,
 		},
-		"SCALAR": &schema.EnumValueDefinition{
+		"SCALAR": {
 			Value: schema.DirectiveLocationScalar,
 		},
-		"OBJECT": &schema.EnumValueDefinition{
+		"OBJECT": {
 			Value: schema.DirectiveLocationObject,
 		},
-		"FIELD_DEFINITION": &schema.EnumValueDefinition{
+		"FIELD_DEFINITION": {
 			Value: schema.DirectiveLocationFieldDefinition,
 		},
-		"ARGUMENT_DEFINITION": &schema.EnumValueDefinition{
+		"ARGUMENT_DEFINITION": {
 			Value: schema.DirectiveLocationArgumentDefinition,
 		},
-		"INTERFACE": &schema.EnumValueDefinition{
+		"INTERFACE": {
 			Value: schema.DirectiveLocationInterface,
 		},
-		"UNION": &schema.EnumValueDefinition{
+		"UNION": {
 			Value: schema.DirectiveLocationUnion,
 		},
-		"ENUM": &schema.EnumValueDefinition{
+		"ENUM": {
 			Value: schema.DirectiveLocationEnum,
 		},
-		"ENUM_VALUE": &schema.EnumValueDefinition{
+		"ENUM_VALUE": {
 			Value: schema.DirectiveLocationEnumValue,
 		},
-		"INPUT_OBJECT": &schema.EnumValueDefinition{
+		"INPUT_OBJECT": {
 			Value: schema.DirectiveLocationInputObject,
 		},
-		"INPUT_FIELD_DEFINITION": &schema.EnumValueDefinition{
+		"INPUT_FIELD_DEFINITION": {
 			Value: schema.DirectiveLocationInputFieldDefinition,
 		},
 	},
@@ -383,25 +383,25 @@ var DirectiveLocationType = &schema.EnumType{
 var DirectiveType = &schema.ObjectType{
 	Name: "__Directive",
 	Fields: map[string]*schema.FieldDefinition{
-		"name": &schema.FieldDefinition{
+		"name": {
 			Type: schema.NewNonNullType(schema.StringType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(directive).Name, nil
 			},
 		},
-		"description": &schema.FieldDefinition{
+		"description": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(directive).Definition.Description)
 			},
 		},
-		"locations": &schema.FieldDefinition{
+		"locations": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(DirectiveLocationType))),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(directive).Definition.Locations, nil
 			},
 		},
-		"args": &schema.FieldDefinition{
+		"args": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(InputValueType))),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return inputValues(ctx.Object.(directive).Definition.Arguments)
@@ -418,37 +418,37 @@ type field struct {
 var FieldType = &schema.ObjectType{
 	Name: "__Field",
 	Fields: map[string]*schema.FieldDefinition{
-		"name": &schema.FieldDefinition{
+		"name": {
 			Type: schema.NewNonNullType(schema.StringType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(field).Name, nil
 			},
 		},
-		"description": &schema.FieldDefinition{
+		"description": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(field).Definition.Description)
 			},
 		},
-		"args": &schema.FieldDefinition{
+		"args": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(InputValueType))),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return inputValues(ctx.Object.(field).Definition.Arguments)
 			},
 		},
-		"type": &schema.FieldDefinition{
+		"type": {
 			Type: schema.NewNonNullType(TypeType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(field).Definition.Type, nil
 			},
 		},
-		"isDeprecated": &schema.FieldDefinition{
+		"isDeprecated": {
 			Type: schema.NewNonNullType(schema.BooleanType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(field).Definition.DeprecationReason != "", nil
 			},
 		},
-		"deprecationReason": &schema.FieldDefinition{
+		"deprecationReason": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(field).Definition.DeprecationReason)
@@ -465,25 +465,25 @@ type enumValue struct {
 var EnumValueType = &schema.ObjectType{
 	Name: "__EnumValue",
 	Fields: map[string]*schema.FieldDefinition{
-		"name": &schema.FieldDefinition{
+		"name": {
 			Type: schema.NewNonNullType(schema.StringType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(enumValue).Name, nil
 			},
 		},
-		"description": &schema.FieldDefinition{
+		"description": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(enumValue).Definition.Description)
 			},
 		},
-		"isDeprecated": &schema.FieldDefinition{
+		"isDeprecated": {
 			Type: schema.NewNonNullType(schema.BooleanType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(enumValue).Definition.DeprecationReason != "", nil
 			},
 		},
-		"deprecationReason": &schema.FieldDefinition{
+		"deprecationReason": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(enumValue).Definition.DeprecationReason)
@@ -500,25 +500,25 @@ type inputValue struct {
 var InputValueType = &schema.ObjectType{
 	Name: "__InputValue",
 	Fields: map[string]*schema.FieldDefinition{
-		"name": &schema.FieldDefinition{
+		"name": {
 			Type: schema.NewNonNullType(schema.StringType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(inputValue).Name, nil
 			},
 		},
-		"description": &schema.FieldDefinition{
+		"description": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(inputValue).Definition.Description)
 			},
 		},
-		"type": &schema.FieldDefinition{
+		"type": {
 			Type: schema.NewNonNullType(TypeType),
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(inputValue).Definition.Type, nil
 			},
 		},
-		"defaultValue": &schema.FieldDefinition{
+		"defaultValue": {
 			Type: schema.StringType,
 			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
 				def := ctx.Object.(inputValue).Definition

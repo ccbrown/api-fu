@@ -15,7 +15,7 @@ func TestSchema(t *testing.T) {
 		Query: &ObjectType{
 			Name: "Query",
 			Fields: map[string]*FieldDefinition{
-				"foo": &FieldDefinition{
+				"foo": {
 					Type: IntType,
 				},
 			},
@@ -49,20 +49,20 @@ func TestCoercion(t *testing.T) {
 			Type: &InputObjectType{
 				Name: "InputObject",
 				Fields: map[string]*InputValueDefinition{
-					"string": &InputValueDefinition{
+					"string": {
 						Type:         StringType,
 						DefaultValue: "default",
 					},
-					"stringList": &InputValueDefinition{
+					"stringList": {
 						Type: NewListType(StringType),
 					},
-					"nonNullInt": &InputValueDefinition{
+					"nonNullInt": {
 						Type: NewNonNullType(IntType),
 					},
-					"enum": &InputValueDefinition{
+					"enum": {
 						Type: &EnumType{
 							Values: map[string]*EnumValueDefinition{
-								"FOO": &EnumValueDefinition{
+								"FOO": {
 									Value: "foo",
 								},
 							},
@@ -80,7 +80,7 @@ func TestCoercion(t *testing.T) {
 			Type: &InputObjectType{
 				Name: "InputObject",
 				Fields: map[string]*InputValueDefinition{
-					"string": &InputValueDefinition{
+					"string": {
 						Type:         StringType,
 						DefaultValue: "default",
 					},
@@ -96,7 +96,7 @@ func TestCoercion(t *testing.T) {
 			Type: &InputObjectType{
 				Name: "InputObject",
 				Fields: map[string]*InputValueDefinition{
-					"string": &InputValueDefinition{
+					"string": {
 						Type:         StringType,
 						DefaultValue: Null,
 					},
@@ -114,7 +114,7 @@ func TestCoercion(t *testing.T) {
 			Type: &InputObjectType{
 				Name: "InputObject",
 				Fields: map[string]*InputValueDefinition{
-					"string": &InputValueDefinition{
+					"string": {
 						Type: StringType,
 					},
 				},

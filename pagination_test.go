@@ -35,7 +35,7 @@ func TestConnection(t *testing.T) {
 			return strconv.Itoa(edge.(int))
 		},
 		EdgeFields: map[string]*graphql.FieldDefinition{
-			"node": &graphql.FieldDefinition{
+			"node": {
 				Type: graphql.IntType,
 				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil
@@ -142,7 +142,7 @@ func TestConnection_ZeroArg_WithoutPageInfo(t *testing.T) {
 			return strconv.Itoa(edge.(int))
 		},
 		EdgeFields: map[string]*graphql.FieldDefinition{
-			"node": &graphql.FieldDefinition{
+			"node": {
 				Type: graphql.IntType,
 				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil
@@ -199,7 +199,7 @@ func TestConnection_ZeroArg_WithPageInfo(t *testing.T) {
 			return strconv.Itoa(edge.(int))
 		},
 		EdgeFields: map[string]*graphql.FieldDefinition{
-			"node": &graphql.FieldDefinition{
+			"node": {
 				Type: graphql.IntType,
 				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil

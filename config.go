@@ -39,7 +39,7 @@ func (cfg *Config) init() {
 		cfg.nodeInterface = &graphql.InterfaceType{
 			Name: "Node",
 			Fields: map[string]*graphql.FieldDefinition{
-				"id": &graphql.FieldDefinition{
+				"id": {
 					Type: graphql.NewNonNullType(graphql.IDType),
 				},
 			},
@@ -51,10 +51,10 @@ func (cfg *Config) init() {
 		cfg.query = &graphql.ObjectType{
 			Name: "Query",
 			Fields: map[string]*graphql.FieldDefinition{
-				"node": &graphql.FieldDefinition{
+				"node": {
 					Type: cfg.nodeInterface,
 					Arguments: map[string]*graphql.InputValueDefinition{
-						"id": &graphql.InputValueDefinition{
+						"id": {
 							Type: graphql.NewNonNullType(graphql.IDType),
 						},
 					},
@@ -63,11 +63,11 @@ func (cfg *Config) init() {
 						return ctxAPI(ctx.Context).resolveNodeByGlobalId(ctx.Context, ctx.Arguments["id"].(string))
 					},
 				},
-				"nodes": &graphql.FieldDefinition{
+				"nodes": {
 					Type:        graphql.NewListType(cfg.nodeInterface),
 					Description: "Gets nodes for multiple ids. Non-existent nodes are not returned and the order of the returned nodes is arbitrary, so clients should check their ids.",
 					Arguments: map[string]*graphql.InputValueDefinition{
-						"ids": &graphql.InputValueDefinition{
+						"ids": {
 							Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(graphql.IDType))),
 						},
 					},

@@ -235,7 +235,7 @@ var BuiltInTypes = map[string]*ScalarType{
 var SkipDirective = &DirectiveDefinition{
 	Description: "The @skip directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional exclusion during execution as described by the if argument.",
 	Arguments: map[string]*InputValueDefinition{
-		"if": &InputValueDefinition{
+		"if": {
 			Type: NewNonNullType(BooleanType),
 		},
 	},
@@ -248,7 +248,7 @@ var SkipDirective = &DirectiveDefinition{
 var IncludeDirective = &DirectiveDefinition{
 	Description: "The @include directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional inclusion during execution as described by the if argument.",
 	Arguments: map[string]*InputValueDefinition{
-		"if": &InputValueDefinition{
+		"if": {
 			Type: NewNonNullType(BooleanType),
 		},
 	},
