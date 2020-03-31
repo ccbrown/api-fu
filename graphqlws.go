@@ -124,6 +124,11 @@ func (api *API) ServeGraphQLWS(w http.ResponseWriter, r *http.Request) {
 	connection := &graphqlws.Connection{
 		Logger: api.logger,
 	}
+
+	api.graphqlWSConnectionsMutex.Lock()
+	api.graphqlWSConnections[connection] = struct{}{}
+	api.graphqlWSConnectionsMutex.Unlock()
+
 	connection.Handler = &graphqlWSHandler{
 		API:        api,
 		Connection: connection,

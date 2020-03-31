@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 )
 
+// MessageType represents a GraphQL-WS message type.
 type MessageType string
 
+// MessageType represents a GraphQL-WS message type.
 const (
 	MessageTypeConnectionInit      MessageType = "connection_init"
 	MessageTypeConnectionKeepAlive MessageType = "ka"
@@ -18,6 +20,7 @@ const (
 	MessageTypeError               MessageType = "error"
 )
 
+// Message represents a GraphQL-WS message. This can be used for both client and server messages.
 type Message struct {
 	Id      string          `json:"id,omitempty"`
 	Type    MessageType     `json:"type"`

@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Connection represents a server-side GraphQL-WS connection.
 type Connection struct {
 	Logger  logrus.FieldLogger
 	Handler ConnectionHandler
@@ -26,7 +27,7 @@ type Connection struct {
 	finishClosingOnce sync.Once
 }
 
-// ConnectionHandle methods may be invoked on a separate goroutine, but invocations will never be
+// ConnectionHandler methods may be invoked on a separate goroutine, but invocations will never be
 // made concurrently.
 type ConnectionHandler interface {
 	// Called when the client wants to start an operation. If the operation is a query or mutation,
@@ -45,6 +46,7 @@ type ConnectionHandler interface {
 
 const connectionSendBufferSize = 100
 
+// Serve takes ownership of the given connection and begins reading / writing to it.
 func (c *Connection) Serve(conn *websocket.Conn) {
 	c.conn = conn
 	c.readLoopDone = make(chan struct{})
@@ -55,6 +57,7 @@ func (c *Connection) Serve(conn *websocket.Conn) {
 	go c.writeLoop()
 }
 
+// SendData sends the given GraphQL response to the client.
 func (c *Connection) SendData(id string, response *graphql.Response) error {
 	buf, err := jsoniter.Marshal(response)
 	if err != nil {
@@ -67,6 +70,8 @@ func (c *Connection) SendData(id string, response *graphql.Response) error {
 	})
 }
 
+// SendComplete sends the "complete" message to the client. This should be done after queries are
+// executed or subscriptions are stopped.
 func (c *Connection) SendComplete(id string) error {
 	return c.sendMessage(&Message{
 		Id:   id,
