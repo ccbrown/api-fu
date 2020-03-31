@@ -20,7 +20,7 @@ jobs:
         go build .
     - name: Test
       run: |
-        ./go.test.sh
+        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
         go vet
     - name: Upload Coverage
       uses: codecov/codecov-action@v1
