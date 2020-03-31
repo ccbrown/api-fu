@@ -1,4 +1,4 @@
-# api-fu ![GitHub Actions](https://github.com/ccbrown/api-fu/workflows/Build/badge.svg) [![Go Report Card](https://goreportcard.com/badge/github.com/ccbrown/api-fu)](https://goreportcard.com/report/github.com/ccbrown/api-fu) [![Documentation](https://godoc.org/github.com/ccbrown/api-fu?status.svg)](https://godoc.org/github.com/ccbrown/api-fu)
+# api-fu ![GitHub Actions](https://github.com/ccbrown/api-fu/workflows/Build/badge.svg) [![Go Report Card](https://goreportcard.com/badge/github.com/ccbrown/api-fu)](https://goreportcard.com/report/github.com/ccbrown/api-fu) [![codecov](https://codecov.io/gh/ccbrown/api-fu/branch/master/graph/badge.svg)](https://codecov.io/gh/ccbrown/api-fu) [![Documentation](https://godoc.org/github.com/ccbrown/api-fu?status.svg)](https://godoc.org/github.com/ccbrown/api-fu)
 
 **api-fu** (noun)
   1. (informal) Mastery of APIs. 💪
