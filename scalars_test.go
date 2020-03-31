@@ -16,7 +16,7 @@ func TestDateTimeType(t *testing.T) {
 }
 
 func TestLongIntType(t *testing.T) {
-	assert.Equal(t, 9007199254740991, LongIntType.LiteralCoercion(&ast.IntValue{
+	assert.Equal(t, int64(9007199254740991), LongIntType.LiteralCoercion(&ast.IntValue{
 		Value: "9007199254740991",
 	}))
 
@@ -24,7 +24,33 @@ func TestLongIntType(t *testing.T) {
 		Value: "9007199254740992",
 	}))
 
-	assert.Equal(t, -9007199254740991, LongIntType.LiteralCoercion(&ast.IntValue{
+	assert.Equal(t, int64(-9007199254740991), LongIntType.LiteralCoercion(&ast.IntValue{
 		Value: "-9007199254740991",
 	}))
+}
+
+func TestCoerceLongInt(t *testing.T) {
+	for _, tc := range []struct {
+		Value    interface{}
+		Expected int64
+	}{
+		{Value: true, Expected: 1},
+		{Value: false, Expected: 0},
+		{Value: int8(1), Expected: 1},
+		{Value: uint8(1), Expected: 1},
+		{Value: int16(1), Expected: 1},
+		{Value: uint16(1), Expected: 1},
+		{Value: int32(1), Expected: 1},
+		{Value: uint32(1), Expected: 1},
+		{Value: int64(1), Expected: 1},
+		{Value: uint64(1), Expected: 1},
+		{Value: int(1), Expected: 1},
+		{Value: uint(1), Expected: 1},
+		{Value: float32(1.0), Expected: 1},
+		{Value: float64(1.0), Expected: 1},
+	} {
+		assert.Equal(t, tc.Expected, coerceLongInt(tc.Value))
+	}
+
+	assert.Nil(t, coerceLongInt("foo"))
 }
