@@ -1,9 +1,9 @@
 package main
 
 import (
+	"io/ioutil"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -12,5 +12,7 @@ func TestGenerate(t *testing.T) {
 	require.NoError(t, err)
 
 	_, errs := Generate(schema, "test", []string{"testdata/github.go"}, "gql")
-	assert.Empty(t, errs)
+	require.Empty(t, errs)
+
+	Run(ioutil.Discard, "--pkg", "test", "-i", "testdata/github.go", "--schema", "testdata/github-schema.json")
 }

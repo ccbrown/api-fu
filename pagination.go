@@ -14,6 +14,8 @@ import (
 	"github.com/ccbrown/api-fu/graphql"
 )
 
+// ConnectionConfig defines the configuration for a connection that adheres to the GraphQL Cursor
+// Connections Specification.
 type ConnectionConfig struct {
 	// A prefix to use for the connection and edge type names. For example, if you provide
 	// "Example", the connection type will be named "ExampleConnection" and the edge type will be
@@ -113,6 +115,7 @@ func (cfg *ConnectionConfig) applyCursorsToEdges(allEdges []interface{}, before,
 	return
 }
 
+// PageInfo represents the page info of a GraphQL Cursor Connection.
 type PageInfo struct {
 	HasPreviousPage bool
 	HasNextPage     bool
@@ -120,6 +123,7 @@ type PageInfo struct {
 	EndCursor       string
 }
 
+// PageInfoType implements the GraphQL type for the page info of a GraphQL Cursor Connection.
 var PageInfoType = &graphql.ObjectType{
 	Name: "PageInfo",
 	Fields: map[string]*graphql.FieldDefinition{
@@ -141,16 +145,18 @@ type connection struct {
 	ResolvePageInfo   func() (interface{}, error)
 }
 
+// Connection is used to create a connection field that adheres to the GraphQL Cursor Connections
+// Specification.
 func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	edgeFields := map[string]*graphql.FieldDefinition{
 		"cursor": {
 			Type: graphql.NewNonNullType(graphql.StringType),
 			Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-				if s, err := serializeCursor(ctx.Object.(edge).Cursor); err != nil {
+				s, err := serializeCursor(ctx.Object.(edge).Cursor)
+				if err != nil {
 					return nil, errors.Wrap(err, "error serializing cursor")
-				} else {
-					return s, nil
 				}
+				return s, nil
 			},
 		},
 	}
@@ -274,9 +280,8 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 							return conn.(*connection).ResolvePageInfo()
 						},
 					}, nil
-				} else {
-					edgeSlice, cursorLess, err = config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
 				}
+				edgeSlice, cursorLess, err = config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
 			}
 			if !isNil(err) {
 				return nil, err
@@ -363,11 +368,13 @@ func completeConnection(config *ConnectionConfig, ctx *graphql.FieldContext, bef
 	}, nil
 }
 
+// TimeBasedCursor represents the data embedded in cursors for time-based connections.
 type TimeBasedCursor struct {
 	Nano int64
 	Id   string
 }
 
+// NewTimeBasedCursor constructs a TimeBasedCursor.
 func NewTimeBasedCursor(t time.Time, id string) TimeBasedCursor {
 	return TimeBasedCursor{
 		Nano: t.UnixNano(),
@@ -380,6 +387,8 @@ func timeBasedCursorLess(a, b interface{}) bool {
 	return ac.Nano < bc.Nano || (ac.Nano == bc.Nano && strings.Compare(ac.Id, bc.Id) < 0)
 }
 
+// TimeBasedConnectionConfig defines the configuration for a time-based connection that adheres to
+// the GraphQL Cursor Connections Specification.
 type TimeBasedConnectionConfig struct {
 	// An optional description for the connection.
 	Description string
@@ -408,9 +417,9 @@ type TimeBasedConnectionConfig struct {
 	ResolveTotalCount func(ctx *graphql.FieldContext) (interface{}, error)
 }
 
-// Creates a new connection for edges sorted by time. In addition to the standard first, last,
-// after, and before fields, the connection will have atOrAfterTime and beforeTime fields, which can
-// be used to query a specific time range.
+// TimeBasedConnection creates a new connection for edges sorted by time. In addition to the
+// standard first, last, after, and before fields, the connection will have atOrAfterTime and
+// beforeTime fields, which can be used to query a specific time range.
 func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefinition {
 	arguments := map[string]*graphql.InputValueDefinition{
 		"atOrAfterTime": {
@@ -479,13 +488,13 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 
 			var edges []interface{}
 			for _, q := range queries {
-				if queryEdges, err := config.EdgeGetter(ctx, q.Min, q.Max, q.Limit); err != nil {
+				queryEdges, err := config.EdgeGetter(ctx, q.Min, q.Max, q.Limit)
+				if err != nil {
 					return nil, nil, err
-				} else {
-					v := reflect.ValueOf(queryEdges)
-					for i := 0; i < v.Len(); i++ {
-						edges = append(edges, v.Index(i).Interface())
-					}
+				}
+				v := reflect.ValueOf(queryEdges)
+				for i := 0; i < v.Len(); i++ {
+					edges = append(edges, v.Index(i).Interface())
 				}
 			}
 
