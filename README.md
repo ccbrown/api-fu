@@ -107,7 +107,7 @@ For example, the `apifu` package provides date-time and long (but JavaScript saf
 
 ### 📡 Implements handlers for HTTP and the [Apollo graphql-ws protocol](https://github.com/apollographql/subscriptions-transport-ws).
 
-Once you've build your API, all you have to do is:
+Once you've built your API, all you have to do is:
 
 ```go
 fu.ServeGraphQL(w, r)
