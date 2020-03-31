@@ -20,6 +20,27 @@ func TestInputObjectType_Coercion(t *testing.T) {
 			},
 		},
 	}
+
+	for name, tc := range map[string]struct {
+		Value    interface{}
+		Expected interface{}
+	}{
+		"MissingField":    {map[string]interface{}{"a": ""}, nil},
+		"WrongType":       {map[string]interface{}{"a": "", "b": ""}, nil},
+		"UnknownField":    {map[string]interface{}{"foo": "", "b": 1}, nil},
+		"InvalidVariable": {1, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			coerced, err := inputType.CoerceVariableValue(tc.Value)
+			if tc.Expected != nil {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.Expected, coerced)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+
 	for name, tc := range map[string]struct {
 		Literal        string
 		VariableValues map[string]interface{}
