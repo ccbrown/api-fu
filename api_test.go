@@ -147,22 +147,74 @@ func TestNodes(t *testing.T) {
 	api, err := NewAPI(&testCfg)
 	require.NoError(t, err)
 
-	resp := executeGraphQL(t, api, `{
-		nodes(ids: ["a", "b", "c", "d"]) {
-			id
+	t.Run("Single", func(t *testing.T) {
+		resp := executeGraphQL(t, api, `{
+			a: node(id: "a") {
+				id
+			}
+			c: node(id: "c") {
+				id
+			}
+		}`)
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var result struct {
+			Data struct {
+				A *node
+				C *node
+			}
+			Errors []struct{}
 		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+		assert.Empty(t, result.Errors)
+
+		assert.NotNil(t, result.Data.A)
+		assert.Nil(t, result.Data.C)
+	})
+
+	t.Run("Multiple", func(t *testing.T) {
+		resp := executeGraphQL(t, api, `{
+			nodes(ids: ["a", "b", "c", "d"]) {
+				id
+			}
+		}`)
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var result struct {
+			Data struct {
+				Nodes []node
+			}
+			Errors []struct{}
+		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+		assert.Empty(t, result.Errors)
+
+		assert.ElementsMatch(t, []node{{Id: "a"}, {Id: "b"}}, result.Data.Nodes)
+	})
+}
+
+func TestMutation(t *testing.T) {
+	var testCfg Config
+
+	testCfg.AddMutation("mut", &graphql.FieldDefinition{
+		Type: graphql.BooleanType,
+		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			return true, nil
+		},
+	})
+
+	api, err := NewAPI(&testCfg)
+	require.NoError(t, err)
+
+	resp := executeGraphQL(t, api, `mutation {
+		mut
 	}`)
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result struct {
-		Data struct {
-			Nodes []node
-		}
-		Errors []struct{}
-	}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	assert.Empty(t, result.Errors)
-
-	assert.ElementsMatch(t, []node{{Id: "a"}, {Id: "b"}}, result.Data.Nodes)
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"data":{"mut":true}}`, string(body))
 }

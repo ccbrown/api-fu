@@ -377,7 +377,7 @@ func LoadSchema(path string) (*schema.Schema, error) {
 	return schema.New(def)
 }
 
-func Run(w io.Writer, args ...string) {
+func Run(w io.Writer, args ...string) []error {
 	flags := pflag.NewFlagSet(os.Args[0], pflag.ExitOnError)
 
 	pkg := flags.String("pkg", "", "the package name of the generated output")
@@ -387,32 +387,32 @@ func Run(w io.Writer, args ...string) {
 	flags.Parse(args)
 
 	if *pkg == "" {
-		fmt.Fprintln(os.Stderr, "the --pkg flag is required")
-		os.Exit(1)
+		return []error{fmt.Errorf("the --pkg flag is required")}
 	}
 
 	if *schemaPath == "" {
-		fmt.Fprintln(os.Stderr, "the --schema flag is required")
-		os.Exit(1)
+		return []error{fmt.Errorf("the --schema flag is required")}
 	}
 
 	schema, err := LoadSchema(*schemaPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error loading schema: "+err.Error())
-		os.Exit(1)
+		return []error{fmt.Errorf("error loading schema: %w", err)}
 	}
 
 	output, errs := Generate(schema, *pkg, *input, *wrapper)
 	if len(errs) > 0 {
+		return errs
+	}
+
+	fmt.Fprint(w, output)
+	return nil
+}
+
+func main() {
+	if errs := Run(os.Stdout, os.Args[1:]...); len(errs) > 0 {
 		for _, err := range errs {
 			fmt.Fprintln(os.Stderr, err.Error())
 		}
 		os.Exit(1)
 	}
-
-	fmt.Fprint(w, output)
-}
-
-func main() {
-	Run(os.Stdout, os.Args[1:]...)
 }
