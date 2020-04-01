@@ -11,7 +11,7 @@
 
 ## Usage
 
-API-fu builds GraphQL API in code. To begin, you need a config that at least defines functions for serializing and deserializing node ids:
+API-fu builds GraphQL APIs with code. To begin, you need a config that at least defines functions for serializing and deserializing node ids:
 
 ```go
 var fuCfg = apifu.Config{
