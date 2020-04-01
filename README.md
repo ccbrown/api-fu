@@ -11,39 +11,15 @@
 
 ## Usage
 
-API-fu builds GraphQL APIs with code. To begin, you need a config that at least defines functions for serializing and deserializing node ids:
+API-fu builds GraphQL APIs with code. To begin, you need a config that at least defines a query field:
 
-```go
-var fuCfg = apifu.Config{
-    SerializeNodeId: func(typeId int, id interface{}) string {
-        buf := make([]byte, binary.MaxVarintLen64)
-        n := binary.PutVarint(buf, int64(typeId))
-        return base64.RawURLEncoding.EncodeToString(append(buf[:n], id.(model.Id)...))
-    },
-    DeserializeNodeId: func(id string) (int, interface{}) {
-        if buf, err := base64.RawURLEncoding.DecodeString(id); err == nil {
-            if typeId, n := binary.Varint(buf); n > 0 {
-                return int(typeId), model.Id(buf[n:])
-            }
-        }
-        return 0, nil
-    },
-}
 ```
+var fuCfg apifu.Config
 
-You also need at least one node type:
-
-```go
-var userType = fuCfg.AddNodeType(&apifu.NodeType{
-    Id:    1,
-    Name:  "User",
-    Model: reflect.TypeOf(model.User{}),
-    GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
-        return ctxSession(ctx).GetUsersByIds(ids.([]model.Id)...)
-    },
-    Fields: map[string]*graphql.FieldDefinition{
-        "id":     apifu.OwnID("Id"),
-        "handle": apifu.NonNull(graphql.StringType, "Handle"),
+fuCfg.AddQueryField("foo", &graphql.FieldDefinition{
+    Type: graphql.StringType,
+    Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+        return "bar", nil
     },
 })
 ```
@@ -63,7 +39,7 @@ And serve it:
 fu.ServeGraphQL(w, r)
 ```
 
-See the examples directory for more complete example code.
+API-fu also has first-class support for common patterns such as nodes that are queryable using global ids. See the examples directory for more complete example code.
 
 ## Features
 
