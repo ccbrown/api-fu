@@ -13,7 +13,7 @@
 
 API-fu builds GraphQL APIs with code. To begin, you need a config that at least defines a query field:
 
-```
+```go
 var fuCfg apifu.Config
 
 fuCfg.AddQueryField("foo", &graphql.FieldDefinition{
