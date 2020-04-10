@@ -6,7 +6,7 @@ import (
 	"reflect"
 
 	"github.com/ccbrown/api-fu/graphql/ast"
-	"github.com/ccbrown/api-fu/graphql/executor/internal/promise"
+	"github.com/ccbrown/api-fu/graphql/executor/internal/future"
 	"github.com/ccbrown/api-fu/graphql/schema"
 	"github.com/ccbrown/api-fu/graphql/schema/introspection"
 )
@@ -187,41 +187,34 @@ func (e *executor) executeSubscriptionEvent(initialValue interface{}) (*OrderedM
 	return nil, nil
 }
 
-func (e *executor) wait(p *promise.Promise) (interface{}, error) {
-	var resultOut interface{}
-	var errOut error
+func (e *executor) wait(f future.Future) (interface{}, error) {
+	var result future.Result
 	done := false
-	p = p.Then(func(result interface{}) interface{} {
-		resultOut = result
+	f = f.Map(func(r future.Result) future.Result {
+		result = r
 		done = true
-		return nil
-	}).Catch(func(err error) interface{} {
-		errOut = err
-		done = true
-		return nil
+		return r
 	})
-	p.Schedule()
+	f.Poll()
 	for !done {
 		if e.IdleHandler == nil {
 			return nil, newError(nil, "No idle handler defined.")
 		}
 		e.IdleHandler()
-		if !p.Schedule() {
-			return nil, newError(nil, "No progress was made after idle handler was invoked.")
-		}
+		f.Poll()
 	}
-	return resultOut, errOut
+	return result.Value, result.Error
 }
 
-// executeSelections returns a promise for an *OrderedMap
-func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path *path, forceSerial bool) *promise.Promise {
+// executeSelections returns a future for an *OrderedMap
+func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path *path, forceSerial bool) future.Future {
 	groupedFieldSet := NewOrderedMapWithCapacity(len(selections))
 	e.collectFields(objectType, selections, nil, groupedFieldSet)
 
 	// re-use groupedFieldSet to maintain the correct order and avoid additional allocations
 	resultMap := groupedFieldSet
 
-	var promises []*promise.Promise
+	var futures []future.Future
 
 	for _, kv := range groupedFieldSet.Items() {
 		responseKey := kv.Key
@@ -239,16 +232,16 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 
 		if fieldDef != nil {
-			p := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, path.WithComponent(responseKey)))
+			f := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, path.WithComponent(responseKey)))
 			if forceSerial {
-				responseValue, err := e.wait(p)
+				responseValue, err := e.wait(f)
 				if err != nil {
-					return promise.Reject(err)
+					return future.Err(err)
 				}
 				resultMap.Set(responseKey, responseValue)
 			} else {
 				responseKey := responseKey
-				promises = append(promises, p.Then(func(responseValue interface{}) interface{} {
+				futures = append(futures, f.MapOk(func(responseValue interface{}) interface{} {
 					resultMap.Set(responseKey, responseValue)
 					return nil
 				}))
@@ -256,7 +249,7 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 	}
 
-	return promise.All(promises).Then(func(interface{}) interface{} {
+	return future.Join(futures...).MapOk(func(interface{}) interface{} {
 		return resultMap
 	})
 }
@@ -283,11 +276,11 @@ func newFieldResolveError(fields []*ast.Field, err error, path *path) *Error {
 	}
 }
 
-func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path *path) *promise.Promise {
+func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path *path) future.Future {
 	field := fields[0]
 	argumentValues, coercionErr := coerceArgumentValues(field, fieldDef.Arguments, field.Arguments, e.VariableValues)
 	if coercionErr != nil {
-		return promise.Reject(coercionErr)
+		return future.Err(coercionErr)
 	}
 	resolvedValue, err := fieldDef.Resolve(&schema.FieldContext{
 		Context:   e.Context,
@@ -296,75 +289,82 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 		Arguments: argumentValues,
 	})
 	if !isNil(err) {
-		return promise.Reject(newFieldResolveError(fields, err, path))
+		return future.Err(newFieldResolveError(fields, err, path))
 	}
-	if p, ok := resolvedValue.(ResolvePromise); ok {
-		return promise.New(func(resolve func(interface{}), reject func(error)) {
+	if f, ok := resolvedValue.(ResolvePromise); ok {
+		return future.New(func() (future.Result, bool) {
+			var result future.Result
 			select {
-			case r := <-p:
+			case r := <-f:
 				if !isNil(r.Error) {
-					reject(r.Error)
+					result.Error = r.Error
 				} else {
-					resolve(r.Value)
+					result.Value = r.Value
 				}
+				return result, true
 			default:
+				return result, false
 			}
-		}).Then(func(resolvedValue interface{}) interface{} {
-			return e.completeValue(fieldDef.Type, fields, resolvedValue, path)
-		}).Catch(func(err error) interface{} {
-			return promise.Reject(newFieldResolveError(fields, err, path))
+		}).Then(func(r future.Result) future.Future {
+			if r.IsOk() {
+				return e.completeValue(fieldDef.Type, fields, r.Value, path)
+			}
+			return future.Err(newFieldResolveError(fields, err, path))
 		})
 	}
 	return e.completeValue(fieldDef.Type, fields, resolvedValue, path)
 }
 
-func (e *executor) catchErrorIfNullable(t schema.Type, p *promise.Promise) *promise.Promise {
-	return p.Catch(func(err error) interface{} {
-		if schema.IsNonNullType(t) {
-			return promise.Reject(err)
+func (e *executor) catchErrorIfNullable(t schema.Type, f future.Future) future.Future {
+	return f.Map(func(r future.Result) future.Result {
+		if r.IsErr() {
+			if schema.IsNonNullType(t) {
+				return r
+			}
+			e.Errors = append(e.Errors, r.Error.(*Error))
+			r.Error = nil
 		}
-		e.Errors = append(e.Errors, err.(*Error))
-		return nil
+		return r
 	})
 }
 
-func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path *path) *promise.Promise {
+func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path *path) future.Future {
 	if nonNullType, ok := fieldType.(*schema.NonNullType); ok {
-		return e.completeValue(nonNullType.Type, fields, result, path).Then(func(result interface{}) interface{} {
-			if result == nil {
-				return promise.Reject(newErrorWithPath(fields[0], path, "Null result for non-null field."))
+		return e.completeValue(nonNullType.Type, fields, result, path).Map(func(r future.Result) future.Result {
+			if r.IsOk() && r.Value == nil {
+				r.Error = newErrorWithPath(fields[0], path, "Null result for non-null field.")
 			}
-			return result
+			return r
 		})
 	}
 
 	if isNil(result) {
-		return promise.Resolve(nil)
+		return future.Ok(nil)
 	}
 
 	switch fieldType := fieldType.(type) {
 	case *schema.ListType:
 		result := reflect.ValueOf(result)
 		if result.Kind() != reflect.Slice {
-			return promise.Reject(newErrorWithPath(fields[0], path, "Result is not a list."))
+			return future.Err(newErrorWithPath(fields[0], path, "Result is not a list."))
 		}
 		innerType := fieldType.Type
-		completedResult := make([]interface{}, result.Len())
+		completedResult := make([]future.Future, result.Len())
 		for i := range completedResult {
 			completedResult[i] = e.catchErrorIfNullable(innerType, e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithComponent(i)))
 		}
-		return promise.All(completedResult)
+		return future.Join(completedResult...)
 	case *schema.ScalarType:
 		if coerced, err := fieldType.CoerceResult(result); err != nil {
-			return promise.Reject(newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
+			return future.Err(newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
 		} else {
-			return promise.Resolve(coerced)
+			return future.Ok(coerced)
 		}
 	case *schema.EnumType:
 		if coerced, err := fieldType.CoerceResult(result); err != nil {
-			return promise.Reject(newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
+			return future.Err(newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
 		} else {
-			return promise.Resolve(coerced)
+			return future.Ok(coerced)
 		}
 	case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		var objectType *schema.ObjectType
@@ -387,7 +387,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 			}
 		}
 		if objectType == nil {
-			return promise.Reject(newErrorWithPath(fields[0], path, "Unable to determine object type."))
+			return future.Err(newErrorWithPath(fields[0], path, "Unable to determine object type."))
 		}
 		return e.executeSelections(mergeSelectionSets(fields), objectType, result, path, false)
 	}
