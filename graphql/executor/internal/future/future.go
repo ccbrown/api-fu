@@ -4,19 +4,24 @@ import (
 	"reflect"
 )
 
+// Result holds either a value or an error.
 type Result struct {
 	Value interface{}
 	Error error
 }
 
+// IsOk returns true if the result is not an error.
 func (r Result) IsOk() bool {
 	return r.Error == nil || reflect.ValueOf(r.Error).IsNil()
 }
 
+// IsErr returns true if the result is an error.
 func (r Result) IsErr() bool {
 	return !r.IsOk()
 }
 
+// Future represents a result that will be available at some point in the future. It is very similar
+// to Rust's Future trait.
 type Future struct {
 	result Result
 	poll   func() (Result, bool)
@@ -57,7 +62,7 @@ func (f Future) Map(fn func(Result) Result) Future {
 	return f
 }
 
-// Map converts a future's value to a different type using a conversion function.
+// MapOk converts a future's value to a different type using a conversion function.
 func (f Future) MapOk(fn func(interface{}) interface{}) Future {
 	return f.Map(func(r Result) Result {
 		if r.IsOk() {
@@ -111,7 +116,7 @@ func Ready(r Result) Future {
 	}
 }
 
-// Ready returns a new future that is immediately ready with the given value.
+// Ok returns a new future that is immediately ready with the given value.
 func Ok(v interface{}) Future {
 	return Future{
 		result: Result{
@@ -120,7 +125,7 @@ func Ok(v interface{}) Future {
 	}
 }
 
-// Ready returns a new future that is immediately ready with the given error.
+// Err returns a new future that is immediately ready with the given error.
 func Err(err error) Future {
 	return Future{
 		result: Result{
