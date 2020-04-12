@@ -406,6 +406,9 @@ func mergeSelectionSets(fields []*ast.Field) []ast.Selection {
 }
 
 func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast.Selection) *GroupedFieldSet {
+	// collectFields can be called many times with the same inputs throughout a query's execution,
+	// so we memoize the return value.
+
 	cacheKey := objectType.Name
 	for _, sel := range selections {
 		pos := sel.Position()
