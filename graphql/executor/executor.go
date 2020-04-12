@@ -63,14 +63,20 @@ func Subscribe(ctx context.Context, r *Request) (interface{}, *Error) {
 }
 
 type executor struct {
-	Context              context.Context
-	Schema               *schema.Schema
-	FragmentDefinitions  map[string]*ast.FragmentDefinition
-	VariableValues       map[string]interface{}
-	Errors               []*Error
-	Operation            *ast.OperationDefinition
-	IdleHandler          func()
+	Context             context.Context
+	Schema              *schema.Schema
+	FragmentDefinitions map[string]*ast.FragmentDefinition
+	VariableValues      map[string]interface{}
+	Errors              []*Error
+	Operation           *ast.OperationDefinition
+	IdleHandler         func()
+
+	// GroupedFieldSetCache is used to cache the results of collectFields.
 	GroupedFieldSetCache map[string]*GroupedFieldSet
+
+	// CatchError is used to handle errors for nullable fields. The closure is generated on
+	// construction to avoid allocations during execution.
+	CatchError func(future.Result) future.Result
 }
 
 func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
@@ -91,6 +97,13 @@ func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 		Operation:            operation,
 		IdleHandler:          r.IdleHandler,
 		GroupedFieldSetCache: map[string]*GroupedFieldSet{},
+	}
+	e.CatchError = func(r future.Result) future.Result {
+		if r.IsErr() {
+			e.Errors = append(e.Errors, r.Error.(*Error))
+			r.Error = nil
+		}
+		return r
 	}
 	for _, def := range r.Document.Definitions {
 		if def, ok := def.(*ast.FragmentDefinition); ok {
@@ -213,7 +226,7 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 
 	resultMap := NewOrderedMapWithLength(groupedFieldSet.Len())
 
-	var futures []future.Future
+	futures := make([]future.Future, 0, groupedFieldSet.Len())
 
 	for i, item := range groupedFieldSet.Items() {
 		responseKey := item.Key
@@ -231,7 +244,7 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 
 		if fieldDef != nil {
-			f := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, path.WithComponent(responseKey)))
+			f := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, path.WithStringComponent(responseKey)))
 			if forceSerial {
 				responseValue, err := e.wait(f)
 				if err != nil {
@@ -249,7 +262,7 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 	}
 
-	return future.Join(futures...).MapOk(func(interface{}) interface{} {
+	return future.After(futures...).MapOk(func(interface{}) interface{} {
 		return resultMap
 	})
 }
@@ -316,16 +329,10 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 }
 
 func (e *executor) catchErrorIfNullable(t schema.Type, f future.Future) future.Future {
-	return f.Map(func(r future.Result) future.Result {
-		if r.IsErr() {
-			if schema.IsNonNullType(t) {
-				return r
-			}
-			e.Errors = append(e.Errors, r.Error.(*Error))
-			r.Error = nil
-		}
-		return r
-	})
+	if schema.IsNonNullType(t) {
+		return f
+	}
+	return f.Map(e.CatchError)
 }
 
 func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path *path) future.Future {
@@ -351,7 +358,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		innerType := fieldType.Type
 		completedResult := make([]future.Future, result.Len())
 		for i := range completedResult {
-			completedResult[i] = e.catchErrorIfNullable(innerType, e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithComponent(i)))
+			completedResult[i] = e.catchErrorIfNullable(innerType, e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithIntComponent(i)))
 		}
 		return future.Join(completedResult...)
 	case *schema.ScalarType:
@@ -578,7 +585,7 @@ func coerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, 
 }
 
 func coerceArgumentValues(node ast.Node, argumentDefinitions map[string]*schema.InputValueDefinition, arguments []*ast.Argument, variableValues map[string]interface{}) (map[string]interface{}, *Error) {
-	coercedValues := map[string]interface{}{}
+	var coercedValues map[string]interface{}
 
 	argumentValues := map[string]ast.Value{}
 	for _, arg := range arguments {
@@ -599,10 +606,16 @@ func coerceArgumentValues(node ast.Node, argumentDefinitions map[string]*schema.
 			if defaultValue == schema.Null {
 				defaultValue = nil
 			}
+			if coercedValues == nil {
+				coercedValues = map[string]interface{}{}
+			}
 			coercedValues[argumentName] = defaultValue
 		} else if schema.IsNonNullType(argumentType) && !hasValue {
 			return nil, newError(node, "The %v argument is required.", argumentName)
 		} else if hasValue {
+			if coercedValues == nil {
+				coercedValues = map[string]interface{}{}
+			}
 			if argVariable, ok := argumentValue.(*ast.Variable); ok {
 				coercedValues[argumentName] = variableValues[argVariable.Name.Name]
 			} else if coerced, err := schema.CoerceLiteral(argumentValue, argumentType, variableValues); err != nil {

@@ -59,20 +59,21 @@ func TestPoll(t *testing.T) {
 	f = f.Map(func(r Result) Result {
 		return Result{Value: r.Value.(int) + 1}
 	})
+	f = f.MapOk(func(v interface{}) interface{} {
+		return v.(int) + 1
+	})
 	f = f.Then(func(r Result) Future {
 		return Ok(r.Value.(int) + 1)
 	})
 
 	f.Poll()
-	if f.IsReady() {
-		t.Fatalf("expected future to not be ready")
-	}
+	require.False(t, f.IsReady())
 
 	v = 1
 
 	f.Poll()
 	require.True(t, f.IsReady())
-	assert.Equal(t, 3, f.Result().Value)
+	assert.Equal(t, 4, f.Result().Value)
 }
 
 func TestJoin(t *testing.T) {
@@ -92,6 +93,9 @@ func TestJoin(t *testing.T) {
 
 		require.False(t, f.IsReady())
 
+		f.Poll()
+		require.False(t, f.IsReady())
+
 		ready = true
 		f.Poll()
 
@@ -99,8 +103,81 @@ func TestJoin(t *testing.T) {
 		assert.Equal(t, []interface{}{1, 2}, f.Result().Value)
 	})
 
+	t.Run("NotReadyError", func(t *testing.T) {
+		ready := false
+
+		f := Join(New(func() (Result, bool) {
+			return Result{Error: fmt.Errorf("foo")}, ready
+		}), Ok(2))
+
+		require.False(t, f.IsReady())
+
+		f.Poll()
+		require.False(t, f.IsReady())
+
+		ready = true
+		f.Poll()
+
+		require.True(t, f.IsReady())
+		assert.True(t, f.Result().IsErr())
+	})
+
 	t.Run("Error", func(t *testing.T) {
 		f := Join(Err(fmt.Errorf("foo")), Ok(2))
+
+		require.True(t, f.IsReady())
+		assert.True(t, f.Result().IsErr())
+	})
+}
+
+func TestAfter(t *testing.T) {
+	t.Run("Ready", func(t *testing.T) {
+		f := After(Ok(1), Ok(2))
+
+		require.True(t, f.IsReady())
+		assert.True(t, f.Result().IsOk())
+	})
+
+	t.Run("NotReady", func(t *testing.T) {
+		ready := false
+
+		f := After(New(func() (Result, bool) {
+			return Result{Value: 1}, ready
+		}), Ok(2))
+
+		require.False(t, f.IsReady())
+
+		f.Poll()
+		require.False(t, f.IsReady())
+
+		ready = true
+		f.Poll()
+
+		require.True(t, f.IsReady())
+		assert.True(t, f.Result().IsOk())
+	})
+
+	t.Run("NotReadyError", func(t *testing.T) {
+		ready := false
+
+		f := After(New(func() (Result, bool) {
+			return Result{Error: fmt.Errorf("foo")}, ready
+		}), Ok(2))
+
+		require.False(t, f.IsReady())
+
+		f.Poll()
+		require.False(t, f.IsReady())
+
+		ready = true
+		f.Poll()
+
+		require.True(t, f.IsReady())
+		assert.True(t, f.Result().IsErr())
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		f := After(Err(fmt.Errorf("foo")), Ok(2))
 
 		require.True(t, f.IsReady())
 		assert.True(t, f.Result().IsErr())
