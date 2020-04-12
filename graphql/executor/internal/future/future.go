@@ -64,12 +64,21 @@ func (f Future) Map(fn func(Result) Result) Future {
 
 // MapOk converts a future's value to a different type using a conversion function.
 func (f Future) MapOk(fn func(interface{}) interface{}) Future {
-	return f.Map(func(r Result) Result {
-		if r.IsOk() {
-			r.Value = fn(r.Value)
+	if f.IsReady() {
+		if f.result.IsOk() {
+			f.result.Value = fn(f.result.Value)
 		}
-		return r
-	})
+	} else {
+		fpoll := f.poll
+		f.poll = func() (Result, bool) {
+			r, ok := fpoll()
+			if ok && r.IsOk() {
+				r.Value = fn(r.Value)
+			}
+			return r, ok
+		}
+	}
+	return f
 }
 
 // Then invokes f when the future is resolved and returns a future that resolves when f's return
@@ -109,13 +118,6 @@ func (f *Future) Poll() {
 	}
 }
 
-// Ready returns a new future that is immediately ready with the given result.
-func Ready(r Result) Future {
-	return Future{
-		result: r,
-	}
-}
-
 // Ok returns a new future that is immediately ready with the given value.
 func Ok(v interface{}) Future {
 	return Future{
@@ -139,27 +141,40 @@ func Err(err error) Future {
 func Join(fs ...Future) Future {
 	results := make([]interface{}, len(fs))
 
-	poll := func() (Result, bool) {
-		ok := true
-		var err error
+	ok := true
 
-		for i, f := range fs {
-			f.Poll()
-			if !f.IsReady() {
-				ok = false
-				break
-			}
+	for i, f := range fs {
+		if f.IsReady() {
 			if !f.Result().IsOk() {
-				err = f.Result().Error
+				return Err(f.Result().Error)
 			} else {
 				results[i] = f.Result().Value
 			}
+		} else {
+			ok = false
 		}
+	}
 
-		if err != nil {
-			return Result{
-				Error: err,
-			}, true
+	if ok {
+		return Ok(results)
+	}
+
+	return New(func() (Result, bool) {
+		ok := true
+
+		for i, f := range fs {
+			f.Poll()
+			if f.IsReady() {
+				if !f.Result().IsOk() {
+					return Result{
+						Error: f.Result().Error,
+					}, true
+				} else {
+					results[i] = f.Result().Value
+				}
+			} else {
+				ok = false
+			}
 		}
 
 		if ok {
@@ -169,9 +184,50 @@ func Join(fs ...Future) Future {
 		}
 
 		return Result{}, false
+	})
+}
+
+// After returns a single future that resolves after all of the given futures. If any future errors,
+// the returned future immediately resolves to an error. This is very similar to Join except that
+// the resolved value will be nil (making it more efficient if you don't need the values from the
+// joined futures).
+func After(fs ...Future) Future {
+	ok := true
+
+	for _, f := range fs {
+		if f.IsReady() {
+			if !f.Result().IsOk() {
+				return Err(f.Result().Error)
+			}
+		} else {
+			ok = false
+		}
 	}
-	if r, ok := poll(); ok {
-		return Ready(r)
+
+	if ok {
+		return Ok(nil)
 	}
-	return New(poll)
+
+	return New(func() (Result, bool) {
+		ok := true
+
+		for _, f := range fs {
+			f.Poll()
+			if f.IsReady() {
+				if !f.Result().IsOk() {
+					return Result{
+						Error: f.Result().Error,
+					}, true
+				}
+			} else {
+				ok = false
+			}
+		}
+
+		if ok {
+			return Result{}, true
+		}
+
+		return Result{}, false
+	})
 }

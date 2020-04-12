@@ -124,7 +124,7 @@ var FloatType = &ScalarType{
 }
 
 func coerceString(v interface{}) interface{} {
-	switch v := v.(type) {
+	switch v.(type) {
 	case string:
 		return v
 	}
