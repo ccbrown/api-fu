@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/ccbrown/api-fu/graphql/ast"
 	"github.com/ccbrown/api-fu/graphql/executor/internal/future"
@@ -62,13 +63,14 @@ func Subscribe(ctx context.Context, r *Request) (interface{}, *Error) {
 }
 
 type executor struct {
-	Context             context.Context
-	Schema              *schema.Schema
-	FragmentDefinitions map[string]*ast.FragmentDefinition
-	VariableValues      map[string]interface{}
-	Errors              []*Error
-	Operation           *ast.OperationDefinition
-	IdleHandler         func()
+	Context              context.Context
+	Schema               *schema.Schema
+	FragmentDefinitions  map[string]*ast.FragmentDefinition
+	VariableValues       map[string]interface{}
+	Errors               []*Error
+	Operation            *ast.OperationDefinition
+	IdleHandler          func()
+	GroupedFieldSetCache map[string]*GroupedFieldSet
 }
 
 func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
@@ -82,12 +84,13 @@ func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 	}
 
 	e := &executor{
-		Context:             ctx,
-		Schema:              r.Schema,
-		FragmentDefinitions: map[string]*ast.FragmentDefinition{},
-		VariableValues:      coercedVariableValues,
-		Operation:           operation,
-		IdleHandler:         r.IdleHandler,
+		Context:              ctx,
+		Schema:               r.Schema,
+		FragmentDefinitions:  map[string]*ast.FragmentDefinition{},
+		VariableValues:       coercedVariableValues,
+		Operation:            operation,
+		IdleHandler:          r.IdleHandler,
+		GroupedFieldSetCache: map[string]*GroupedFieldSet{},
 	}
 	for _, def := range r.Document.Definitions {
 		if def, ok := def.(*ast.FragmentDefinition); ok {
@@ -131,16 +134,14 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
 		return nil, newError(e.Operation, "This schema cannot perform subscriptions.")
 	}
 
-	groupedFieldSet := NewOrderedMapWithCapacity(1)
-	e.collectFields(subscriptionType, e.Operation.SelectionSet.Selections, nil, groupedFieldSet)
+	groupedFieldSet := e.collectFields(subscriptionType, e.Operation.SelectionSet.Selections)
 
 	if groupedFieldSet.Len() != 1 {
 		return nil, newError(e.Operation.SelectionSet, "Subscriptions must contain exactly one root field selection.")
 	}
 
-	responseKey := groupedFieldSet.Items()[0].Key
-	v, _ := groupedFieldSet.Get(responseKey)
-	fields := v.([]*ast.Field)
+	item := groupedFieldSet.Items()[0]
+	fields := item.Fields
 	field := fields[0]
 	fieldName := field.Name.Name
 	fieldDef := subscriptionType.Fields[fieldName]
@@ -166,7 +167,7 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
 				Line:   field.Position().Line,
 				Column: field.Position().Column,
 			}},
-			Path:          []interface{}{responseKey},
+			Path:          []interface{}{item.Key},
 			originalError: resolveErr,
 		}
 	}
@@ -208,21 +209,19 @@ func (e *executor) wait(f future.Future) (interface{}, error) {
 
 // executeSelections returns a future for an *OrderedMap
 func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path *path, forceSerial bool) future.Future {
-	groupedFieldSet := NewOrderedMapWithCapacity(len(selections))
-	e.collectFields(objectType, selections, nil, groupedFieldSet)
+	groupedFieldSet := e.collectFields(objectType, selections)
 
-	// re-use groupedFieldSet to maintain the correct order and avoid additional allocations
-	resultMap := groupedFieldSet
+	resultMap := NewOrderedMapWithLength(groupedFieldSet.Len())
 
 	var futures []future.Future
 
-	for _, kv := range groupedFieldSet.Items() {
-		responseKey := kv.Key
-		fields := kv.Value.([]*ast.Field)
+	for i, item := range groupedFieldSet.Items() {
+		responseKey := item.Key
+		fields := item.Fields
 		fieldName := fields[0].Name.Name
 
 		if fieldName == "__typename" {
-			resultMap.Set(responseKey, objectType.Name)
+			resultMap.Set(i, responseKey, objectType.Name)
 			continue
 		}
 
@@ -238,11 +237,12 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 				if err != nil {
 					return future.Err(err)
 				}
-				resultMap.Set(responseKey, responseValue)
+				resultMap.Set(i, responseKey, responseValue)
 			} else {
+				i := i
 				responseKey := responseKey
 				futures = append(futures, f.MapOk(func(responseValue interface{}) interface{} {
-					resultMap.Set(responseKey, responseValue)
+					resultMap.Set(i, responseKey, responseValue)
 					return nil
 				}))
 			}
@@ -405,7 +405,27 @@ func mergeSelectionSets(fields []*ast.Field) []ast.Selection {
 	return selectionSet
 }
 
-func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast.Selection, visitedFragments map[string]struct{}, groupedFields *OrderedMap) {
+func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast.Selection) *GroupedFieldSet {
+	// collectFields can be called many times with the same inputs throughout a query's execution,
+	// so we memoize the return value.
+
+	cacheKey := objectType.Name
+	for _, sel := range selections {
+		pos := sel.Position()
+		cacheKey += ":" + strconv.Itoa(pos.Line) + "," + strconv.Itoa(pos.Column)
+	}
+
+	if hit, ok := e.GroupedFieldSetCache[cacheKey]; ok {
+		return hit
+	}
+
+	groupedFieldSet := NewGroupedFieldSetWithCapacity(len(selections))
+	e.collectFieldsImpl(objectType, selections, nil, groupedFieldSet)
+	e.GroupedFieldSetCache[cacheKey] = groupedFieldSet
+	return groupedFieldSet
+}
+
+func (e *executor) collectFieldsImpl(objectType *schema.ObjectType, selections []ast.Selection, visitedFragments map[string]struct{}, groupedFields *GroupedFieldSet) {
 	if visitedFragments == nil {
 		visitedFragments = map[string]struct{}{}
 	}
@@ -428,11 +448,7 @@ func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast
 			if selection.Alias != nil {
 				responseKey = selection.Alias.Name
 			}
-			if groupForResponseKey, ok := groupedFields.Get(responseKey); ok {
-				groupedFields.Set(responseKey, append(groupForResponseKey.([]*ast.Field), selection))
-			} else {
-				groupedFields.Set(responseKey, []*ast.Field{selection})
-			}
+			groupedFields.Append(responseKey, selection)
 		case *ast.FragmentSpread:
 			fragmentSpreadName := selection.FragmentName.Name
 			if _, ok := visitedFragments[fragmentSpreadName]; ok {
@@ -450,7 +466,7 @@ func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast
 				continue
 			}
 
-			e.collectFields(objectType, fragment.SelectionSet.Selections, visitedFragments, groupedFields)
+			e.collectFieldsImpl(objectType, fragment.SelectionSet.Selections, visitedFragments, groupedFields)
 		case *ast.InlineFragment:
 			if selection.TypeCondition != nil {
 				fragmentType := schemaType(selection.TypeCondition, e.Schema)
@@ -459,7 +475,7 @@ func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast
 				}
 			}
 
-			e.collectFields(objectType, selection.SelectionSet.Selections, visitedFragments, groupedFields)
+			e.collectFieldsImpl(objectType, selection.SelectionSet.Selections, visitedFragments, groupedFields)
 		default:
 			panic(fmt.Sprintf("unexpected selection type: %T", selection))
 		}

@@ -11,8 +11,10 @@ import (
 
 func TestOrderedMapEncoding(t *testing.T) {
 	m := NewOrderedMap()
-	m.Set("foo", "bar")
-	m.Set("foo2", "bar2")
+	m.Append("foo", "bar")
+	m.Append("foo2", "bar2")
+	assert.Len(t, m.Items(), 2)
+
 	buf, err := json.Marshal(m)
 	assert.NoError(t, err)
 	assert.Equal(t, `{"foo":"bar","foo2":"bar2"}`, string(buf))
@@ -21,17 +23,17 @@ func TestOrderedMapEncoding(t *testing.T) {
 func BenchmarkOrderedMapEncoding(b *testing.B) {
 	m := NewOrderedMap()
 	for i := 0; i < 2000; i++ {
-		m.Set("foo"+strconv.Itoa(i), "bar")
+		m.Append("foo"+strconv.Itoa(i), "bar")
 		m2 := NewOrderedMap()
 		for j := 0; j < 10; j++ {
-			m2.Set("foo"+strconv.Itoa(j), "bar")
+			m2.Append("foo"+strconv.Itoa(j), "bar")
 			m3 := NewOrderedMap()
 			for k := 0; k < 10; k++ {
-				m3.Set("foo"+strconv.Itoa(k), "bar")
+				m3.Append("foo"+strconv.Itoa(k), "bar")
 			}
-			m2.Set("m"+strconv.Itoa(j), m3)
+			m2.Append("m"+strconv.Itoa(j), m3)
 		}
-		m.Set("m"+strconv.Itoa(i), m2)
+		m.Append("m"+strconv.Itoa(i), m2)
 	}
 
 	b.ReportAllocs()
