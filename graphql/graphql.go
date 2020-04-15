@@ -70,14 +70,14 @@ var IncludeDirective = schema.IncludeDirective
 // SkipDirective implements the @skip directive as defined by the GraphQL spec.
 var SkipDirective = schema.SkipDirective
 
-// IDType implements the ID type as defined by the GraphQL spec.
+// IDType implements the ID type as defined by the GraphQL spec. It can be deserialized from a
+// string or an integer type, but always serializes to a string.
 var IDType = schema.IDType
 
 // StringType implements the String type as defined by the GraphQL spec.
 var StringType = schema.StringType
 
-// IDType implements the ID type as defined by the GraphQL spec. It can be deserialized from a
-// string or an integer type, but always serializes to a string.
+// IntType implements the Int type as defined by the GraphQL spec.
 var IntType = schema.IntType
 
 // FloatType implements the Float type as defined by the GraphQL spec.
@@ -155,10 +155,9 @@ func NewRequestFromHTTP(r *http.Request) (req *Request, code int, err error) {
 
 	switch r.Method {
 	case http.MethodGet:
-		if query := r.URL.Query().Get("query"); query == "" {
+		req.Query = r.URL.Query().Get("query")
+		if req.Query == "" {
 			return nil, http.StatusBadRequest, fmt.Errorf("the query parameter is required")
-		} else {
-			req.Query = query
 		}
 
 		if variables := r.URL.Query().Get("variables"); variables != "" {
