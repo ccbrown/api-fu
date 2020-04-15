@@ -5,12 +5,13 @@ coverage:
   precision: 2
   round: down
   range: "70...100"
-  patch:
-    default:
-      enabled: no
-  project:
-    default:
-      threshold: 0.2
+  status:
+    patch:
+      default:
+        enabled: no
+    project:
+      default:
+        threshold: 0.2
 
 comment:
   layout: "reach,diff,flags,tree"
