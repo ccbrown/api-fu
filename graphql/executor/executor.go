@@ -17,10 +17,10 @@ type ResolveResult struct {
 	Error error
 }
 
-// To resolve a field's value asynchronously, you may return ResolvePromise from the field's resolve
-// function. If you do, you must define an IdleHandler for the request. Any time request execution
-// is unable to proceed, the idle handler will be invoked. Before the idle handler returns, a result
-// must be sent to at least one previously returned ResolvePromise.
+// ResolvePromise can be used to resolve fields asynchronously. You may return ResolvePromise from
+// the field's resolve function. If you do, you must define an IdleHandler for the request. Any time
+// request execution is unable to proceed, the idle handler will be invoked. Before the idle handler
+// returns, a result must be sent to at least one previously returned ResolvePromise.
 type ResolvePromise chan ResolveResult
 
 type Request struct {

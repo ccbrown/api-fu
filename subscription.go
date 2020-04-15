@@ -5,6 +5,7 @@ import (
 	"reflect"
 )
 
+// SubscriptionSourceStream defines the source stream for a subscription.
 type SubscriptionSourceStream struct {
 	// A channel of events. The channel can be of any type.
 	EventChannel interface{}
@@ -14,7 +15,7 @@ type SubscriptionSourceStream struct {
 	Stop func()
 }
 
-// Drives the stream until it's closed or until the given context is cancelled.
+// Run drives the stream until it's closed or until the given context is cancelled.
 func (s *SubscriptionSourceStream) Run(ctx context.Context, onEvent func(interface{})) error {
 	eventChannel := reflect.ValueOf(s.EventChannel)
 	ctxChannel := reflect.ValueOf(ctx.Done())

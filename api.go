@@ -33,6 +33,7 @@ func normalizeModelType(t reflect.Type) reflect.Type {
 	return t
 }
 
+// NewAPI validates your schema and builds an API ready to serve requests.
 func NewAPI(cfg *Config) (*API, error) {
 	schema, err := cfg.graphqlSchema()
 	if err != nil {
@@ -182,6 +183,8 @@ func Batch(f func([]*graphql.FieldContext) []graphql.ResolveResult) func(*graphq
 	}
 }
 
+// ServeGraphQL serves GraphQL HTTP requests. Requests may be GET requests using query string
+// parameters or POST requests with either the application/json or application/graphql content type.
 func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(r.Context(), apiContextKey, api)
 	apiRequest := &apiRequest{}

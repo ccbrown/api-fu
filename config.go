@@ -98,6 +98,7 @@ func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
 	})
 }
 
+// NodeObjectType returns the object type for a node type previously added via AddNodeType.
 func (cfg *Config) NodeObjectType(name string) *graphql.ObjectType {
 	return cfg.nodeObjectTypesByName[name]
 }
@@ -157,6 +158,8 @@ func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
 	cfg.mutation.Fields[name] = def
 }
 
+// AddSubscription adds a subscription operation to your schema.
+//
 // When a subscription is started, your resolver will be invoked with ctx.IsSubscribe set to true.
 // When this happens, you should return a pointer to a SubscriptionSourceStream (or an error). For
 // example:
