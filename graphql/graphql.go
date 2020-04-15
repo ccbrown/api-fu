@@ -76,7 +76,8 @@ var IDType = schema.IDType
 // StringType implements the String type as defined by the GraphQL spec.
 var StringType = schema.StringType
 
-// IntType implements the Int type as defined by the GraphQL spec.
+// IDType implements the ID type as defined by the GraphQL spec. It can be deserialized from a
+// string or an integer type, but always serializes to a string.
 var IntType = schema.IntType
 
 // FloatType implements the Float type as defined by the GraphQL spec.

@@ -40,7 +40,7 @@ func (f Future) IsReady() bool {
 	return f.poll == nil
 }
 
-// Value returns the future's value if it is ready.
+// Result returns the future's result if it is ready.
 func (f Future) Result() Result {
 	return f.result
 }
@@ -86,25 +86,24 @@ func (f Future) MapOk(fn func(interface{}) interface{}) Future {
 func (f Future) Then(fn func(Result) Future) Future {
 	if f.IsReady() {
 		return fn(f.result)
-	} else {
-		var then Future
-		var hasThen bool
-		fpoll := f.poll
-		f.poll = func() (Result, bool) {
-			if !hasThen {
-				if r, ok := fpoll(); ok {
-					then = fn(r)
-					hasThen = true
-				}
-			}
-			if hasThen {
-				then.Poll()
-				return then.result, then.IsReady()
-			}
-			return Result{}, false
-		}
-		return f
 	}
+	var then Future
+	var hasThen bool
+	fpoll := f.poll
+	f.poll = func() (Result, bool) {
+		if !hasThen {
+			if r, ok := fpoll(); ok {
+				then = fn(r)
+				hasThen = true
+			}
+		}
+		if hasThen {
+			then.Poll()
+			return then.result, then.IsReady()
+		}
+		return Result{}, false
+	}
+	return f
 }
 
 // Poll invokes pollers for the future and its dependencies, allowing futures to transition to
@@ -147,9 +146,8 @@ func Join(fs ...Future) Future {
 		if f.IsReady() {
 			if !f.Result().IsOk() {
 				return Err(f.Result().Error)
-			} else {
-				results[i] = f.Result().Value
 			}
+			results[i] = f.Result().Value
 		} else {
 			ok = false
 		}
@@ -169,9 +167,8 @@ func Join(fs ...Future) Future {
 					return Result{
 						Error: f.Result().Error,
 					}, true
-				} else {
-					results[i] = f.Result().Value
 				}
+				results[i] = f.Result().Value
 			} else {
 				ok = false
 			}

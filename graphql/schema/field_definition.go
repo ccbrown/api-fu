@@ -6,18 +6,20 @@ import (
 	"strings"
 )
 
+// FieldContext contains important context passed to resolver implementations.
 type FieldContext struct {
 	Context   context.Context
 	Schema    *Schema
 	Object    interface{}
 	Arguments map[string]interface{}
 
-	// True if this is a subscription field being invoked for a subscribe operation. Subselections
-	// of this field will not be executed, and the return value will be returned immediately to the
-	// caller of Subscribe.
+	// IsSubscribe is true if this is a subscription field being invoked for a subscribe operation.
+	// Subselections of this field will not be executed, and the return value will be returned
+	// immediately to the caller of Subscribe.
 	IsSubscribe bool
 }
 
+// FieldDefinition defines an object's field.
 type FieldDefinition struct {
 	Description       string
 	Arguments         map[string]*InputValueDefinition

@@ -9,6 +9,7 @@ import (
 	"github.com/ccbrown/api-fu/examples/chat/model"
 )
 
+// Store implements the persistence layer of our application.
 type Store struct {
 	Backend keyvaluestore.Backend
 }

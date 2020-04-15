@@ -5,6 +5,9 @@ import (
 	"reflect"
 )
 
+// Inspect traverses the types referenced by the schema, invoking f for each one. If f returns true,
+// Inspect will recursively inspect the types referenced by the given node. For many schemas,
+// this means f must be able to break cycles to prevent Inspect from running infinitely.
 func Inspect(node interface{}, f func(interface{}) bool) {
 	if node == nil || reflect.ValueOf(node).IsNil() || !f(node) {
 		return

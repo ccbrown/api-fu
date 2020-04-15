@@ -5,6 +5,8 @@ import (
 	"reflect"
 )
 
+// Inspect traverses the given AST, invoking f for each node. If f returns true, Inspect will
+// recursively inspect the nodes referenced by the given node.
 func Inspect(node Node, f func(Node) bool) {
 	if node == nil || reflect.ValueOf(node).IsNil() || !f(node) {
 		return

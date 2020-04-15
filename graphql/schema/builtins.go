@@ -54,6 +54,7 @@ func coerceInt(v interface{}) interface{} {
 	return nil
 }
 
+// IntType implements the Int type as defined by the GraphQL spec.
 var IntType = &ScalarType{
 	Name: "Int",
 	LiteralCoercion: func(v ast.Value) interface{} {
@@ -104,6 +105,7 @@ func coerceFloat(v interface{}) interface{} {
 	return nil
 }
 
+// FloatType implements the Float type as defined by the GraphQL spec.
 var FloatType = &ScalarType{
 	Name: "Float",
 	LiteralCoercion: func(v ast.Value) interface{} {
@@ -131,6 +133,7 @@ func coerceString(v interface{}) interface{} {
 	return nil
 }
 
+// StringType implements the String type as defined by the GraphQL spec.
 var StringType = &ScalarType{
 	Name: "String",
 	LiteralCoercion: func(v ast.Value) interface{} {
@@ -152,6 +155,7 @@ func coerceBoolean(v interface{}) interface{} {
 	return nil
 }
 
+// BooleanType implements the Boolean type as defined by the GraphQL spec.
 var BooleanType = &ScalarType{
 	Name: "Boolean",
 	LiteralCoercion: func(v ast.Value) interface{} {
@@ -165,6 +169,8 @@ var BooleanType = &ScalarType{
 	ResultCoercion:        coerceBoolean,
 }
 
+// IDType implements the ID type as defined by the GraphQL spec. It can be deserialized from a
+// string or an integer type, but always serializes to a string.
 var IDType = &ScalarType{
 	Name: "ID",
 	LiteralCoercion: func(v ast.Value) interface{} {
@@ -224,6 +230,7 @@ var IDType = &ScalarType{
 	},
 }
 
+// BuiltInTypes maps all of the built-in types to their names.
 var BuiltInTypes = map[string]*ScalarType{
 	"Int":     IntType,
 	"Float":   FloatType,
@@ -232,6 +239,7 @@ var BuiltInTypes = map[string]*ScalarType{
 	"ID":      IDType,
 }
 
+// SkipDirective implements the @skip directive as defined by the GraphQL spec.
 var SkipDirective = &DirectiveDefinition{
 	Description: "The @skip directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional exclusion during execution as described by the if argument.",
 	Arguments: map[string]*InputValueDefinition{
@@ -245,6 +253,7 @@ var SkipDirective = &DirectiveDefinition{
 	},
 }
 
+// IncludeDirective implements the @include directive as defined by the GraphQL spec.
 var IncludeDirective = &DirectiveDefinition{
 	Description: "The @include directive may be provided for fields, fragment spreads, and inline fragments, and allows for conditional inclusion during execution as described by the if argument.",
 	Arguments: map[string]*InputValueDefinition{

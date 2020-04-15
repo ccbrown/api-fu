@@ -36,17 +36,16 @@ func (d *UnionType) TypeName() string {
 func (d *UnionType) shallowValidate() error {
 	if len(d.MemberTypes) == 0 {
 		return fmt.Errorf("%v must have at least one member type", d.Name)
-	} else {
-		objNames := map[string]struct{}{}
-		for _, member := range d.MemberTypes {
-			if _, ok := objNames[member.Name]; ok {
-				return fmt.Errorf("union member types must be unique")
-			}
-			if member.IsTypeOf == nil {
-				return fmt.Errorf("union member types must define IsTypeOf")
-			}
-			objNames[member.Name] = struct{}{}
+	}
+	objNames := map[string]struct{}{}
+	for _, member := range d.MemberTypes {
+		if _, ok := objNames[member.Name]; ok {
+			return fmt.Errorf("union member types must be unique")
 		}
+		if member.IsTypeOf == nil {
+			return fmt.Errorf("union member types must define IsTypeOf")
+		}
+		objNames[member.Name] = struct{}{}
 	}
 	return nil
 }

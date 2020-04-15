@@ -6,11 +6,13 @@ import (
 	"github.com/ccbrown/api-fu/graphql/ast"
 )
 
+// Location represents the location of a character within a query's source text.
 type Location struct {
 	Line   int
 	Column int
 }
 
+// Error represents an execution error.
 type Error struct {
 	// Executor error messages are formatted as sentences, e.g. "An error occurred."
 	Message string
