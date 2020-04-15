@@ -30,16 +30,16 @@ func (s *SubscriptionSourceStream) Run(ctx context.Context, onEvent func(interfa
 		},
 	}
 	for {
-		if chosen, recv, recvOK := reflect.Select(selectCases); chosen == 0 {
+		chosen, recv, recvOK := reflect.Select(selectCases)
+		if chosen == 0 {
 			// ctx.Done()
 			return ctx.Err()
+		}
+		// s.EventChannel
+		if recvOK {
+			onEvent(recv.Interface())
 		} else {
-			// s.EventChannel
-			if recvOK {
-				onEvent(recv.Interface())
-			} else {
-				return nil
-			}
+			return nil
 		}
 	}
 }
