@@ -2,6 +2,7 @@ package schema
 
 import "fmt"
 
+// InputValueDefinition defines an input value such as an argument.
 type InputValueDefinition struct {
 	Description string
 	Type        Type
@@ -14,7 +15,7 @@ type InputValueDefinition struct {
 
 type explicitNull struct{}
 
-// Used to specify an explicit "null" default for input values.
+// Null is to specify an explicit "null" default for input values.
 var Null = (*explicitNull)(nil)
 
 func (d *InputValueDefinition) shallowValidate() error {

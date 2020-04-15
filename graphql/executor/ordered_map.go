@@ -23,7 +23,7 @@ func NewOrderedMap() *OrderedMap {
 	return &OrderedMap{}
 }
 
-// NewOrderedMapWithCapacity creates a new ordered map with n elements pre-allocated and
+// NewOrderedMapWithLength creates a new ordered map with n elements pre-allocated and
 // zero-initialized.
 func NewOrderedMapWithLength(n int) *OrderedMap {
 	return &OrderedMap{
@@ -58,6 +58,7 @@ func (m *OrderedMap) Items() []OrderedMapItem {
 	return m.items
 }
 
+// MarshalJSON marshals the map to JSON, maintaining the correct key order.
 func (m *OrderedMap) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(m)
 }

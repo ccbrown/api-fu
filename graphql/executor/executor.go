@@ -12,6 +12,8 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema/introspection"
 )
 
+// ResolveResult represents the result of a field resolver. This type is generally used with
+// ResolvePromise to pass around asynchronous results.
 type ResolveResult struct {
 	Value interface{}
 	Error error
@@ -23,6 +25,7 @@ type ResolveResult struct {
 // returns, a result must be sent to at least one previously returned ResolvePromise.
 type ResolvePromise chan ResolveResult
 
+// Request defines all of the inputs required to execute a GraphQL query.
 type Request struct {
 	Document       *ast.Document
 	Schema         *schema.Schema
@@ -32,6 +35,7 @@ type Request struct {
 	IdleHandler    func()
 }
 
+// ExecuteRequest executes a request.
 func ExecuteRequest(ctx context.Context, r *Request) (*OrderedMap, []*Error) {
 	if e, err := newExecutor(ctx, r); err != nil {
 		return nil, []*Error{err}
@@ -362,17 +366,17 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		}
 		return future.Join(completedResult...)
 	case *schema.ScalarType:
-		if coerced, err := fieldType.CoerceResult(result); err != nil {
+		coerced, err := fieldType.CoerceResult(result)
+		if err != nil {
 			return future.Err(newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
-		} else {
-			return future.Ok(coerced)
 		}
+		return future.Ok(coerced)
 	case *schema.EnumType:
-		if coerced, err := fieldType.CoerceResult(result); err != nil {
+		coerced, err := fieldType.CoerceResult(result)
+		if err != nil {
 			return future.Err(newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
-		} else {
-			return future.Ok(coerced)
 		}
+		return future.Ok(coerced)
 	case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		var objectType *schema.ObjectType
 		switch fieldType := fieldType.(type) {
@@ -565,20 +569,20 @@ func coerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, 
 		value, hasValue := variableValues[variableName]
 
 		if !hasValue && def.DefaultValue != nil {
-			if coerced, err := schema.CoerceLiteral(def.DefaultValue, variableType, variableValues); err != nil {
+			coerced, err := schema.CoerceLiteral(def.DefaultValue, variableType, variableValues)
+			if err != nil {
 				return nil, newError(def.DefaultValue, "Invalid default value for $%v: %v", variableName, err.Error())
-			} else {
-				coercedValues[variableName] = coerced
 			}
+			coercedValues[variableName] = coerced
 			continue
 		} else if schema.IsNonNullType(variableType) && !hasValue {
 			return nil, newError(def.Variable, "The %v variable is required.", variableName)
 		} else if hasValue {
-			if coerced, err := schema.CoerceVariableValue(value, variableType); err != nil {
+			coerced, err := schema.CoerceVariableValue(value, variableType)
+			if err != nil {
 				return nil, newError(def.Variable, "Invalid $%v value: %v", variableName, err.Error())
-			} else {
-				coercedValues[variableName] = coerced
 			}
+			coercedValues[variableName] = coerced
 		}
 	}
 	return coercedValues, nil
