@@ -14,6 +14,7 @@ func fieldValue(object interface{}, name string) interface{} {
 	return v.FieldByName(name).Interface()
 }
 
+// OwnID returns a field that resolves to an ID for the current Object.
 func OwnID(fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(graphql.IDType),
@@ -26,6 +27,7 @@ func OwnID(fieldName string) *graphql.FieldDefinition {
 	}
 }
 
+// NonNullNodeID returns a field that resolves to an ID for an object of the given type.
 func NonNullNodeID(modelType reflect.Type, fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(graphql.IDType),
@@ -38,8 +40,8 @@ func NonNullNodeID(modelType reflect.Type, fieldName string) *graphql.FieldDefin
 	}
 }
 
-// Returns a field that resolves to a string if the field's value is non-empty. Otherwise, the field
-// resolves to nil.
+// NonEmptyString returns a field that resolves to a string if the field's value is non-empty.
+// Otherwise, the field resolves to nil.
 func NonEmptyString(fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.StringType,
@@ -52,6 +54,7 @@ func NonEmptyString(fieldName string) *graphql.FieldDefinition {
 	}
 }
 
+// NonNull returns a non-null field that resolves to the given type.
 func NonNull(t graphql.Type, fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(t),
@@ -61,7 +64,9 @@ func NonNull(t graphql.Type, fieldName string) *graphql.FieldDefinition {
 	}
 }
 
-func Node(nodeType *graphql.ObjectType, fieldName string) *graphql.FieldDefinition {
+// Node returns a field that resolves to the node of the given type, whose id is the value of the
+// specified field.
+func Node(nodeType *graphql.ObjectType, idFieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: nodeType,
 		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
@@ -70,7 +75,7 @@ func Node(nodeType *graphql.ObjectType, fieldName string) *graphql.FieldDefiniti
 			if !ok {
 				return nil, nil
 			}
-			return api.resolveNodeById(ctx.Context, nodeType, fieldValue(ctx.Object, fieldName))
+			return api.resolveNodeById(ctx.Context, nodeType, fieldValue(ctx.Object, idFieldName))
 		},
 	}
 }
