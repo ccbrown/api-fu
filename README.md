@@ -47,6 +47,18 @@ API-fu also has first-class support for common patterns such as nodes that are q
 
 This includes null literals, error extensions, subscriptions, and directives.
 
+### 🚅 Fast!
+
+The graphql package is over twice as fast and several times more memory efficient than its inspiration ([graphql-go/graphql](https://github.com/graphql-go/graphql)).
+
+```
+pkg: github.com/ccbrown/api-fu/graphql/benchmarks
+BenchmarkAPIFu
+BenchmarkAPIFu-16        	     765	   1553517 ns/op	  890575 B/op	   22587 allocs/op
+BenchmarkGraphQLGo
+BenchmarkGraphQLGo-16    	     315	   3753681 ns/op	 3990220 B/op	   45952 allocs/op
+```
+
 ### ⚡️ Supports efficient batching and concurrency without the use of goroutines.
 
 The `graphql` package supports virtually any batching or concurrency pattern using low level primitives.
