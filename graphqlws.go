@@ -21,7 +21,9 @@ type graphqlWSHandler struct {
 
 func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[string]interface{}, operationName string) {
 	ctx := context.WithValue(h.Context, apiContextKey, h.API)
-	ctx = context.WithValue(ctx, apiRequestContextKey, &apiRequest{})
+
+	apiRequest := &apiRequest{}
+	ctx = context.WithValue(ctx, apiRequestContextKey, apiRequest)
 
 	var resp *graphql.Response
 	if doc, errs := graphql.ParseAndValidate(query, h.API.schema); len(errs) > 0 {
@@ -34,6 +36,7 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 			Document:       doc,
 			Query:          query,
 			Schema:         h.API.schema,
+			IdleHandler:    apiRequest.IdleHandler,
 			OperationName:  operationName,
 			VariableValues: variables,
 		}
