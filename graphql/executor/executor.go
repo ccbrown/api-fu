@@ -326,7 +326,7 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 			if r.IsOk() {
 				return e.completeValue(fieldDef.Type, fields, r.Value, path)
 			}
-			return future.Err(newFieldResolveError(fields, err, path))
+			return future.Err(newFieldResolveError(fields, r.Error, path))
 		})
 	}
 	return e.completeValue(fieldDef.Type, fields, resolvedValue, path)
