@@ -215,6 +215,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				Type: graphql.StringType,
 			},
 		},
+		Description: config.Description,
 		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 			if first, ok := ctx.Arguments["first"].(int); ok {
 				if first < 0 {
