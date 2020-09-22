@@ -245,49 +245,49 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				}
 			}
 
-			var edgeSlice interface{}
-			var cursorLess func(a, b interface{}) bool
-			var err error
-			if config.ResolveAllEdges != nil {
-				edgeSlice, cursorLess, err = config.ResolveAllEdges(ctx)
+			var limit int
+			if first, ok := ctx.Arguments["first"].(int); ok {
+				limit = first + 1
 			} else {
-				var limit int
-				if first, ok := ctx.Arguments["first"].(int); ok {
-					limit = first + 1
-				} else {
-					limit = -(ctx.Arguments["last"].(int) + 1)
-				}
-				if limit == 1 || limit == -1 {
-					// no edges. don't do anything unless pageInfo is requested
-					return &connection{
-						ResolveTotalCount: func() (interface{}, error) {
-							return config.ResolveTotalCount(ctx)
-						},
-						Edges: []edge{},
-						ResolvePageInfo: func() (interface{}, error) {
-							edgeSlice, cursorLess, err = config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
-							if !isNil(err) {
-								return nil, err
-							}
-							conn, err := completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
-							if !isNil(err) {
-								return nil, err
-							}
-							if promise, ok := conn.(graphql.ResolvePromise); ok {
-								return chain(ctx.Context, promise, func(conn interface{}) (interface{}, error) {
-									return conn.(*connection).ResolvePageInfo()
-								}), nil
-							}
-							return conn.(*connection).ResolvePageInfo()
-						},
-					}, nil
-				}
-				edgeSlice, cursorLess, err = config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
+				limit = -(ctx.Arguments["last"].(int) + 1)
 			}
+			resolve := func() (interface{}, func(a, b interface{}) bool, error) {
+				return config.ResolveAllEdges(ctx)
+			}
+			if config.ResolveAllEdges == nil {
+				resolve = func() (interface{}, func(a, b interface{}) bool, error) {
+					return config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
+				}
+			}
+			if limit == 1 || limit == -1 {
+				// no edges. don't do anything unless pageInfo is requested
+				return &connection{
+					ResolveTotalCount: func() (interface{}, error) {
+						return config.ResolveTotalCount(ctx)
+					},
+					Edges: []edge{},
+					ResolvePageInfo: func() (interface{}, error) {
+						edgeSlice, cursorLess, err := resolve()
+						if !isNil(err) {
+							return nil, err
+						}
+						conn, err := completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
+						if !isNil(err) {
+							return nil, err
+						}
+						if promise, ok := conn.(graphql.ResolvePromise); ok {
+							return chain(ctx.Context, promise, func(conn interface{}) (interface{}, error) {
+								return conn.(*connection).ResolvePageInfo()
+							}), nil
+						}
+						return conn.(*connection).ResolvePageInfo()
+					},
+				}, nil
+			}
+			edgeSlice, cursorLess, err := config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
 			if !isNil(err) {
 				return nil, err
 			}
-
 			return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
 		},
 	}
