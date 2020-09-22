@@ -284,7 +284,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 					},
 				}, nil
 			}
-			edgeSlice, cursorLess, err := config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
+			edgeSlice, cursorLess, err := resolve()
 			if !isNil(err) {
 				return nil, err
 			}
