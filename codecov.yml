@@ -11,7 +11,7 @@ coverage:
         enabled: no
     project:
       default:
-        threshold: 0.3
+        threshold: 0.6
 
 comment:
   layout: "reach,diff,flags,tree"
