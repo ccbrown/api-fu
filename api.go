@@ -132,6 +132,27 @@ func chain(ctx context.Context, p graphql.ResolvePromise, f func(interface{}) (i
 	})
 }
 
+func join(ctx context.Context, p []graphql.ResolvePromise, f func([]interface{}) (interface{}, error)) graphql.ResolvePromise {
+	apiRequest := ctxAPIRequest(ctx)
+	if apiRequest.chainedAsyncResolutions == nil {
+		apiRequest.chainedAsyncResolutions = map[graphql.ResolvePromise]struct{}{}
+	}
+	for _, p := range p {
+		apiRequest.chainedAsyncResolutions[p] = struct{}{}
+	}
+	return Go(ctx, func() (interface{}, error) {
+		values := make([]interface{}, len(p))
+		for i, p := range p {
+			result := <-p
+			if !isNil(result.Error) {
+				return nil, result.Error
+			}
+			values[i] = result.Value
+		}
+		return f(values)
+	})
+}
+
 // Go completes resolution asynchronously and concurrently with any other asynchronous resolutions.
 func Go(ctx context.Context, f func() (interface{}, error)) graphql.ResolvePromise {
 	apiRequest := ctxAPIRequest(ctx)

@@ -488,17 +488,31 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 			queries = append(queries, middle)
 
 			var edges []interface{}
+			var promises []graphql.ResolvePromise
 			for _, q := range queries {
-				queryEdges, err := config.EdgeGetter(ctx, q.Min, q.Max, q.Limit)
-				if err != nil {
+				println("foo!")
+				if queryEdges, err := config.EdgeGetter(ctx, q.Min, q.Max, q.Limit); err != nil {
 					return nil, nil, err
-				}
-				v := reflect.ValueOf(queryEdges)
-				for i := 0; i < v.Len(); i++ {
-					edges = append(edges, v.Index(i).Interface())
+				} else if promise, ok := queryEdges.(graphql.ResolvePromise); ok {
+					promises = append(promises, promise)
+				} else {
+					v := reflect.ValueOf(queryEdges)
+					for i := 0; i < v.Len(); i++ {
+						edges = append(edges, v.Index(i).Interface())
+					}
 				}
 			}
-
+			if len(promises) > 0 {
+				return join(ctx.Context, promises, func(v []interface{}) (interface{}, error) {
+					for _, queryEdges := range v {
+						v := reflect.ValueOf(queryEdges)
+						for i := 0; i < v.Len(); i++ {
+							edges = append(edges, v.Index(i).Interface())
+						}
+					}
+					return edges, nil
+				}), timeBasedCursorLess, err
+			}
 			return edges, timeBasedCursorLess, err
 		},
 	})
