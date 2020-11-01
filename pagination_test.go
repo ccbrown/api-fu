@@ -258,12 +258,22 @@ func TestTimeBasedConnection(t *testing.T) {
 	config.AddQueryField("connection", TimeBasedConnection(&TimeBasedConnectionConfig{
 		NamePrefix:  "Test",
 		Description: "Test",
+		Arguments: map[string]*graphql.InputValueDefinition{
+			"async": &graphql.InputValueDefinition{
+				Type: graphql.BooleanType,
+			},
+		},
 		EdgeGetter: func(ctx *graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error) {
 			var ret []time.Time
 			for _, edge := range edges {
 				if !edge.Before(minTime) && !edge.After(maxTime) {
 					ret = append(ret, edge)
 				}
+			}
+			if async, ok := ctx.Arguments["async"].(bool); ok && async {
+				return Go(ctx.Context, func() (interface{}, error) {
+					return ret, nil
+				}), nil
 			}
 			return ret, nil
 		},
@@ -290,6 +300,33 @@ func TestTimeBasedConnection(t *testing.T) {
 		"All": {
 			Query: `{
 				connection(first: 100) {
+					edges {
+						node
+					}
+				}
+			}`,
+			ExpectedJSON: `{
+				"data":{
+					"connection":{
+						"edges":[
+							{"node":"2020-01-01T00:00:00Z"},
+							{"node":"2020-01-01T00:00:01Z"},
+							{"node":"2020-01-01T00:00:02Z"},
+							{"node":"2020-01-01T00:00:03Z"},
+							{"node":"2020-01-01T00:00:04Z"},
+							{"node":"2020-01-01T00:00:05Z"},
+							{"node":"2020-01-01T00:00:06Z"},
+							{"node":"2020-01-01T00:00:07Z"},
+							{"node":"2020-01-01T00:00:08Z"},
+							{"node":"2020-01-01T00:00:09Z"}
+						]
+					}
+				}
+			}`,
+		},
+		"AllAsync": {
+			Query: `{
+				connection(first: 100, async: true) {
 					edges {
 						node
 					}
