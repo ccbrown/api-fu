@@ -490,7 +490,6 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 			var edges []interface{}
 			var promises []graphql.ResolvePromise
 			for _, q := range queries {
-				println("foo!")
 				if queryEdges, err := config.EdgeGetter(ctx, q.Min, q.Max, q.Limit); err != nil {
 					return nil, nil, err
 				} else if promise, ok := queryEdges.(graphql.ResolvePromise); ok {
