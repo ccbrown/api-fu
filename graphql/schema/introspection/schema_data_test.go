@@ -59,4 +59,18 @@ func TestSchemaData(t *testing.T) {
 		_, errs := graphql.ParseAndValidate(query, schema)
 		assert.NotEmpty(t, errs)
 	})
+
+	t.Run("UnreferencedInterface", func(t *testing.T) {
+		query := `{
+				node(id: "foo") {
+					... on RepositoryInvitation {
+						id
+					}
+				}
+			}
+		`
+
+		_, errs := graphql.ParseAndValidate(query, schema)
+		assert.Empty(t, errs)
+	})
 }
