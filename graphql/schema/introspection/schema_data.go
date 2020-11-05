@@ -107,6 +107,9 @@ func (d *SchemaData) GetSchemaDefinition() (*schema.SchemaDefinition, error) {
 					def.ImplementedInterfaces = append(def.ImplementedInterfaces, iface)
 				}
 			}
+			if len(t.Interfaces) > 0 {
+				ret.AdditionalTypes = append(ret.AdditionalTypes, def)
+			}
 			def.IsTypeOf = func(v interface{}) bool {
 				return false
 			}
