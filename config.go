@@ -18,6 +18,11 @@ type Config struct {
 	DeserializeNodeId    func(string) (typeId int, id interface{})
 	AdditionalNodeFields map[string]*graphql.FieldDefinition
 
+	// Execute is invoked to execute a GraphQL request. If not given, this is simply
+	// graphql.Execute. You may wish to provide this to perform request logging or
+	// pre/post-processing.
+	Execute func(*graphql.Request) *graphql.Response
+
 	initOnce              sync.Once
 	nodeObjectTypesByName map[string]*graphql.ObjectType
 	nodeTypesByModel      map[reflect.Type]*NodeType

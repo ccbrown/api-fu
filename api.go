@@ -18,9 +18,10 @@ import (
 // API is responsible for serving your API traffic. Construct an API by creating a Config, then
 // calling NewAPI.
 type API struct {
-	schema *graphql.Schema
-	config *Config
-	logger logrus.FieldLogger
+	schema  *graphql.Schema
+	config  *Config
+	logger  logrus.FieldLogger
+	execute func(*graphql.Request) *graphql.Response
 
 	graphqlWSConnectionsMutex sync.Mutex
 	graphqlWSConnections      map[*graphqlws.Connection]struct{}
@@ -43,10 +44,15 @@ func NewAPI(cfg *Config) (*API, error) {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
+	execute := cfg.Execute
+	if execute == nil {
+		execute = graphql.Execute
+	}
 	return &API{
 		config:               cfg,
 		schema:               schema,
 		logger:               logger,
+		execute:              execute,
 		graphqlWSConnections: map[*graphqlws.Connection]struct{}{},
 	}, nil
 }
@@ -220,7 +226,7 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	req.Schema = api.schema
 	req.IdleHandler = apiRequest.IdleHandler
 
-	body, err := jsoniter.Marshal(graphql.Execute(req))
+	body, err := jsoniter.Marshal(api.execute(req))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
