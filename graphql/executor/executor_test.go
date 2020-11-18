@@ -465,21 +465,21 @@ func TestGetOperation(t *testing.T) {
 	doc, errs := parser.ParseDocument([]byte(`{x} {x} query q {x} mutation m {x} mutation m {x}`))
 	assert.Empty(t, errs)
 
-	_, err := getOperation(doc, "")
+	_, err := GetOperation(doc, "")
 	assert.NotNil(t, err)
 
-	op, err := getOperation(doc, "m")
+	op, err := GetOperation(doc, "m")
 	assert.Nil(t, op)
 	assert.NotNil(t, err)
 
-	op, err = getOperation(doc, "q")
+	op, err = GetOperation(doc, "q")
 	assert.NotNil(t, op)
 	assert.Nil(t, err)
 
 	doc, errs = parser.ParseDocument([]byte(`query q {x}`))
 	assert.Empty(t, errs)
 
-	op, err = getOperation(doc, "")
+	op, err = GetOperation(doc, "")
 	assert.NotNil(t, op)
 	assert.Nil(t, err)
 }

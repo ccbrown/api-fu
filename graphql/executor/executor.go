@@ -51,7 +51,7 @@ func ExecuteRequest(ctx context.Context, r *Request) (*OrderedMap, []*Error) {
 
 // IsSubscription can be used to determine if a request is for a subscription.
 func IsSubscription(doc *ast.Document, operationName string) bool {
-	operation, err := getOperation(doc, operationName)
+	operation, err := GetOperation(doc, operationName)
 	return err == nil && operation.OperationType != nil && operation.OperationType.Value == "subscription"
 }
 
@@ -84,7 +84,7 @@ type executor struct {
 }
 
 func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
-	operation, err := getOperation(r.Document, r.OperationName)
+	operation, err := GetOperation(r.Document, r.OperationName)
 	if err != nil {
 		return nil, err
 	}
@@ -515,7 +515,10 @@ func doesFragmentTypeApply(objectType *schema.ObjectType, fragmentType schema.Ty
 	panic(fmt.Sprintf("unexpected fragment type: %T", fragmentType))
 }
 
-func getOperation(doc *ast.Document, operationName string) (*ast.OperationDefinition, *Error) {
+// GetOperation returns the operation selected by the given name. If operationName is "" and the
+// document contains only one operation, it is returned. Otherwise the document must contain exactly
+// one operation with the given name.
+func GetOperation(doc *ast.Document, operationName string) (*ast.OperationDefinition, *Error) {
 	var ret *ast.OperationDefinition
 	for _, def := range doc.Definitions {
 		if def, ok := def.(*ast.OperationDefinition); ok {
