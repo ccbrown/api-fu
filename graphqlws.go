@@ -63,7 +63,7 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 					if err := sourceStream.Run(context.Background(), func(event interface{}) {
 						req := *req
 						req.InitialValue = event
-						if err := h.Connection.SendData(id, graphql.Execute(&req)); err != nil {
+						if err := h.Connection.SendData(id, h.API.execute(&req)); err != nil {
 							h.Connection.Logger.Warn(errors.Wrap(err, "error sending graphql-ws data"))
 						}
 					}); err != nil && err != context.Canceled {
@@ -72,7 +72,7 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 				}()
 			}
 		} else {
-			resp = graphql.Execute(req)
+			resp = h.API.execute(req)
 		}
 	}
 
