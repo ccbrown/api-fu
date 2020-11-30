@@ -226,7 +226,12 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	req.Schema = api.schema
 	req.IdleHandler = apiRequest.IdleHandler
 
-	body, err := jsoniter.Marshal(api.execute(req))
+	execute := api.execute
+	if storage := api.config.PersistedQueryStorage; storage != nil {
+		execute = PersistedQueryExtension(storage, execute)
+	}
+
+	body, err := jsoniter.Marshal(execute(req))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
