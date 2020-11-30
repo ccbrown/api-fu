@@ -33,7 +33,17 @@ func TestNewRequestFromHTTP(t *testing.T) {
 			Query: url.Values{
 				"variables": []string{`{"foo":"bar"}`},
 			},
-			ExpectedCode: http.StatusBadRequest,
+			// extensions such as persistedQuery can provide the query later
+			ExpectedCode: http.StatusOK,
+		},
+		"GETExtensions": {
+			Method: "GET",
+			Query: url.Values{
+				"query":      []string{"{__typename}"},
+				"variables":  []string{`{"foo":"bar"}`},
+				"extensions": []string{`{"foo":"bar"}`},
+			},
+			ExpectedCode: http.StatusOK,
 		},
 		"GETBadVariables": {
 			Method: "GET",
@@ -49,13 +59,19 @@ func TestNewRequestFromHTTP(t *testing.T) {
 			Body:         `{__typename}`,
 			ExpectedCode: http.StatusOK,
 		},
-		"POSTJSON": {
+		"POSTJSONGETQuery": {
 			Method:      "POST",
 			ContentType: "application/json",
 			Query: url.Values{
 				"query": []string{"{__typename}"},
 			},
 			Body:         `{}`,
+			ExpectedCode: http.StatusOK,
+		},
+		"POSTJSON": {
+			Method:       "POST",
+			ContentType:  "application/json",
+			Body:         `{"query":"{__typename}","extensions":{"foo":"bar"}}`,
 			ExpectedCode: http.StatusOK,
 		},
 		"POSTBadJSON": {

@@ -130,6 +130,7 @@ type Request struct {
 	Schema         *Schema
 	OperationName  string
 	VariableValues map[string]interface{}
+	Extensions     map[string]interface{}
 	InitialValue   interface{}
 	IdleHandler    func()
 }
@@ -156,9 +157,6 @@ func NewRequestFromHTTP(r *http.Request) (req *Request, code int, err error) {
 	switch r.Method {
 	case http.MethodGet:
 		req.Query = r.URL.Query().Get("query")
-		if req.Query == "" {
-			return nil, http.StatusBadRequest, fmt.Errorf("the query parameter is required")
-		}
 
 		if variables := r.URL.Query().Get("variables"); variables != "" {
 			if err := json.Unmarshal([]byte(variables), &req.VariableValues); err != nil {
@@ -166,11 +164,15 @@ func NewRequestFromHTTP(r *http.Request) (req *Request, code int, err error) {
 			}
 		}
 
-		req.OperationName = r.URL.Query().Get("variables")
-	case http.MethodPost:
-		if query := r.URL.Query().Get("query"); query != "" {
-			req.Query = query
+		req.OperationName = r.URL.Query().Get("operationName")
+
+		if extensions := r.URL.Query().Get("extensions"); extensions != "" {
+			if err := json.Unmarshal([]byte(extensions), &req.Extensions); err != nil {
+				return nil, http.StatusBadRequest, fmt.Errorf("malformed extensions parameter")
+			}
 		}
+	case http.MethodPost:
+		req.Query = r.URL.Query().Get("query")
 
 		switch mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType {
 		case "application/json":
@@ -178,6 +180,7 @@ func NewRequestFromHTTP(r *http.Request) (req *Request, code int, err error) {
 				Query         string                 `json:"query"`
 				OperationName string                 `json:"operationName"`
 				Variables     map[string]interface{} `json:"variables"`
+				Extensions    map[string]interface{} `json:"extensions"`
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -187,6 +190,7 @@ func NewRequestFromHTTP(r *http.Request) (req *Request, code int, err error) {
 			req.Query = body.Query
 			req.OperationName = body.OperationName
 			req.VariableValues = body.Variables
+			req.Extensions = body.Extensions
 		case "application/graphql":
 			body, _ := ioutil.ReadAll(r.Body)
 			req.Query = string(body)
