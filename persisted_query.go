@@ -31,7 +31,8 @@ func PersistedQueryExtension(storage PersistedQueryStorage, execute func(*graphq
 	return func(input *graphql.Request) *graphql.Response {
 		r := *input
 		ext, _ := r.Extensions["persistedQuery"].(map[string]interface{})
-		if ext["version"] == 1 {
+		switch ext["version"] {
+		case 1, 1.0:
 			if r.Query == "" && r.Document == nil {
 				// errors parsing the hash can be ignored: hash will end up empty and we'll error
 				// out due to not being able to find the query
