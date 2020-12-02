@@ -250,7 +250,7 @@ func (s *generateState) processQuery(q string) []error {
 				case "mutation":
 					t = s.schema.MutationType()
 				case "subscription":
-					continue
+					t = s.schema.SubscriptionType()
 				}
 			}
 			if op.Name != nil {
