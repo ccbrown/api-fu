@@ -149,8 +149,8 @@ func (cfg *Config) AddNamedType(t graphql.NamedType) {
 	cfg.additionalTypes = append(cfg.additionalTypes, t)
 }
 
-// AddMutation adds a mutation to your schema.
-func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
+// MutationType returns the root mutation type.
+func (cfg *Config) MutationType() *graphql.ObjectType {
 	cfg.init()
 
 	if cfg.mutation == nil {
@@ -160,11 +160,18 @@ func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
 		}
 	}
 
-	if _, ok := cfg.mutation.Fields[name]; ok {
+	return cfg.mutation
+}
+
+// AddMutation adds a mutation to your schema.
+func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
+	t := cfg.MutationType()
+
+	if _, ok := t.Fields[name]; ok {
 		panic("a mutation with that name already exists")
 	}
 
-	cfg.mutation.Fields[name] = def
+	t.Fields[name] = def
 }
 
 // AddSubscription adds a subscription operation to your schema.
@@ -203,13 +210,19 @@ func (cfg *Config) AddSubscription(name string, def *graphql.FieldDefinition) {
 	cfg.subscription.Fields[name] = def
 }
 
+// QueryType returns the root query type.
+func (cfg *Config) QueryType() *graphql.ObjectType {
+	cfg.init()
+	return cfg.query
+}
+
 // AddQueryField adds a field to your schema's query object.
 func (cfg *Config) AddQueryField(name string, def *graphql.FieldDefinition) {
-	cfg.init()
+	t := cfg.QueryType()
 
-	if _, ok := cfg.query.Fields[name]; ok {
+	if _, ok := t.Fields[name]; ok {
 		panic("a field with that name already exists")
 	}
 
-	cfg.query.Fields[name] = def
+	t.Fields[name] = def
 }
