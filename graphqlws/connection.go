@@ -25,11 +25,16 @@ type Connection struct {
 	close             chan struct{}
 	beginClosingOnce  sync.Once
 	finishClosingOnce sync.Once
+	didInit           bool
 }
 
 // ConnectionHandler methods may be invoked on a separate goroutine, but invocations will never be
 // made concurrently.
 type ConnectionHandler interface {
+	// Called when the server receives the init message. If an error is returned, it will be sent to
+	// the client and the connection will be closed.
+	HandleInit(parameters json.RawMessage) error
+
 	// Called when the client wants to start an operation. If the operation is a query or mutation,
 	// the handler should immediately call SendData followed by SendComplete. If the operation is a
 	// subscription, the handler should call SendData to send events and SendComplete if/when the
@@ -133,6 +138,26 @@ func (c *Connection) handleMessage(data []byte) {
 
 	switch msg.Type {
 	case MessageTypeConnectionInit:
+		if err := c.Handler.HandleInit(msg.Payload); err != nil {
+			payload := struct {
+				Message string `json:"message"`
+			}{
+				Message: err.Error(),
+			}
+			if buf, err := jsoniter.Marshal(payload); err != nil {
+				c.Logger.Error(errors.Wrap(err, "unable to marshal graphql-ws connection error payload"))
+			} else if err := c.sendMessage(&Message{
+				Id:      msg.Id,
+				Type:    MessageTypeConnectionError,
+				Payload: buf,
+			}); err != nil {
+				c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws connection error"))
+			}
+			c.beginClosing()
+			return
+		}
+
+		c.didInit = true
 		if err := c.sendMessage(&Message{
 			Id:   msg.Id,
 			Type: MessageTypeConnectionAck,
@@ -146,6 +171,10 @@ func (c *Connection) handleMessage(data []byte) {
 			c.beginClosing()
 		}
 	case MessageTypeStart:
+		if !c.didInit {
+			return
+		}
+
 		var payload struct {
 			Query         string                 `json:"query"`
 			Variables     map[string]interface{} `json:"variables"`
@@ -157,6 +186,10 @@ func (c *Connection) handleMessage(data []byte) {
 		}
 		c.Handler.HandleStart(msg.Id, payload.Query, payload.Variables, payload.OperationName)
 	case MessageTypeStop:
+		if !c.didInit {
+			return
+		}
+
 		c.Handler.HandleStop(msg.Id)
 		if err := c.sendMessage(&Message{
 			Id:   msg.Id,

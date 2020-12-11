@@ -2,6 +2,7 @@ package apifu
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -17,6 +18,17 @@ type graphqlWSHandler struct {
 	Context    context.Context
 
 	subscriptions map[string]*SubscriptionSourceStream
+}
+
+func (h *graphqlWSHandler) HandleInit(parameters json.RawMessage) error {
+	if f := h.API.config.HandleGraphQLWSInit; f != nil {
+		if ctx, err := f(h.Context, parameters); err != nil {
+			return err
+		} else {
+			h.Context = ctx
+		}
+	}
+	return nil
 }
 
 func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[string]interface{}, operationName string) {
