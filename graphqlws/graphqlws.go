@@ -10,6 +10,7 @@ type MessageType string
 // MessageType represents a GraphQL-WS message type.
 const (
 	MessageTypeConnectionInit      MessageType = "connection_init"
+	MessageTypeConnectionError     MessageType = "connection_error"
 	MessageTypeConnectionKeepAlive MessageType = "ka"
 	MessageTypeConnectionTerminate MessageType = "connection_terminate"
 	MessageTypeConnectionAck       MessageType = "connection_ack"

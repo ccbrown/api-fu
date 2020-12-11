@@ -1,6 +1,8 @@
 package apifu
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"sync"
@@ -26,6 +28,13 @@ type Config struct {
 	// graphql.Execute. You may wish to provide this to perform request logging or
 	// pre/post-processing.
 	Execute func(*graphql.Request) *graphql.Response
+
+	// If given, this function is invoked when the servers receives the graphql-ws connection init
+	// payload. If an error is returned, it will be sent to the client and the connection will be
+	// closed. Otherwise the returned context will become associated with the connection.
+	//
+	// This is commonly used for authentication.
+	HandleGraphQLWSInit func(ctx context.Context, parameters json.RawMessage) (context.Context, error)
 
 	initOnce              sync.Once
 	nodeObjectTypesByName map[string]*graphql.ObjectType
