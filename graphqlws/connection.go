@@ -23,6 +23,8 @@ type Connection struct {
 	writeLoopDone     chan struct{}
 	outgoing          chan *websocket.PreparedMessage
 	close             chan struct{}
+	closeReceived     chan struct{}
+	closeMessage      chan []byte
 	beginClosingOnce  sync.Once
 	finishClosingOnce sync.Once
 	didInit           bool
@@ -58,6 +60,16 @@ func (c *Connection) Serve(conn *websocket.Conn) {
 	c.writeLoopDone = make(chan struct{})
 	c.outgoing = make(chan *websocket.PreparedMessage, connectionSendBufferSize)
 	c.close = make(chan struct{})
+	c.closeReceived = make(chan struct{})
+	c.closeMessage = make(chan []byte, 1)
+	conn.SetCloseHandler(func(code int, text string) error {
+		select {
+		case <-c.closeReceived:
+		default:
+			close(c.closeReceived)
+		}
+		return nil
+	})
 	go c.readLoop()
 	go c.writeLoop()
 }
@@ -86,7 +98,7 @@ func (c *Connection) SendComplete(id string) error {
 
 // Close closes the connection. This must not be called from handler functions.
 func (c *Connection) Close() error {
-	c.beginClosing()
+	c.beginClosing(websocket.CloseNormalClosure, "close requested by application")
 	c.finishClosing()
 	return nil
 }
@@ -110,12 +122,12 @@ func (c *Connection) sendMessage(msg *Message) error {
 
 func (c *Connection) readLoop() {
 	defer close(c.readLoopDone)
-	defer c.beginClosing()
+	defer c.beginClosing(websocket.CloseInternalServerErr, "read error")
 
 	for {
 		_, p, err := c.conn.ReadMessage()
 		if err != nil {
-			if !websocket.IsCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseGoingAway) {
+			if _, ok := err.(*websocket.CloseError); !ok {
 				select {
 				case <-c.close:
 				default:
@@ -153,7 +165,7 @@ func (c *Connection) handleMessage(data []byte) {
 			}); err != nil {
 				c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws connection error"))
 			}
-			c.beginClosing()
+			c.beginClosing(websocket.CloseInternalServerErr, "connection init error")
 			return
 		}
 
@@ -163,12 +175,12 @@ func (c *Connection) handleMessage(data []byte) {
 			Type: MessageTypeConnectionAck,
 		}); err != nil {
 			c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws connection ack"))
-			c.beginClosing()
+			c.beginClosing(websocket.CloseInternalServerErr, "ack send error")
 		} else if err := c.sendMessage(&Message{
 			Type: MessageTypeConnectionKeepAlive,
 		}); err != nil {
 			c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws initial keep-alive"))
-			c.beginClosing()
+			c.beginClosing(websocket.CloseInternalServerErr, "keep-alive send error")
 		}
 	case MessageTypeStart:
 		if !c.didInit {
@@ -198,7 +210,7 @@ func (c *Connection) handleMessage(data []byte) {
 			c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws stop response"))
 		}
 	case MessageTypeConnectionTerminate:
-		c.beginClosing()
+		c.beginClosing(websocket.CloseNormalClosure, "terminate requested by client")
 	default:
 		c.Logger.Info("unknown graphql-ws message type received")
 	}
@@ -239,7 +251,23 @@ func (c *Connection) writeLoop() {
 			msg = outgoing
 		case <-keepAliveTicker.C:
 			msg = keepAlivePreparedMessage
-		case <-c.close:
+		case msg := <-c.closeMessage:
+			// initiate the close handshake
+			if err := c.conn.WriteMessage(websocket.CloseMessage, msg); err != nil {
+				c.Logger.Error(errors.Wrap(err, "websocket control write error"))
+			}
+			// wait for the response, then close the connection
+			select {
+			case <-c.closeReceived:
+			case <-c.readLoopDone:
+			case <-time.After(time.Second):
+			}
+			return
+		case <-c.closeReceived:
+			// the client initiated the close handshake
+			if err := c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "close requested by client")); err != nil {
+				c.Logger.Error(errors.Wrap(err, "websocket control write error"))
+			}
 			return
 		}
 
@@ -254,8 +282,9 @@ func (c *Connection) writeLoop() {
 	}
 }
 
-func (c *Connection) beginClosing() {
+func (c *Connection) beginClosing(code int, text string) {
 	c.beginClosingOnce.Do(func() {
+		c.closeMessage <- websocket.FormatCloseMessage(code, text)
 		close(c.close)
 	})
 }

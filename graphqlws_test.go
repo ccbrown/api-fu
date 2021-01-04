@@ -70,7 +70,10 @@ func TestGraphQLWS(t *testing.T) {
 		}
 	}
 	require.NotNil(t, conn)
-	defer conn.Close()
+	defer func() {
+		assert.NoError(t, conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "closing")))
+		conn.Close()
+	}()
 
 	require.NoError(t, conn.WriteJSON(map[string]string{
 		"id":   "init",
@@ -198,7 +201,10 @@ func TestGraphQLWS_InitParameters(t *testing.T) {
 				}
 			}
 			require.NotNil(t, conn)
-			defer conn.Close()
+			defer func() {
+				assert.NoError(t, conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "closing")))
+				conn.Close()
+			}()
 
 			require.NoError(t, conn.WriteJSON(map[string]interface{}{
 				"id":      "init",
