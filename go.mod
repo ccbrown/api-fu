@@ -3,7 +3,7 @@ module github.com/ccbrown/api-fu
 go 1.12
 
 require (
-	github.com/gorilla/websocket v1.4.0
+	github.com/gorilla/websocket v1.4.2
 	github.com/json-iterator/go v1.1.7
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.8.1
