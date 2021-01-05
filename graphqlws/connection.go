@@ -244,14 +244,28 @@ func (c *Connection) writeLoop() {
 	for {
 		var msg *websocket.PreparedMessage
 		select {
-		case outgoing, ok := <-c.outgoing:
-			if !ok {
-				return
-			}
+		case outgoing := <-c.outgoing:
 			msg = outgoing
 		case <-keepAliveTicker.C:
 			msg = keepAlivePreparedMessage
 		case msg := <-c.closeMessage:
+			// make sure we send any outgoing messages before closing (e.g. to make sure we send
+			// back the error after a bad init)
+			for done := false; !done; {
+				select {
+				case msg := <-c.outgoing:
+					c.conn.SetWriteDeadline(time.Now().Add(time.Second))
+					if err := c.conn.WritePreparedMessage(msg); err != nil {
+						if !websocket.IsCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseGoingAway) && err != websocket.ErrCloseSent {
+							c.Logger.Error(errors.Wrap(err, "websocket write error"))
+						}
+						done = true
+					}
+				default:
+					done = true
+				}
+			}
+
 			// initiate the close handshake
 			if err := c.conn.WriteMessage(websocket.CloseMessage, msg); err != nil {
 				c.Logger.Error(errors.Wrap(err, "websocket control write error"))
