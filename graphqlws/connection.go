@@ -1,8 +1,8 @@
 package graphqlws
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -75,12 +75,12 @@ func (c *Connection) Serve(conn *websocket.Conn) {
 }
 
 // SendData sends the given GraphQL response to the client.
-func (c *Connection) SendData(id string, response *graphql.Response) error {
+func (c *Connection) SendData(ctx context.Context, id string, response *graphql.Response) error {
 	buf, err := jsoniter.Marshal(response)
 	if err != nil {
 		return errors.Wrap(err, "unable to marshal graphql response")
 	}
-	return c.sendMessage(&Message{
+	return c.sendMessage(ctx, &Message{
 		Id:      id,
 		Type:    MessageTypeData,
 		Payload: json.RawMessage(buf),
@@ -89,8 +89,8 @@ func (c *Connection) SendData(id string, response *graphql.Response) error {
 
 // SendComplete sends the "complete" message to the client. This should be done after queries are
 // executed or subscriptions are stopped.
-func (c *Connection) SendComplete(id string) error {
-	return c.sendMessage(&Message{
+func (c *Connection) SendComplete(ctx context.Context, id string) error {
+	return c.sendMessage(ctx, &Message{
 		Id:   id,
 		Type: MessageTypeComplete,
 	})
@@ -103,7 +103,7 @@ func (c *Connection) Close() error {
 	return nil
 }
 
-func (c *Connection) sendMessage(msg *Message) error {
+func (c *Connection) sendMessage(ctx context.Context, msg *Message) error {
 	data, err := jsoniter.Marshal(msg)
 	if err != nil {
 		return errors.Wrap(err, "error marshaling message")
@@ -114,8 +114,8 @@ func (c *Connection) sendMessage(msg *Message) error {
 	}
 	select {
 	case c.outgoing <- prepared:
-	default:
-		return fmt.Errorf("send buffer full")
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }
@@ -137,11 +137,11 @@ func (c *Connection) readLoop() {
 			return
 		}
 
-		c.handleMessage(p)
+		c.handleMessage(context.Background(), p)
 	}
 }
 
-func (c *Connection) handleMessage(data []byte) {
+func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 	var msg Message
 	if err := json.Unmarshal(data, &msg); err != nil {
 		c.Logger.WithField("error", err.Error()).Info("malformed graphql-ws message received")
@@ -158,7 +158,7 @@ func (c *Connection) handleMessage(data []byte) {
 			}
 			if buf, err := jsoniter.Marshal(payload); err != nil {
 				c.Logger.Error(errors.Wrap(err, "unable to marshal graphql-ws connection error payload"))
-			} else if err := c.sendMessage(&Message{
+			} else if err := c.sendMessage(ctx, &Message{
 				Id:      msg.Id,
 				Type:    MessageTypeConnectionError,
 				Payload: buf,
@@ -170,13 +170,13 @@ func (c *Connection) handleMessage(data []byte) {
 		}
 
 		c.didInit = true
-		if err := c.sendMessage(&Message{
+		if err := c.sendMessage(ctx, &Message{
 			Id:   msg.Id,
 			Type: MessageTypeConnectionAck,
 		}); err != nil {
 			c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws connection ack"))
 			c.beginClosing(websocket.CloseInternalServerErr, "ack send error")
-		} else if err := c.sendMessage(&Message{
+		} else if err := c.sendMessage(ctx, &Message{
 			Type: MessageTypeConnectionKeepAlive,
 		}); err != nil {
 			c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws initial keep-alive"))
@@ -203,7 +203,7 @@ func (c *Connection) handleMessage(data []byte) {
 		}
 
 		c.Handler.HandleStop(msg.Id)
-		if err := c.sendMessage(&Message{
+		if err := c.sendMessage(context.Background(), &Message{
 			Id:   msg.Id,
 			Type: MessageTypeComplete,
 		}); err != nil {
