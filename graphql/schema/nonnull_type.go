@@ -25,6 +25,9 @@ func (t *NonNullType) IsOutputType() bool {
 }
 
 func (t *NonNullType) IsSubTypeOf(other Type) bool {
+	if other, ok := other.(*NonNullType); ok {
+		return t.IsSameType(other.Type) || t.Type.IsSubTypeOf(other.Type)
+	}
 	return t.IsSameType(other) || t.Type.IsSubTypeOf(other)
 }
 
