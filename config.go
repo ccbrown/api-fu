@@ -36,6 +36,10 @@ type Config struct {
 	// This is commonly used for authentication.
 	HandleGraphQLWSInit func(ctx context.Context, parameters json.RawMessage) (context.Context, error)
 
+	// Explicitly adds named types to the schema. This is generally only required for interface
+	// implementations that aren't explicitly referenced elsewhere in the schema.
+	AdditionalTypes map[string]graphql.NamedType
+
 	initOnce              sync.Once
 	nodeObjectTypesByName map[string]*graphql.ObjectType
 	nodeTypesByModel      map[reflect.Type]*NodeType
@@ -45,7 +49,6 @@ type Config struct {
 	query                 *graphql.ObjectType
 	mutation              *graphql.ObjectType
 	subscription          *graphql.ObjectType
-	additionalTypes       []graphql.NamedType
 }
 
 func (cfg *Config) init() {
@@ -54,6 +57,9 @@ func (cfg *Config) init() {
 		cfg.nodeTypesByModel = make(map[reflect.Type]*NodeType)
 		cfg.nodeTypesById = make(map[int]*NodeType)
 		cfg.nodeTypesByObjectType = make(map[*graphql.ObjectType]*NodeType)
+		if cfg.AdditionalTypes == nil {
+			cfg.AdditionalTypes = make(map[string]graphql.NamedType)
+		}
 
 		cfg.nodeInterface = &graphql.InterfaceType{
 			Name: "Node",
@@ -104,11 +110,15 @@ func (cfg *Config) init() {
 }
 
 func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
+	additionalTypes := make([]graphql.NamedType, 0, len(cfg.AdditionalTypes))
+	for _, t := range cfg.AdditionalTypes {
+		additionalTypes = append(additionalTypes, t)
+	}
 	return graphql.NewSchema(&graphql.SchemaDefinition{
 		Query:           cfg.query,
 		Mutation:        cfg.mutation,
 		Subscription:    cfg.subscription,
-		AdditionalTypes: cfg.additionalTypes,
+		AdditionalTypes: additionalTypes,
 		Directives: map[string]*graphql.DirectiveDefinition{
 			"include": graphql.IncludeDirective,
 			"skip":    graphql.SkipDirective,
@@ -144,7 +154,7 @@ func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 			return normalizeModelType(reflect.TypeOf(v)) == model
 		},
 	}
-	cfg.additionalTypes = append(cfg.additionalTypes, objectType)
+	cfg.AdditionalTypes[t.Name] = objectType
 	cfg.nodeTypesByObjectType[objectType] = t
 	cfg.nodeObjectTypesByName[t.Name] = objectType
 
@@ -155,7 +165,7 @@ func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
 // implementations that aren't explicitly referenced elsewhere in the schema.
 func (cfg *Config) AddNamedType(t graphql.NamedType) {
 	cfg.init()
-	cfg.additionalTypes = append(cfg.additionalTypes, t)
+	cfg.AdditionalTypes[t.TypeName()] = t
 }
 
 // MutationType returns the root mutation type.
