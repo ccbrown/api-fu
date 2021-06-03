@@ -224,6 +224,20 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 	return ret, nil
 }
 
+func generateTypeDef(name, original string) string {
+	ret := "type " + name + " " + original + "\n\n"
+
+	if !strings.ContainsAny(original, "* \n") {
+		ret += `
+			func (t *` + name + `) UnmarshalJSON(b []byte) error {
+				return (*` + original + `)(t).UnmarshalJSON(b)
+			}
+		`
+	}
+
+	return ret
+}
+
 func (s *generateState) processQuery(q string) []error {
 	var ret []error
 	doc, errs := graphql.ParseAndValidate(q, s.schema)
@@ -259,7 +273,7 @@ func (s *generateState) processQuery(q string) []error {
 					ret = append(ret, err)
 					continue
 				}
-				s.output += "type " + op.Name.Name + "Data " + gen + "\n\n"
+				s.output += generateTypeDef(op.Name.Name+"Data", gen)
 			}
 		case *ast.FragmentDefinition:
 			if op.Name != nil {
@@ -268,7 +282,7 @@ func (s *generateState) processQuery(q string) []error {
 					ret = append(ret, err)
 					continue
 				}
-				s.output += "type " + op.Name.Name + "Fragment " + gen + "\n\n"
+				s.output += generateTypeDef(op.Name.Name+"Fragment", gen)
 			}
 		}
 	}
