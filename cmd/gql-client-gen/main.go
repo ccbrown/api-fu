@@ -227,7 +227,7 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 func generateTypeDef(name, original string) string {
 	ret := "type " + name + " " + original + "\n\n"
 
-	if !strings.ContainsAny(original, " \n") {
+	if !strings.ContainsAny(original, "* \n") {
 		ret += `
 			func (t *` + name + `) UnmarshalJSON(b []byte) error {
 				return (*` + original + `)(t).UnmarshalJSON(b)
