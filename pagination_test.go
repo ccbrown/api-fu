@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ccbrown/api-fu/graphql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ccbrown/api-fu/graphql"
 )
 
 func TestConnection(t *testing.T) {
@@ -47,6 +48,27 @@ func TestConnection(t *testing.T) {
 
 	api, err := NewAPI(config)
 	require.NoError(t, err)
+
+	t.Run("Cost", func(t *testing.T) {
+		var cost int
+		_, errs := graphql.ParseAndValidate(`{
+		connection(first: 10) {
+			edges {
+				node
+				cursor
+			}
+			pageInfo {
+				hasPreviousPage
+				hasNextPage
+				startCursor
+				endCursor
+			}
+			totalCount
+		}
+	}`, api.schema, graphql.ValidateCost("", nil, -1, &cost))
+		require.Empty(t, errs)
+		assert.Equal(t, (1 /*connection*/)+(10 /* edges */)*(1 /* node */)+(1 /*totalCount*/), cost)
+	})
 
 	req := httptest.NewRequest("POST", "/", strings.NewReader(`{
 		connection(first: 10) {

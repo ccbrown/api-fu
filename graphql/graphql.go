@@ -52,6 +52,17 @@ type ListType = schema.ListType
 // object and arguments.
 type FieldContext = schema.FieldContext
 
+// FieldCostContext contains important context passed to field cost functions.
+type FieldCostContext = schema.FieldCostContext
+
+// FieldCost describes the cost of resolving a field, enabling rate limiting and metering.
+type FieldCost = schema.FieldCost
+
+// Returns a cost function which returns a constant resolver cost with no multiplier.
+func FieldResolverCost(n int) func(*FieldCostContext) FieldCost {
+	return schema.FieldResolverCost(n)
+}
+
 // EnumValueDefinition defines a possible value for an enum type.
 type EnumValueDefinition = schema.EnumValueDefinition
 
@@ -63,6 +74,17 @@ type FieldDefinition = schema.FieldDefinition
 
 // DirectiveDefinition defines a directive.
 type DirectiveDefinition = schema.DirectiveDefinition
+
+// ValidatorRule defines a rule that the validator will evaluate.
+type ValidatorRule = validator.Rule
+
+// Calculates the cost of the given operation and ensures it is not greater than max. If max is -1,
+// no limit is enforced. If actual is non-nil, it is set to the actual cost of the operation.
+// Queries with costs that are too high to calculate due to overflows always result in an error when
+// max is non-negative, and actual will be set to the maximum possible value.
+func ValidateCost(operationName string, variableValues map[string]interface{}, max int, actual *int) ValidatorRule {
+	return validator.ValidateCost(operationName, variableValues, max, actual)
+}
 
 // IncludeDirective implements the @include directive as defined by the GraphQL spec.
 var IncludeDirective = schema.IncludeDirective
@@ -133,6 +155,14 @@ type Request struct {
 	Extensions     map[string]interface{}
 	InitialValue   interface{}
 	IdleHandler    func()
+}
+
+// Calculates the cost of the requested operation and ensures it is not greater than max. If max is
+// -1, no limit is enforced. If actual is non-nil, it is set to the actual cost of the operation.
+// Queries with costs that are too high to calculate due to overflows always result in an error when
+// max is non-negative, and actual will be set to the maximum possible value.
+func (r *Request) ValidateCost(max int, actual *int) ValidatorRule {
+	return validator.ValidateCost(r.OperationName, r.VariableValues, max, actual)
 }
 
 func (r *Request) executorRequest(doc *ast.Document) *executor.Request {
@@ -246,7 +276,7 @@ func IsSubscription(doc *ast.Document, operationName string) bool {
 }
 
 // ParseAndValidate parses and validates a query.
-func ParseAndValidate(query string, schema *Schema) (*ast.Document, []*Error) {
+func ParseAndValidate(query string, schema *Schema, additionalRules ...ValidatorRule) (*ast.Document, []*Error) {
 	var errors []*Error
 	parsed, parseErrs := parser.ParseDocument([]byte(query))
 	if len(parseErrs) > 0 {
@@ -263,7 +293,7 @@ func ParseAndValidate(query string, schema *Schema) (*ast.Document, []*Error) {
 		}
 		return nil, errors
 	}
-	if validationErrs := validator.ValidateDocument(parsed, schema); len(validationErrs) > 0 {
+	if validationErrs := validator.ValidateDocument(parsed, schema, additionalRules...); len(validationErrs) > 0 {
 		for _, err := range validationErrs {
 			locations := make([]Location, len(err.Locations))
 			for i, loc := range err.Locations {

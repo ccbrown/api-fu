@@ -75,6 +75,10 @@ var fooBarEnumType = &schema.EnumType{
 
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
+		"freeBoolean": {
+			Type: schema.BooleanType,
+			Cost: schema.FieldResolverCost(0),
+		},
 		"booleanArgField": {
 			Type: schema.BooleanType,
 			Arguments: map[string]*schema.InputValueDefinition{
@@ -180,8 +184,35 @@ func init() {
 				IsTypeOf:              func(interface{}) bool { return false },
 			},
 		},
+		"costFromArg": {
+			Type: schema.IntType,
+			Arguments: map[string]*schema.InputValueDefinition{
+				"cost": {
+					Type:         schema.IntType,
+					DefaultValue: 10,
+				},
+			},
+			Cost: func(ctx *schema.FieldCostContext) schema.FieldCost {
+				cost, _ := ctx.Arguments["cost"].(int)
+				return schema.FieldCost{
+					Resolver: cost,
+				}
+			},
+		},
 		"objects": {
 			Type: schema.NewListType(objectType),
+			Arguments: map[string]*schema.InputValueDefinition{
+				"first": {
+					Type: schema.IntType,
+				},
+			},
+			Cost: func(ctx *schema.FieldCostContext) schema.FieldCost {
+				multiplier, _ := ctx.Arguments["first"].(int)
+				return schema.FieldCost{
+					Resolver:   1,
+					Multiplier: multiplier,
+				}
+			},
 		},
 		"object": {
 			Type: objectType,

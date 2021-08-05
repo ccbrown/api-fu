@@ -1,6 +1,7 @@
 package apifu
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"reflect"
@@ -145,12 +146,17 @@ type connection struct {
 	ResolvePageInfo   func() (interface{}, error)
 }
 
+type maxEdgeCountContextKeyType int
+
+var maxEdgeCountContextKey maxEdgeCountContextKeyType
+
 // Connection is used to create a connection field that adheres to the GraphQL Cursor Connections
 // Specification.
 func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	edgeFields := map[string]*graphql.FieldDefinition{
 		"cursor": {
 			Type: graphql.NewNonNullType(graphql.StringType),
+			Cost: graphql.FieldResolverCost(0),
 			Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 				s, err := serializeCursor(ctx.Object.(edge).Cursor)
 				if err != nil {
@@ -180,9 +186,24 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Name:        config.NamePrefix + "Connection",
 		Description: config.Description,
 		Fields: map[string]*graphql.FieldDefinition{
-			"edges": NonNull(graphql.NewListType(graphql.NewNonNullType(edgeType)), "Edges"),
+			"edges": {
+				Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edgeType))),
+				Cost: func(ctx *graphql.FieldCostContext) graphql.FieldCost {
+					return graphql.FieldCost{
+						Resolver:   0,
+						Multiplier: ctx.Context.Value(maxEdgeCountContextKey).(int),
+					}
+				},
+				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					return ctx.Object.(*connection).Edges, nil
+				},
+			},
 			"pageInfo": {
 				Type: graphql.NewNonNullType(PageInfoType),
+				// The cost is already accounted for by the connection itself. Either
+				// ResolvePageInfo will be trivial or 0 edges were requested and all work was
+				// delayed until now.
+				Cost: graphql.FieldResolverCost(0),
 				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 					return ctx.Object.(*connection).ResolvePageInfo()
 				},
@@ -214,6 +235,16 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			"after": {
 				Type: graphql.StringType,
 			},
+		},
+		Cost: func(ctx *graphql.FieldCostContext) graphql.FieldCost {
+			maxCount, _ := ctx.Arguments["first"].(int)
+			if last, ok := ctx.Arguments["last"].(int); ok {
+				maxCount = last
+			}
+			return graphql.FieldCost{
+				Context:  context.WithValue(ctx.Context, maxEdgeCountContextKey, maxCount),
+				Resolver: 1,
+			}
 		},
 		Description: config.Description,
 		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
