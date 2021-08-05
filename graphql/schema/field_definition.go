@@ -19,6 +19,39 @@ type FieldContext struct {
 	IsSubscribe bool
 }
 
+// FieldCost describes the cost of resolving a field, enabling rate limiting and metering.
+type FieldCost struct {
+	// If non-nil, this context will be passed on to sub-selections of the current field.
+	Context context.Context
+
+	// This is the cost of executing the resolver. Typically it will be 1, but if a resolver is
+	// particularly expensive, it may be greater.
+	Resolver int
+
+	// This is a multiplier applied to all sub-selections of the current field. For fields that
+	// return arrays, this is typically the number of expected results (e.g. the "first" or "last"
+	// argument to a connection field). Defaults to 1 if not set.
+	Multiplier int
+}
+
+// Returns a cost function which returns a constant resolver cost with no multiplier.
+func FieldResolverCost(n int) func(*FieldCostContext) FieldCost {
+	return func(*FieldCostContext) FieldCost {
+		return FieldCost{
+			Resolver: n,
+		}
+	}
+}
+
+// FieldCostContext contains important context passed to field cost functions.
+type FieldCostContext struct {
+	Context context.Context
+
+	// The arguments that were provided. Note that cost calculations are done during validation, so
+	// it is possible for non-null arguments to be absent (which would later result in an error).
+	Arguments map[string]interface{}
+}
+
 // FieldDefinition defines an object's field.
 type FieldDefinition struct {
 	Description       string
@@ -26,6 +59,11 @@ type FieldDefinition struct {
 	Type              Type
 	Directives        []*Directive
 	DeprecationReason string
+
+	// This function can be used to define the cost of resolving the field. By default, all fields
+	// are considered to have a constant cost of 1. The total cost of an operation can be calculated
+	// before the operation is executed, enabling rate limiting and metering.
+	Cost func(*FieldCostContext) FieldCost
 
 	Resolve func(*FieldContext) (interface{}, error)
 }

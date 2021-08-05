@@ -140,6 +140,15 @@ The `gql-client-gen` tool can be used to generate types for use in client-side c
 
 See [cmd/gql-client-gen](cmd/gql-client-gen) for details.
 
+### 🚔 Calculates operation costs during validation for rate limiting and metering
+
+During validation, you can specify a max operation cost or get the actual cost
+of an operation using customizable cost definitions:
+
+```go
+doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(maxCost, &actualCost))
+```
+
 ## API Design Guidelines
 
 The following are guidelines that are recommended for all new GraphQL APIs. API-fu aims to make it easy to conform to these for robust and future-proof APIs:
