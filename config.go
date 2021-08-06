@@ -27,7 +27,7 @@ type Config struct {
 	// Execute is invoked to execute a GraphQL request. If not given, this is simply
 	// graphql.Execute. You may wish to provide this to perform request logging or
 	// pre/post-processing.
-	Execute func(*graphql.Request) *graphql.Response
+	Execute func(*graphql.Request, *RequestInfo) *graphql.Response
 
 	// If given, this function is invoked when the servers receives the graphql-ws connection init
 	// payload. If an error is returned, it will be sent to the client and the connection will be
