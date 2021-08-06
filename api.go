@@ -232,23 +232,22 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	req.Schema = api.schema
 	req.IdleHandler = apiRequest.IdleHandler
 
-	execute := api.execute
+	execute := func(req *graphql.Request) *graphql.Response {
+		var info RequestInfo
+		if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost)); len(errs) > 0 {
+			return &graphql.Response{
+				Errors: errs,
+			}
+		} else {
+			req.Document = doc
+			return api.execute(req, &info)
+		}
+	}
 	if storage := api.config.PersistedQueryStorage; storage != nil {
 		execute = PersistedQueryExtension(storage, execute)
 	}
 
-	var info RequestInfo
-	var resp *graphql.Response
-	if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost)); len(errs) > 0 {
-		resp = &graphql.Response{
-			Errors: errs,
-		}
-	} else {
-		req.Document = doc
-		resp = execute(req, &info)
-	}
-
-	body, err := jsoniter.Marshal(resp)
+	body, err := jsoniter.Marshal(execute(req))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

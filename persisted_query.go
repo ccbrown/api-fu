@@ -27,8 +27,8 @@ var emptyStringHash = sha256.Sum256([]byte(""))
 //
 // Typically this shouldn't be invoked directly. Instead, set the PersistedQueryStorage Config
 // field.
-func PersistedQueryExtension(storage PersistedQueryStorage, execute func(*graphql.Request, *RequestInfo) *graphql.Response) func(*graphql.Request, *RequestInfo) *graphql.Response {
-	return func(input *graphql.Request, info *RequestInfo) *graphql.Response {
+func PersistedQueryExtension(storage PersistedQueryStorage, execute func(*graphql.Request) *graphql.Response) func(*graphql.Request) *graphql.Response {
+	return func(input *graphql.Request) *graphql.Response {
 		r := *input
 		ext, _ := r.Extensions["persistedQuery"].(map[string]interface{})
 		switch ext["version"] {
@@ -64,6 +64,6 @@ func PersistedQueryExtension(storage PersistedQueryStorage, execute func(*graphq
 				storage.PersistQuery(r.Context, r.Query, hash[:])
 			}
 		}
-		return execute(&r, info)
+		return execute(&r)
 	}
 }

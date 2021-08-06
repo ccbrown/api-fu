@@ -27,7 +27,7 @@ func TestPersistedQueryExtension(t *testing.T) {
 	query := `{ __typename }`
 	queryHash := sha256.Sum256([]byte(query))
 	queryHashHex := hex.EncodeToString(queryHash[:])
-	execute := PersistedQueryExtension(storage, func(r *graphql.Request, info *RequestInfo) *graphql.Response {
+	execute := PersistedQueryExtension(storage, func(r *graphql.Request) *graphql.Response {
 		assert.Equal(t, query, r.Query)
 		return success
 	})
@@ -45,7 +45,7 @@ func TestPersistedQueryExtension(t *testing.T) {
 				"sha256Hash": queryHashHex,
 			},
 		},
-	}, nil))
+	}))
 
 	assert.Equal(t, success, execute(&graphql.Request{
 		Query: query,
@@ -55,7 +55,7 @@ func TestPersistedQueryExtension(t *testing.T) {
 				"sha256Hash": queryHashHex,
 			},
 		},
-	}, nil))
+	}))
 
 	assert.Equal(t, success, execute(&graphql.Request{
 		Extensions: map[string]interface{}{
@@ -64,5 +64,5 @@ func TestPersistedQueryExtension(t *testing.T) {
 				"sha256Hash": queryHashHex,
 			},
 		},
-	}, nil))
+	}))
 }
