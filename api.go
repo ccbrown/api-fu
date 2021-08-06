@@ -21,10 +21,14 @@ type API struct {
 	schema  *graphql.Schema
 	config  *Config
 	logger  logrus.FieldLogger
-	execute func(*graphql.Request) *graphql.Response
+	execute func(*graphql.Request, *RequestInfo) *graphql.Response
 
 	graphqlWSConnectionsMutex sync.Mutex
 	graphqlWSConnections      map[*graphqlws.Connection]struct{}
+}
+
+type RequestInfo struct {
+	Cost int
 }
 
 func normalizeModelType(t reflect.Type) reflect.Type {
@@ -46,7 +50,9 @@ func NewAPI(cfg *Config) (*API, error) {
 	}
 	execute := cfg.Execute
 	if execute == nil {
-		execute = graphql.Execute
+		execute = func(r *graphql.Request, info *RequestInfo) *graphql.Response {
+			return graphql.Execute(r)
+		}
 	}
 	return &API{
 		config:               cfg,
@@ -231,7 +237,18 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 		execute = PersistedQueryExtension(storage, execute)
 	}
 
-	body, err := jsoniter.Marshal(execute(req))
+	var info RequestInfo
+	var resp *graphql.Response
+	if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost)); len(errs) > 0 {
+		resp = &graphql.Response{
+			Errors: errs,
+		}
+	} else {
+		req.Document = doc
+		resp = execute(req, &info)
+	}
+
+	body, err := jsoniter.Marshal(resp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
