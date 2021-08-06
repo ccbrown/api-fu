@@ -103,7 +103,7 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 								if fieldCost.Context != nil {
 									newCtx = fieldCost.Context
 								}
-							} else {
+							} else if selection.Name.Name != "__typename" {
 								ret = append(ret, newSecondaryError(selection, "unknown field type"))
 							}
 						case *ast.FragmentSpread:
