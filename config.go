@@ -87,6 +87,7 @@ func (cfg *Config) init() {
 							Type: graphql.NewNonNullType(graphql.IDType),
 						},
 					},
+					Cost: graphql.FieldResolverCost(1),
 					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 						// TODO: batching?
 						return ctxAPI(ctx.Context).resolveNodeByGlobalId(ctx.Context, ctx.Arguments["id"].(string))
@@ -99,6 +100,13 @@ func (cfg *Config) init() {
 						"ids": {
 							Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(graphql.IDType))),
 						},
+					},
+					Cost: func(ctx *graphql.FieldCostContext) graphql.FieldCost {
+						ids, _ := ctx.Arguments["ids"].([]interface{})
+						return graphql.FieldCost{
+							Resolver:   1,
+							Multiplier: len(ids),
+						}
 					},
 					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
 						var ids []string
