@@ -60,9 +60,9 @@ type FieldDefinition struct {
 	Directives        []*Directive
 	DeprecationReason string
 
-	// This function can be used to define the cost of resolving the field. By default, all fields
-	// are considered to have a constant cost of 1. The total cost of an operation can be calculated
-	// before the operation is executed, enabling rate limiting and metering.
+	// This function can be used to define the cost of resolving the field. The total cost of an
+	// operation can be calculated before the operation is executed, enabling rate limiting and
+	// metering.
 	Cost func(*FieldCostContext) FieldCost
 
 	Resolve func(*FieldContext) (interface{}, error)

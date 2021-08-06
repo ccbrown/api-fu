@@ -24,6 +24,9 @@ type Config struct {
 	// https://www.apollographql.com/docs/react/api/link/persisted-queries/
 	PersistedQueryStorage PersistedQueryStorage
 
+	// When calculating field costs, this is used as the default.
+	DefaultFieldCost graphql.FieldCost
+
 	// Execute is invoked to execute a GraphQL request. If not given, this is simply
 	// graphql.Execute. You may wish to provide this to perform request logging or
 	// pre/post-processing.

@@ -48,7 +48,7 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 
 	var info RequestInfo
 	var resp *graphql.Response
-	if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost)); len(errs) > 0 {
+	if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost, h.API.config.DefaultFieldCost)); len(errs) > 0 {
 		resp = &graphql.Response{
 			Errors: errs,
 		}

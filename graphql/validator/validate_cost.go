@@ -39,7 +39,7 @@ func checkedNonNegativeAdd(a, b int) int {
 // no limit is enforced. If actual is non-nil, it is set to the actual cost of the operation.
 // Queries with costs that are too high to calculate due to overflows always result in an error when
 // max is non-negative, and actual will be set to the maximum possible value.
-func ValidateCost(operationName string, variableValues map[string]interface{}, max int, actual *int) Rule {
+func ValidateCost(operationName string, variableValues map[string]interface{}, max int, actual *int, defaultCost schema.FieldCost) Rule {
 	return func(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
 		var ret []*Error
 
@@ -90,9 +90,7 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 									Context:   ctx,
 									Arguments: coerceArgumentValues(selection, def.Arguments, selection.Arguments, variableValues),
 								}
-								fieldCost := schema.FieldCost{
-									Resolver: 1,
-								}
+								fieldCost := defaultCost
 								if def.Cost != nil {
 									fieldCost = def.Cost(&costContext)
 								}
