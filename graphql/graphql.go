@@ -82,8 +82,8 @@ type ValidatorRule = validator.Rule
 // no limit is enforced. If actual is non-nil, it is set to the actual cost of the operation.
 // Queries with costs that are too high to calculate due to overflows always result in an error when
 // max is non-negative, and actual will be set to the maximum possible value.
-func ValidateCost(operationName string, variableValues map[string]interface{}, max int, actual *int) ValidatorRule {
-	return validator.ValidateCost(operationName, variableValues, max, actual)
+func ValidateCost(operationName string, variableValues map[string]interface{}, max int, actual *int, defaultCost schema.FieldCost) ValidatorRule {
+	return validator.ValidateCost(operationName, variableValues, max, actual, defaultCost)
 }
 
 // IncludeDirective implements the @include directive as defined by the GraphQL spec.
@@ -161,8 +161,8 @@ type Request struct {
 // -1, no limit is enforced. If actual is non-nil, it is set to the actual cost of the operation.
 // Queries with costs that are too high to calculate due to overflows always result in an error when
 // max is non-negative, and actual will be set to the maximum possible value.
-func (r *Request) ValidateCost(max int, actual *int) ValidatorRule {
-	return validator.ValidateCost(r.OperationName, r.VariableValues, max, actual)
+func (r *Request) ValidateCost(max int, actual *int, defaultCost schema.FieldCost) ValidatorRule {
+	return validator.ValidateCost(r.OperationName, r.VariableValues, max, actual, defaultCost)
 }
 
 func (r *Request) executorRequest(doc *ast.Document) *executor.Request {

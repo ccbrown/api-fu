@@ -234,7 +234,7 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 
 	execute := func(req *graphql.Request) *graphql.Response {
 		var info RequestInfo
-		if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost)); len(errs) > 0 {
+		if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost, api.config.DefaultFieldCost)); len(errs) > 0 {
 			return &graphql.Response{
 				Errors: errs,
 			}
