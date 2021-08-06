@@ -31,6 +31,9 @@ func TestValidateCost(t *testing.T) {
 		"Simple": {
 			Source: `{freeBoolean}`,
 		},
+		"TypeName": {
+			Source: `{__typename t:__typename}`,
+		},
 		"Multiplier": {
 			Source:       `{objects(first: 10) { int }}`,
 			ExpectedCost: 1 + 10,
