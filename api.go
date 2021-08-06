@@ -18,11 +18,10 @@ import (
 // API is responsible for serving your API traffic. Construct an API by creating a Config, then
 // calling NewAPI.
 type API struct {
-	schema           *graphql.Schema
-	config           *Config
-	logger           logrus.FieldLogger
-	execute          func(*graphql.Request, *RequestInfo) *graphql.Response
-	defaultFieldCost graphql.FieldCost
+	schema  *graphql.Schema
+	config  *Config
+	logger  logrus.FieldLogger
+	execute func(*graphql.Request, *RequestInfo) *graphql.Response
 
 	graphqlWSConnectionsMutex sync.Mutex
 	graphqlWSConnections      map[*graphqlws.Connection]struct{}
