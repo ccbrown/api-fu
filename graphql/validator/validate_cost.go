@@ -63,6 +63,11 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 			}
 		}
 
+		var coercedVariableValues map[string]interface{}
+		if op != nil {
+			coercedVariableValues, _ = CoerceVariableValues(s, op, variableValues)
+		}
+
 		var cost int
 		multipliers := []int{1}
 		ctxs := []context.Context{context.Background()}
@@ -85,21 +90,23 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 					for _, selection := range selectionSet.Selections {
 						switch selection := selection.(type) {
 						case *ast.Field:
-							if def, ok := typeInfo.FieldDefinitions[selection]; ok {
-								costContext := schema.FieldCostContext{
-									Context:   ctx,
-									Arguments: coerceArgumentValues(selection, def.Arguments, selection.Arguments, variableValues),
-								}
-								fieldCost := defaultCost
-								if def.Cost != nil {
-									fieldCost = def.Cost(&costContext)
-								}
-								cost = checkedNonNegativeAdd(cost, checkedNonNegativeMultiply(multiplier, fieldCost.Resolver))
-								if fieldCost.Multiplier > 1 {
-									newMultiplier = checkedNonNegativeMultiply(multiplier, fieldCost.Multiplier)
-								}
-								if fieldCost.Context != nil {
-									newCtx = fieldCost.Context
+							if def, ok := typeInfo.FieldDefinitions[selection]; ok && coercedVariableValues != nil {
+								if args, err := CoerceArgumentValues(selection, def.Arguments, selection.Arguments, coercedVariableValues); err == nil {
+									costContext := schema.FieldCostContext{
+										Context:   ctx,
+										Arguments: args,
+									}
+									fieldCost := defaultCost
+									if def.Cost != nil {
+										fieldCost = def.Cost(&costContext)
+									}
+									cost = checkedNonNegativeAdd(cost, checkedNonNegativeMultiply(multiplier, fieldCost.Resolver))
+									if fieldCost.Multiplier > 1 {
+										newMultiplier = checkedNonNegativeMultiply(multiplier, fieldCost.Multiplier)
+									}
+									if fieldCost.Context != nil {
+										newCtx = fieldCost.Context
+									}
 								}
 							} else if selection.Name.Name != "__typename" {
 								ret = append(ret, newSecondaryError(selection, "unknown field type"))
@@ -148,46 +155,4 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 
 		return ret
 	}
-}
-
-// Makes a best effort attempt to coerce argument values, ignoring any errors that occur.
-func coerceArgumentValues(node ast.Node, argumentDefinitions map[string]*schema.InputValueDefinition, arguments []*ast.Argument, variableValues map[string]interface{}) map[string]interface{} {
-	var coercedValues map[string]interface{}
-
-	argumentValues := map[string]ast.Value{}
-	for _, arg := range arguments {
-		argumentValues[arg.Name.Name] = arg.Value
-	}
-
-	for argumentName, argumentDefinition := range argumentDefinitions {
-		argumentType := argumentDefinition.Type
-		defaultValue := argumentDefinition.DefaultValue
-
-		argumentValue, hasValue := argumentValues[argumentName]
-
-		if argumentValue, ok := argumentValue.(*ast.Variable); ok {
-			_, hasValue = variableValues[argumentValue.Name.Name]
-		}
-
-		if !hasValue && defaultValue != nil {
-			if defaultValue == schema.Null {
-				defaultValue = nil
-			}
-			if coercedValues == nil {
-				coercedValues = map[string]interface{}{}
-			}
-			coercedValues[argumentName] = defaultValue
-		} else if hasValue {
-			if coercedValues == nil {
-				coercedValues = map[string]interface{}{}
-			}
-			if argVariable, ok := argumentValue.(*ast.Variable); ok {
-				coercedValues[argumentName] = variableValues[argVariable.Name.Name]
-			} else if coerced, err := schema.CoerceLiteral(argumentValue, argumentType, variableValues); err == nil {
-				coercedValues[argumentName] = coerced
-			}
-		}
-	}
-
-	return coercedValues
 }

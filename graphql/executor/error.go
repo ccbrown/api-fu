@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ccbrown/api-fu/graphql/ast"
+	"github.com/ccbrown/api-fu/graphql/validator"
 )
 
 // Location represents the location of a character within a query's source text.
@@ -51,6 +52,22 @@ func newErrorWithPath(node ast.Node, path *path, message string, args ...interfa
 	}
 	if path != nil {
 		ret.Path = path.Slice()
+	}
+	return ret
+}
+
+func newErrorWithValidatorError(err *validator.Error) *Error {
+	if err == nil {
+		return nil
+	}
+	ret := &Error{
+		Message: err.Message,
+	}
+	for _, loc := range err.Locations {
+		ret.Locations = append(ret.Locations, Location{
+			Line:   loc.Line,
+			Column: loc.Column,
+		})
 	}
 	return ret
 }
