@@ -47,8 +47,7 @@ func FieldResolverCost(n int) func(*FieldCostContext) FieldCost {
 type FieldCostContext struct {
 	Context context.Context
 
-	// The arguments that were provided. Note that cost calculations are done during validation, so
-	// it is possible for non-null arguments to be absent (which would later result in an error).
+	// The arguments that were provided.
 	Arguments map[string]interface{}
 }
 
