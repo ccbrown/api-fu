@@ -180,7 +180,7 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
 	})
 	if !isNil(resolveErr) {
 		return nil, &Error{
-			Message: err.Error(),
+			Message: resolveErr.Error(),
 			Locations: []Location{{
 				Line:   field.Position().Line,
 				Column: field.Position().Column,
