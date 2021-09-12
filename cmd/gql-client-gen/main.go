@@ -356,7 +356,11 @@ func Generate(schema *schema.Schema, pkg string, inputGlobs []string, wrapper, j
 	tmp := state.output
 	state.output = "package " + pkg + "\n\n"
 	if state.requiresJSONImport {
-		state.output += fmt.Sprintf("import %#v\n\n", jsonPackage)
+		if !strings.HasSuffix(jsonPackage, "/json") {
+			state.output += fmt.Sprintf("import json %#v\n\n", jsonPackage)
+		} else {
+			state.output += fmt.Sprintf("import %#v\n\n", jsonPackage)
+		}
 	}
 	state.output += tmp
 
