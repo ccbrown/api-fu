@@ -12,7 +12,7 @@ func TestGenerate(t *testing.T) {
 	schema, err := LoadSchema("testdata/github-schema.json")
 	require.NoError(t, err)
 
-	_, errs := Generate(schema, "test", []string{"testdata/github.go"}, "gql")
+	_, errs := Generate(schema, "test", []string{"testdata/github.go"}, "gql", "encoding/json")
 	require.Empty(t, errs)
 }
 

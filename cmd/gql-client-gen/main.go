@@ -328,7 +328,7 @@ func (s *generateState) processFile(path string) []error {
 	return errs
 }
 
-func Generate(schema *schema.Schema, pkg string, inputGlobs []string, wrapper string) (string, []error) {
+func Generate(schema *schema.Schema, pkg string, inputGlobs []string, wrapper, jsonPackage string) (string, []error) {
 	state := &generateState{
 		schema:      schema,
 		wrapper:     wrapper,
@@ -356,7 +356,7 @@ func Generate(schema *schema.Schema, pkg string, inputGlobs []string, wrapper st
 	tmp := state.output
 	state.output = "package " + pkg + "\n\n"
 	if state.requiresJSONImport {
-		state.output += "import \"encoding/json\"\n\n"
+		state.output += fmt.Sprintf("import %#v\n\n", jsonPackage)
 	}
 	state.output += tmp
 
@@ -398,6 +398,7 @@ func Run(w io.Writer, args ...string) []error {
 	input := flags.StringArrayP("input", "i", nil, "the input files to search")
 	schemaPath := flags.String("schema", "", "the path to the schema json file")
 	wrapper := flags.String("wrapper", "gql", "the wrapper name to look for")
+	json := flags.String("json", "encoding/json", "the json encoding package to import")
 	flags.Parse(args)
 
 	if *pkg == "" {
@@ -413,7 +414,7 @@ func Run(w io.Writer, args ...string) []error {
 		return []error{fmt.Errorf("error loading schema: %w", err)}
 	}
 
-	output, errs := Generate(schema, *pkg, *input, *wrapper)
+	output, errs := Generate(schema, *pkg, *input, *wrapper, *json)
 	if len(errs) > 0 {
 		return errs
 	}
