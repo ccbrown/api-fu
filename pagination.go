@@ -449,6 +449,8 @@ type TimeBasedConnectionConfig struct {
 	ResolveTotalCount func(ctx *graphql.FieldContext) (interface{}, error)
 }
 
+var distantFuture = time.Date(3000, time.January, 1, 0, 0, 0, 0, time.UTC)
+
 // TimeBasedConnection creates a new connection for edges sorted by time. In addition to the
 // standard first, last, after, and before fields, the connection will have atOrAfterTime and
 // beforeTime fields, which can be used to query a specific time range.
@@ -493,7 +495,7 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 				atOrAfterTime = t
 			}
 
-			beforeTime := time.Now().Add(365 * 24 * time.Hour)
+			beforeTime := distantFuture
 			if t, ok := ctx.Arguments["beforeTime"].(time.Time); ok {
 				beforeTime = t
 			}
