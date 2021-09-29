@@ -65,7 +65,11 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 
 		var coercedVariableValues map[string]interface{}
 		if op != nil {
-			coercedVariableValues, _ = CoerceVariableValues(s, op, variableValues)
+			if v, err := CoerceVariableValues(s, op, variableValues); err != nil {
+				ret = append(ret, newSecondaryError(op, err.Error()))
+			} else {
+				coercedVariableValues = v
+			}
 		}
 
 		var cost int
@@ -137,7 +141,7 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 			})
 		}
 
-		if op != nil {
+		if len(ret) == 0 && op != nil {
 			visitNode(op)
 		}
 
