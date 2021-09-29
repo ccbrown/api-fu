@@ -91,7 +91,9 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 						switch selection := selection.(type) {
 						case *ast.Field:
 							if def, ok := typeInfo.FieldDefinitions[selection]; ok && coercedVariableValues != nil {
-								if args, err := CoerceArgumentValues(selection, def.Arguments, selection.Arguments, coercedVariableValues); err == nil {
+								if args, err := CoerceArgumentValues(selection, def.Arguments, selection.Arguments, coercedVariableValues); err != nil {
+									ret = append(ret, newSecondaryError(selection, err.Error()))
+								} else {
 									costContext := schema.FieldCostContext{
 										Context:   ctx,
 										Arguments: args,
@@ -123,6 +125,10 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 							}
 						}
 					}
+				}
+
+				if len(ret) > 0 {
+					return false
 				}
 
 				multipliers = append(multipliers, newMultiplier)
