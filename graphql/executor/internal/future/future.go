@@ -5,110 +5,121 @@ import (
 )
 
 // Result holds either a value or an error.
-type Result struct {
-	Value interface{}
+type Result[T any] struct {
+	Value T
 	Error error
 }
 
 // IsOk returns true if the result is not an error.
-func (r Result) IsOk() bool {
+func (r Result[T]) IsOk() bool {
 	return r.Error == nil || reflect.ValueOf(r.Error).IsNil()
 }
 
 // IsErr returns true if the result is an error.
-func (r Result) IsErr() bool {
+func (r Result[T]) IsErr() bool {
 	return !r.IsOk()
 }
 
 // Future represents a result that will be available at some point in the future. It is very similar
 // to Rust's Future trait.
-type Future struct {
-	result Result
-	poll   func() (Result, bool)
+type Future[T any] struct {
+	result Result[T]
+	poll   func() (Result[T], bool)
 }
 
 // New constructs a new future from a poll function. When the future's value is ready, poll should
 // return the value and true. Otherwise, poll should return a zero value and false.
-func New(poll func() (Result, bool)) Future {
-	return Future{
+func New[T any](poll func() (Result[T], bool)) Future[T] {
+	return Future[T]{
 		poll: poll,
 	}
 }
 
 // IsReady returns true if the future's value is ready.
-func (f Future) IsReady() bool {
+func (f Future[T]) IsReady() bool {
 	return f.poll == nil
 }
 
 // Result returns the future's result if it is ready.
-func (f Future) Result() Result {
+func (f Future[T]) Result() Result[T] {
 	return f.result
 }
 
 // Map converts a future's result to a different type using a conversion function.
-func (f Future) Map(fn func(Result) Result) Future {
+func Map[T any, U any](f Future[T], fn func(Result[T]) Result[U]) Future[U] {
 	if f.IsReady() {
-		f.result = fn(f.result)
+		return Future[U]{
+			result: fn(f.result),
+		}
 	} else {
-		fpoll := f.poll
-		f.poll = func() (Result, bool) {
-			r, ok := fpoll()
-			if ok {
-				return fn(r), true
-			}
-			return r, false
+		return Future[U]{
+			poll: func() (Result[U], bool) {
+				r, ok := f.poll()
+				if ok {
+					return fn(r), true
+				}
+				var r2 Result[U]
+				return r2, false
+			},
 		}
 	}
-	return f
 }
 
 // MapOk converts a future's value to a different type using a conversion function.
-func (f Future) MapOk(fn func(interface{}) interface{}) Future {
+func MapOk[T any, U any](f Future[T], fn func(T) U) Future[U] {
 	if f.IsReady() {
+		var r Result[U]
 		if f.result.IsOk() {
-			f.result.Value = fn(f.result.Value)
+			r.Value = fn(f.result.Value)
+		} else {
+			r.Error = f.result.Error
+		}
+		return Future[U]{
+			result: r,
 		}
 	} else {
-		fpoll := f.poll
-		f.poll = func() (Result, bool) {
-			r, ok := fpoll()
-			if ok && r.IsOk() {
-				r.Value = fn(r.Value)
-			}
-			return r, ok
+		return Future[U]{
+			poll: func() (Result[U], bool) {
+				r, ok := f.poll()
+				var r2 Result[U]
+				if ok && r.IsOk() {
+					r2.Value = fn(r.Value)
+				}
+				return r2, ok
+			},
 		}
 	}
-	return f
 }
 
 // Then invokes f when the future is resolved and returns a future that resolves when f's return
 // value is resolved.
-func (f Future) Then(fn func(Result) Future) Future {
+func Then[T any, U any](f Future[T], fn func(Result[T]) Future[U]) Future[U] {
 	if f.IsReady() {
 		return fn(f.result)
 	}
-	var then Future
+	var then Future[U]
 	var hasThen bool
 	fpoll := f.poll
-	f.poll = func() (Result, bool) {
-		if !hasThen {
-			if r, ok := fpoll(); ok {
-				then = fn(r)
-				hasThen = true
+	return Future[U]{
+		poll: func() (Result[U], bool) {
+			if !hasThen {
+				if r, ok := fpoll(); ok {
+					then = fn(r)
+					hasThen = true
+				}
 			}
-		}
-		if hasThen {
-			then.Poll()
-			return then.result, then.IsReady()
-		}
-		return Result{}, false
+			if hasThen {
+				then.Poll()
+				return then.result, then.IsReady()
+			}
+			return Result[U]{}, false
+		},
 	}
-	return f
 }
 
 // Poll invokes pollers for the future and its dependencies, allowing futures to transition to
 // the ready state.
-func (f *Future) Poll() {
+func (f *Future[T]) Poll() {
 	if f.poll != nil {
 		var ok bool
 		if f.result, ok = f.poll(); ok {
@@ -118,34 +129,34 @@ func (f *Future) Poll() {
 }
 
 // Ok returns a new future that is immediately ready with the given value.
-func Ok(v interface{}) Future {
-	return Future{
-		result: Result{
+func Ok[T any](v T) Future[T] {
+	return Future[T]{
+		result: Result[T]{
 			Value: v,
 		},
 	}
 }
 
 // Err returns a new future that is immediately ready with the given error.
-func Err(err error) Future {
-	return Future{
-		result: Result{
+func Err[T any](err error) Future[T] {
+	return Future[T]{
+		result: Result[T]{
 			Error: err,
 		},
 	}
 }
 
 // Join combines the values from multiple futures into a single future that resolves to
-// []interface{}. If any future errors, the returned future immediately resolves to an error.
-func Join(fs ...Future) Future {
-	results := make([]interface{}, len(fs))
+// []T. If any future errors, the returned future immediately resolves to an error.
+func Join[T any](fs ...Future[T]) Future[[]T] {
+	results := make([]T, len(fs))
 
 	ok := true
 
 	for i, f := range fs {
 		if f.IsReady() {
 			if !f.Result().IsOk() {
-				return Err(f.Result().Error)
+				return Err[[]T](f.Result().Error)
 			}
 			results[i] = f.Result().Value
 		} else {
@@ -157,14 +168,14 @@ func Join(fs ...Future) Future {
 		return Ok(results)
 	}
 
-	return New(func() (Result, bool) {
+	return New(func() (Result[[]T], bool) {
 		ok := true
 
 		for i, f := range fs {
 			f.Poll()
 			if f.IsReady() {
 				if !f.Result().IsOk() {
-					return Result{
+					return Result[[]T]{
 						Error: f.Result().Error,
 					}, true
 				}
@@ -175,26 +186,26 @@ func Join(fs ...Future) Future {
 		}
 
 		if ok {
-			return Result{
+			return Result[[]T]{
 				Value: results,
 			}, true
 		}
 
-		return Result{}, false
+		return Result[[]T]{}, false
 	})
 }
 
 // After returns a single future that resolves after all of the given futures. If any future errors,
 // the returned future immediately resolves to an error. This is very similar to Join except that
-// the resolved value will be nil (making it more efficient if you don't need the values from the
+// the resolved value will be empty (making it more efficient if you don't need the values from the
 // joined futures).
-func After(fs ...Future) Future {
+func After[T any](fs ...Future[T]) Future[struct{}] {
 	ok := true
 
 	for _, f := range fs {
 		if f.IsReady() {
 			if !f.Result().IsOk() {
-				return Err(f.Result().Error)
+				return Err[struct{}](f.Result().Error)
 			}
 		} else {
 			ok = false
@@ -202,17 +213,17 @@ func After(fs ...Future) Future {
 	}
 
 	if ok {
-		return Ok(nil)
+		return Ok(struct{}{})
 	}
 
-	return New(func() (Result, bool) {
+	return New(func() (Result[struct{}], bool) {
 		ok := true
 
 		for _, f := range fs {
 			f.Poll()
 			if f.IsReady() {
 				if !f.Result().IsOk() {
-					return Result{
+					return Result[struct{}]{
 						Error: f.Result().Error,
 					}, true
 				}
@@ -222,9 +233,9 @@ func After(fs ...Future) Future {
 		}
 
 		if ok {
-			return Result{}, true
+			return Result[struct{}]{}, true
 		}
 
-		return Result{}, false
+		return Result[struct{}]{}, false
 	})
 }

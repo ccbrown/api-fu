@@ -81,7 +81,7 @@ type executor struct {
 
 	// CatchError is used to handle errors for nullable fields. The closure is generated on
 	// construction to avoid allocations during execution.
-	CatchError func(future.Result) future.Result
+	CatchError func(future.Result[any]) future.Result[any]
 }
 
 func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
@@ -103,7 +103,7 @@ func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 		IdleHandler:          r.IdleHandler,
 		GroupedFieldSetCache: map[string]*GroupedFieldSet{},
 	}
-	e.CatchError = func(r future.Result) future.Result {
+	e.CatchError = func(r future.Result[any]) future.Result[any] {
 		if r.IsErr() {
 			e.Errors = append(e.Errors, r.Error.(*Error))
 			r.Error = nil
@@ -123,11 +123,11 @@ func (e *executor) executeQuery(initialValue interface{}) (*OrderedMap, []*Error
 	if !schema.IsObjectType(queryType) {
 		return nil, []*Error{newError(e.Operation, "This schema cannot perform queries.")}
 	}
-	if data, err := e.wait(e.executeSelections(e.Operation.SelectionSet.Selections, queryType, initialValue, nil, false)); err != nil {
+	if data, err := wait(e, e.executeSelections(e.Operation.SelectionSet.Selections, queryType, initialValue, nil, false)); err != nil {
 		e.Errors = append(e.Errors, err.(*Error))
 		return nil, e.Errors
 	} else if data != nil {
-		return data.(*OrderedMap), e.Errors
+		return data, e.Errors
 	}
 	return nil, nil
 }
@@ -137,11 +137,11 @@ func (e *executor) executeMutation(initialValue interface{}) (*OrderedMap, []*Er
 	if !schema.IsObjectType(mutationType) {
 		return nil, []*Error{newError(e.Operation, "This schema cannot perform mutations.")}
 	}
-	if data, err := e.wait(e.executeSelections(e.Operation.SelectionSet.Selections, mutationType, initialValue, nil, true)); err != nil {
+	if data, err := wait(e, e.executeSelections(e.Operation.SelectionSet.Selections, mutationType, initialValue, nil, true)); err != nil {
 		e.Errors = append(e.Errors, err.(*Error))
 		return nil, e.Errors
 	} else if data != nil {
-		return data.(*OrderedMap), e.Errors
+		return data, e.Errors
 	}
 	return nil, nil
 }
@@ -197,19 +197,19 @@ func (e *executor) executeSubscriptionEvent(initialValue interface{}) (*OrderedM
 	if !schema.IsObjectType(subscriptionType) {
 		return nil, []*Error{newError(e.Operation, "This schema cannot perform subscriptions.")}
 	}
-	if data, err := e.wait(e.executeSelections(e.Operation.SelectionSet.Selections, subscriptionType, initialValue, nil, false)); err != nil {
+	if data, err := wait(e, e.executeSelections(e.Operation.SelectionSet.Selections, subscriptionType, initialValue, nil, false)); err != nil {
 		e.Errors = append(e.Errors, err.(*Error))
 		return nil, e.Errors
 	} else if data != nil {
-		return data.(*OrderedMap), e.Errors
+		return data, e.Errors
 	}
 	return nil, nil
 }
 
-func (e *executor) wait(f future.Future) (interface{}, error) {
-	var result future.Result
+func wait[T any](e *executor, f future.Future[T]) (T, error) {
+	var result future.Result[T]
 	done := false
-	f = f.Map(func(r future.Result) future.Result {
+	f = future.Map(f, func(r future.Result[T]) future.Result[T] {
 		result = r
 		done = true
 		return r
@@ -217,7 +217,7 @@ func (e *executor) wait(f future.Future) (interface{}, error) {
 	f.Poll()
 	for !done {
 		if e.IdleHandler == nil {
-			return nil, newError(nil, "No idle handler defined.")
+			return result.Value, newError(nil, "No idle handler defined.")
 		}
 		e.IdleHandler()
 		f.Poll()
@@ -225,13 +225,12 @@ func (e *executor) wait(f future.Future) (interface{}, error) {
 	return result.Value, result.Error
 }
 
-// executeSelections returns a future for an *OrderedMap
-func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path *path, forceSerial bool) future.Future {
+func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path *path, forceSerial bool) future.Future[*OrderedMap] {
 	groupedFieldSet := e.collectFields(objectType, selections)
 
 	resultMap := NewOrderedMapWithLength(groupedFieldSet.Len())
 
-	futures := make([]future.Future, 0, groupedFieldSet.Len())
+	futures := make([]future.Future[any], 0, groupedFieldSet.Len())
 
 	for i, item := range groupedFieldSet.Items() {
 		responseKey := item.Key
@@ -251,15 +250,15 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		if fieldDef != nil {
 			f := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, path.WithStringComponent(responseKey)))
 			if forceSerial {
-				responseValue, err := e.wait(f)
+				responseValue, err := wait(e, f)
 				if err != nil {
-					return future.Err(err)
+					return future.Err[*OrderedMap](err)
 				}
 				resultMap.Set(i, responseKey, responseValue)
 			} else {
 				i := i
 				responseKey := responseKey
-				futures = append(futures, f.MapOk(func(responseValue interface{}) interface{} {
+				futures = append(futures, future.MapOk(f, func(responseValue any) any {
 					resultMap.Set(i, responseKey, responseValue)
 					return nil
 				}))
@@ -267,7 +266,7 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 	}
 
-	return future.After(futures...).MapOk(func(interface{}) interface{} {
+	return future.MapOk(future.After(futures...), func(struct{}) *OrderedMap {
 		return resultMap
 	})
 }
@@ -294,11 +293,11 @@ func newFieldResolveError(fields []*ast.Field, err error, path *path) *Error {
 	}
 }
 
-func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path *path) future.Future {
+func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path *path) future.Future[any] {
 	field := fields[0]
 	argumentValues, coercionErr := coerceArgumentValues(field, fieldDef.Arguments, field.Arguments, e.VariableValues)
 	if coercionErr != nil {
-		return future.Err(coercionErr)
+		return future.Err[any](coercionErr)
 	}
 	resolvedValue, err := fieldDef.Resolve(&schema.FieldContext{
 		Context:   e.Context,
@@ -307,11 +306,11 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 		Arguments: argumentValues,
 	})
 	if !isNil(err) {
-		return future.Err(newFieldResolveError(fields, err, path))
+		return future.Err[any](newFieldResolveError(fields, err, path))
 	}
 	if f, ok := resolvedValue.(ResolvePromise); ok {
-		return future.New(func() (future.Result, bool) {
-			var result future.Result
+		return future.Then(future.New(func() (future.Result[any], bool) {
+			var result future.Result[any]
 			select {
 			case r := <-f:
 				if !isNil(r.Error) {
@@ -323,26 +322,26 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 			default:
 				return result, false
 			}
-		}).Then(func(r future.Result) future.Future {
+		}), func(r future.Result[any]) future.Future[any] {
 			if r.IsOk() {
 				return e.completeValue(fieldDef.Type, fields, r.Value, path)
 			}
-			return future.Err(newFieldResolveError(fields, r.Error, path))
+			return future.Err[any](newFieldResolveError(fields, r.Error, path))
 		})
 	}
 	return e.completeValue(fieldDef.Type, fields, resolvedValue, path)
 }
 
-func (e *executor) catchErrorIfNullable(t schema.Type, f future.Future) future.Future {
+func (e *executor) catchErrorIfNullable(t schema.Type, f future.Future[any]) future.Future[any] {
 	if schema.IsNonNullType(t) {
 		return f
 	}
-	return f.Map(e.CatchError)
+	return future.Map(f, e.CatchError)
 }
 
-func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path *path) future.Future {
+func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path *path) future.Future[any] {
 	if nonNullType, ok := fieldType.(*schema.NonNullType); ok {
-		return e.completeValue(nonNullType.Type, fields, result, path).Map(func(r future.Result) future.Result {
+		return future.Map(e.completeValue(nonNullType.Type, fields, result, path), func(r future.Result[any]) future.Result[any] {
 			if r.IsOk() && r.Value == nil {
 				r.Error = newErrorWithPath(fields[0], path, "Null result for non-null field.")
 			}
@@ -351,33 +350,35 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 	}
 
 	if isNil(result) {
-		return future.Ok(nil)
+		return future.Ok[any](nil)
 	}
 
 	switch fieldType := fieldType.(type) {
 	case *schema.ListType:
 		result := reflect.ValueOf(result)
 		if result.Kind() != reflect.Slice {
-			return future.Err(newErrorWithPath(fields[0], path, "Result is not a list."))
+			return future.Err[any](newErrorWithPath(fields[0], path, "Result is not a list."))
 		}
 		innerType := fieldType.Type
-		completedResult := make([]future.Future, result.Len())
+		completedResult := make([]future.Future[any], result.Len())
 		for i := range completedResult {
 			completedResult[i] = e.catchErrorIfNullable(innerType, e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithIntComponent(i)))
 		}
-		return future.Join(completedResult...)
+		return future.MapOk(future.Join(completedResult...), func(l []interface{}) interface{} {
+			return l
+		})
 	case *schema.ScalarType:
 		coerced, err := fieldType.CoerceResult(result)
 		if err != nil {
-			return future.Err(newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
+			return future.Err[any](newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
 		}
 		return future.Ok(coerced)
 	case *schema.EnumType:
 		coerced, err := fieldType.CoerceResult(result)
 		if err != nil {
-			return future.Err(newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
+			return future.Err[any](newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
 		}
-		return future.Ok(coerced)
+		return future.Ok[any](coerced)
 	case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		var objectType *schema.ObjectType
 		switch fieldType := fieldType.(type) {
@@ -399,9 +400,11 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 			}
 		}
 		if objectType == nil {
-			return future.Err(newErrorWithPath(fields[0], path, "Unable to determine object type."))
+			return future.Err[any](newErrorWithPath(fields[0], path, "Unable to determine object type."))
 		}
-		return e.executeSelections(mergeSelectionSets(fields), objectType, result, path, false)
+		return future.MapOk(e.executeSelections(mergeSelectionSets(fields), objectType, result, path, false), func(m *OrderedMap) interface{} {
+			return m
+		})
 	}
 	panic(fmt.Sprintf("unexpected field type: %T", fieldType))
 }
