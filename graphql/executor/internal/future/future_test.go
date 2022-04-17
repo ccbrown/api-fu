@@ -17,7 +17,7 @@ func TestOk(t *testing.T) {
 }
 
 func TestErr(t *testing.T) {
-	f := Err(fmt.Errorf("foo"))
+	f := Err[bool](fmt.Errorf("foo"))
 	require.True(t, f.IsReady())
 	require.False(t, f.Result().IsOk())
 	require.True(t, f.Result().IsErr())
@@ -25,9 +25,9 @@ func TestErr(t *testing.T) {
 }
 
 func TestMap(t *testing.T) {
-	f := Ok(1).Map(func(r Result) Result {
-		return Result{
-			Value: float64(r.Value.(int)),
+	f := Map(Ok(1), func(r Result[int]) Result[float64] {
+		return Result[float64]{
+			Value: float64(r.Value),
 		}
 	})
 	require.True(t, f.IsReady())
@@ -35,16 +35,16 @@ func TestMap(t *testing.T) {
 }
 
 func TestMapOk(t *testing.T) {
-	f := Ok(1).MapOk(func(v interface{}) interface{} {
-		return float64(v.(int))
+	f := MapOk(Ok(1), func(v int) float64 {
+		return float64(v)
 	})
 	require.True(t, f.IsReady())
 	assert.Equal(t, 1.0, f.Result().Value)
 }
 
 func TestThen(t *testing.T) {
-	f := Ok(1).Then(func(r Result) Future {
-		return Ok(float64(r.Value.(int)))
+	f := Then(Ok(1), func(r Result[int]) Future[float64] {
+		return Ok(float64(r.Value))
 	})
 	require.True(t, f.IsReady())
 	assert.Equal(t, 1.0, f.Result().Value)
@@ -53,17 +53,17 @@ func TestThen(t *testing.T) {
 func TestPoll(t *testing.T) {
 	v := 0
 
-	f := New(func() (Result, bool) {
-		return Result{Value: v}, v != 0
+	f := New(func() (Result[int], bool) {
+		return Result[int]{Value: v}, v != 0
 	})
-	f = f.Map(func(r Result) Result {
-		return Result{Value: r.Value.(int) + 1}
+	f = Map(f, func(r Result[int]) Result[int] {
+		return Result[int]{Value: r.Value + 1}
 	})
-	f = f.MapOk(func(v interface{}) interface{} {
-		return v.(int) + 1
+	f = MapOk(f, func(v int) int {
+		return v + 1
 	})
-	f = f.Then(func(r Result) Future {
-		return Ok(r.Value.(int) + 1)
+	f = Then(f, func(r Result[int]) Future[int] {
+		return Ok(r.Value + 1)
 	})
 
 	f.Poll()
@@ -81,14 +81,14 @@ func TestJoin(t *testing.T) {
 		f := Join(Ok(1), Ok(2))
 
 		require.True(t, f.IsReady())
-		assert.Equal(t, []interface{}{1, 2}, f.Result().Value)
+		assert.Equal(t, []int{1, 2}, f.Result().Value)
 	})
 
 	t.Run("NotReady", func(t *testing.T) {
 		ready := false
 
-		f := Join(New(func() (Result, bool) {
-			return Result{Value: 1}, ready
+		f := Join(New(func() (Result[int], bool) {
+			return Result[int]{Value: 1}, ready
 		}), Ok(2))
 
 		require.False(t, f.IsReady())
@@ -100,14 +100,14 @@ func TestJoin(t *testing.T) {
 		f.Poll()
 
 		require.True(t, f.IsReady())
-		assert.Equal(t, []interface{}{1, 2}, f.Result().Value)
+		assert.Equal(t, []int{1, 2}, f.Result().Value)
 	})
 
 	t.Run("NotReadyError", func(t *testing.T) {
 		ready := false
 
-		f := Join(New(func() (Result, bool) {
-			return Result{Error: fmt.Errorf("foo")}, ready
+		f := Join(New(func() (Result[int], bool) {
+			return Result[int]{Error: fmt.Errorf("foo")}, ready
 		}), Ok(2))
 
 		require.False(t, f.IsReady())
@@ -123,7 +123,7 @@ func TestJoin(t *testing.T) {
 	})
 
 	t.Run("Error", func(t *testing.T) {
-		f := Join(Err(fmt.Errorf("foo")), Ok(2))
+		f := Join(Err[int](fmt.Errorf("foo")), Ok(2))
 
 		require.True(t, f.IsReady())
 		assert.True(t, f.Result().IsErr())
@@ -141,8 +141,8 @@ func TestAfter(t *testing.T) {
 	t.Run("NotReady", func(t *testing.T) {
 		ready := false
 
-		f := After(New(func() (Result, bool) {
-			return Result{Value: 1}, ready
+		f := After(New(func() (Result[int], bool) {
+			return Result[int]{Value: 1}, ready
 		}), Ok(2))
 
 		require.False(t, f.IsReady())
@@ -160,8 +160,8 @@ func TestAfter(t *testing.T) {
 	t.Run("NotReadyError", func(t *testing.T) {
 		ready := false
 
-		f := After(New(func() (Result, bool) {
-			return Result{Error: fmt.Errorf("foo")}, ready
+		f := After(New(func() (Result[int], bool) {
+			return Result[int]{Error: fmt.Errorf("foo")}, ready
 		}), Ok(2))
 
 		require.False(t, f.IsReady())
@@ -177,7 +177,7 @@ func TestAfter(t *testing.T) {
 	})
 
 	t.Run("Error", func(t *testing.T) {
-		f := After(Err(fmt.Errorf("foo")), Ok(2))
+		f := After(Err[int](fmt.Errorf("foo")), Ok(2))
 
 		require.True(t, f.IsReady())
 		assert.True(t, f.Result().IsErr())
