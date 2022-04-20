@@ -219,3 +219,22 @@ func TestScanner_SkipsIgnored(t *testing.T) {
 	assert.Equal(t, []string{"{", "node", "{", "}", "}"}, literals)
 	assert.Empty(t, s.Errors())
 }
+
+// This is a regression test for an issue where the scanner would go into an infinite loop if the
+// input ended with a comment.
+func TestScanner_TerminatingComment(t *testing.T) {
+	s := New([]byte("{ foo } # bar"), 0)
+	var tokens []token.Token
+	var literals []string
+	for s.Scan() {
+		tokens = append(tokens, s.Token())
+		literals = append(literals, s.Literal())
+	}
+	assert.Equal(t, []token.Token{
+		token.PUNCTUATOR,
+		token.NAME,
+		token.PUNCTUATOR,
+	}, tokens)
+	assert.Equal(t, []string{"{", "foo", "}"}, literals)
+	assert.Empty(t, s.Errors())
+}
