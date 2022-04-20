@@ -147,7 +147,7 @@ func (s *Scanner) Scan() bool {
 			}
 			s.token = token.LINE_TERMINATOR
 		case '#':
-			for s.nextRune != '\r' && s.nextRune != '\n' {
+			for !s.isDone() && s.nextRune != '\r' && s.nextRune != '\n' {
 				s.consumeRune()
 			}
 			s.token = token.COMMENT
