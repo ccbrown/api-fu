@@ -31,6 +31,14 @@ type generateState struct {
 	requiresJSONImport bool
 }
 
+func fieldName(name string) string {
+	ret := name
+	if strings.HasPrefix(ret, "__") {
+		ret = ret[2:] + "__"
+	}
+	return strings.Title(ret)
+}
+
 func (s *generateState) generateType(t schema.Type, selections []ast.Selection, nonNull bool, fragTypes map[string]string) (string, error) {
 	if t, ok := t.(*schema.NonNullType); ok {
 		return s.generateType(t.Type, selections, true, fragTypes)
@@ -151,16 +159,12 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 
 		parts := make([]string, 0, len(fields))
 		for k, v := range fields {
-			jsonName := k
-			if strings.HasPrefix(k, "__") {
-				k = k[2:] + "__"
-			}
+			name := fieldName(k)
 			jsonTag := ""
-			if jsonName != k {
-				jsonTag = " `json:\"" + jsonName + "\"`"
+			if !strings.EqualFold(name, k) {
+				jsonTag = " `json:\"" + k + "\"`"
 			}
-			k = strings.Title(k)
-			parts = append(parts, k+" "+v+jsonTag+"\n")
+			parts = append(parts, name+" "+v+jsonTag+"\n")
 		}
 		ret = "struct {\n" + strings.Join(parts, "") + "}"
 
@@ -190,7 +194,7 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 				}
 				if isKnown {
 					for _, field := range fields {
-						s.output += `if err := json.Unmarshal(b, &s.` + field + `); err != nil {
+						s.output += `if err := json.Unmarshal(b, &s.` + fieldName(field) + `); err != nil {
 								return err
 							}
 						`
@@ -212,7 +216,7 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 				for _, field := range fields {
 					s.output += `switch base.Typename__ {
 						case "` + strings.Join(okTypes, `", "`) + `":
-							if err := json.Unmarshal(b, &s.` + field + `); err != nil {
+							if err := json.Unmarshal(b, &s.` + fieldName(field) + `); err != nil {
 								return err
 							}
 						}
