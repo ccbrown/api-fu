@@ -1,4 +1,5 @@
-// +build ignore
+//go:build ignore
+
 package main
 
 func main() {
@@ -28,6 +29,12 @@ func main() {
 		  name
 		  login
 		}
+	  }
+	}`))
+
+	println(gql(`query UserType {
+	  __type(name:"User") {
+	   __typename
 	  }
 	}`))
 }

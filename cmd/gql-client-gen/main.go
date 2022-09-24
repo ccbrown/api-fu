@@ -132,9 +132,8 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 				if sel.Alias != nil {
 					k = sel.Alias.Name
 				}
-				k = strings.Title(k)
 				if sel.Name.Name == "__typename" {
-					fields["Typename__"] = "string `json:\"__typename\"`"
+					fields[k] = "string"
 				} else {
 					var err error
 					switch t := t.(type) {
@@ -152,7 +151,16 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 
 		parts := make([]string, 0, len(fields))
 		for k, v := range fields {
-			parts = append(parts, k+" "+v+"\n")
+			jsonName := k
+			if strings.HasPrefix(k, "__") {
+				k = k[2:] + "__"
+			}
+			jsonTag := ""
+			if jsonName != k {
+				jsonTag = " `json:\"" + jsonName + "\"`"
+			}
+			k = strings.Title(k)
+			parts = append(parts, k+" "+v+jsonTag+"\n")
 		}
 		ret = "struct {\n" + strings.Join(parts, "") + "}"
 
@@ -392,7 +400,15 @@ func LoadSchema(path string) (*schema.Schema, error) {
 		return nil, err
 	}
 
-	return schema.New(def)
+	ret, err := schema.New(def)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range introspection.MetaFields {
+		ret.QueryType().Fields[k] = v
+	}
+	return ret, nil
 }
 
 func Run(w io.Writer, args ...string) []error {
