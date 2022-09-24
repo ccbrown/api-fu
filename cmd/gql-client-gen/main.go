@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -166,6 +167,7 @@ func (s *generateState) generateType(t schema.Type, selections []ast.Selection, 
 			}
 			parts = append(parts, name+" "+v+jsonTag+"\n")
 		}
+		sort.Strings(parts)
 		ret = "struct {\n" + strings.Join(parts, "") + "}"
 
 		if len(typeConditions) > 0 {
