@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -538,4 +539,56 @@ func BenchmarkExecuteRequest(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		sink, _ = ExecuteRequest(context.Background(), r)
 	}
+}
+
+func TestContextCancelation(t *testing.T) {
+	var objectType = &schema.ObjectType{
+		Name: "Object",
+	}
+
+	objectType.Fields = map[string]*schema.FieldDefinition{
+		"slowString": {
+			Type: schema.StringType,
+			Resolve: func(*schema.FieldContext) (interface{}, error) {
+				time.Sleep(100 * time.Millisecond)
+				return "foo", nil
+			},
+		},
+		"objects": {
+			Type: schema.NewListType(objectType),
+			Arguments: map[string]*schema.InputValueDefinition{
+				"count": {
+					Type: schema.NewNonNullType(schema.IntType),
+				},
+			},
+			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+				return make([]struct{}, ctx.Arguments["count"].(int)), nil
+			},
+		},
+	}
+
+	s, err := schema.New(&schema.SchemaDefinition{
+		Query: objectType,
+	})
+	require.NoError(t, err)
+	doc, parseErrs := parser.ParseDocument([]byte(`{
+		objects(count: 100) {
+			slowString
+		}
+	}`))
+	require.Empty(t, parseErrs)
+	require.Empty(t, validator.ValidateDocument(doc, s))
+
+	r := &Request{
+		Document: doc,
+		Schema:   s,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	startTime := time.Now()
+	_, errs := ExecuteRequest(ctx, r)
+	// The request should be cancelled early.
+	assert.Less(t, time.Since(startTime), 2*time.Second)
+	assert.NotEmpty(t, errs)
 }
