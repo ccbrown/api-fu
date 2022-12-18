@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -123,6 +124,29 @@ func (h *graphqlWSHandler) HandleClose() {
 	delete(h.API.graphqlWSConnections, h.Connection)
 }
 
+// This type is a context which gets values from another context (e.g. a canceled http.Request
+// context after a hijacking).
+type hijackedContext struct {
+	newContext   context.Context
+	valueContext context.Context
+}
+
+func (ctx hijackedContext) Deadline() (time.Time, bool) {
+	return ctx.newContext.Deadline()
+}
+
+func (ctx hijackedContext) Done() <-chan struct{} {
+	return ctx.newContext.Done()
+}
+
+func (ctx hijackedContext) Err() error {
+	return ctx.newContext.Err()
+}
+
+func (ctx hijackedContext) Value(key any) any {
+	return ctx.valueContext.Value(key)
+}
+
 // ServeGraphQLWS serves a graphql-ws WebSocket connection. This method hijacks connections. To
 // gracefully close them, use CloseHijackedConnections.
 func (api *API) ServeGraphQLWS(w http.ResponseWriter, r *http.Request) {
@@ -156,9 +180,12 @@ func (api *API) ServeGraphQLWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	connection.Handler = &graphqlWSHandler{
-		API:           api,
-		Connection:    connection,
-		Context:       ctx,
+		API:        api,
+		Connection: connection,
+		Context: hijackedContext{
+			newContext:   ctx,
+			valueContext: r.Context(),
+		},
 		cancelContext: cancel,
 	}
 	connection.Serve(conn)
