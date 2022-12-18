@@ -17,6 +17,7 @@ type graphqlWSHandler struct {
 	Connection *graphqlws.Connection
 	Context    context.Context
 
+	cancelContext func()
 	subscriptions map[string]*SubscriptionSourceStream
 }
 
@@ -107,6 +108,10 @@ func (h *graphqlWSHandler) HandleStop(id string) {
 	}
 }
 
+func (h *graphqlWSHandler) Cancel() {
+	h.cancelContext()
+}
+
 func (h *graphqlWSHandler) HandleClose() {
 	for _, stream := range h.subscriptions {
 		stream.Stop()
@@ -146,10 +151,15 @@ func (api *API) ServeGraphQLWS(w http.ResponseWriter, r *http.Request) {
 	api.graphqlWSConnections[connection] = struct{}{}
 	api.graphqlWSConnectionsMutex.Unlock()
 
+	// We've hijacked the request and can't use its context as it'll be cancelled once this handler
+	// returns. We create a new context and cancel it if we detect that the connection is closed.
+	ctx, cancel := context.WithCancel(context.Background())
+
 	connection.Handler = &graphqlWSHandler{
-		API:        api,
-		Connection: connection,
-		Context:    r.Context(),
+		API:           api,
+		Connection:    connection,
+		Context:       ctx,
+		cancelContext: cancel,
 	}
 	connection.Serve(conn)
 }

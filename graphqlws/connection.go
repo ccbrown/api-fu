@@ -47,6 +47,9 @@ type ConnectionHandler interface {
 	// the corresponding subscription.
 	HandleStop(id string)
 
+	// Called when the connection begins closing and all in-flight operations should be canceled.
+	Cancel()
+
 	// Called when the connection is closed.
 	HandleClose()
 }
@@ -300,6 +303,7 @@ func (c *Connection) beginClosing(code int, text string) {
 	c.beginClosingOnce.Do(func() {
 		c.closeMessage <- websocket.FormatCloseMessage(code, text)
 		close(c.close)
+		c.Handler.Cancel()
 	})
 }
 

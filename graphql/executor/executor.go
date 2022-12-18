@@ -299,6 +299,9 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 	if coercionErr != nil {
 		return future.Err[any](coercionErr)
 	}
+	if err := e.Context.Err(); err != nil {
+		return future.Err[any](newFieldResolveError(fields, err, path))
+	}
 	resolvedValue, err := fieldDef.Resolve(&schema.FieldContext{
 		Context:   e.Context,
 		Schema:    e.Schema,
