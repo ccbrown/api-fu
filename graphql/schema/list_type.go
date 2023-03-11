@@ -29,7 +29,10 @@ func (t *ListType) IsOutputType() bool {
 }
 
 func (t *ListType) IsSubTypeOf(other Type) bool {
-	return t.IsSameType(other) || t.Type.IsSubTypeOf(other)
+	if other, ok := other.(*ListType); ok {
+		return t.IsSameType(other.Type) || t.Type.IsSubTypeOf(other.Type)
+	}
+	return false
 }
 
 func (t *ListType) IsSameType(other Type) bool {
