@@ -140,15 +140,119 @@ var PageInfoType = &graphql.ObjectType{
 	},
 }
 
+// Defines the configuration for a connection interface.
+type ConnectionInterfaceConfig struct {
+	// A prefix to use for the connection and edge type names. For example, if you provide
+	// "Example", the connection type will be named "ExampleConnection" and the edge type will be
+	// "ExampleEdge".
+	NamePrefix string
+
+	// EdgeFields should provide definitions for the fields of each node. You must provide the
+	// "node" field, but the "cursor" field will be provided for you.
+	EdgeFields map[string]*graphql.FieldDefinition
+
+	// If true, implementations must provide the "totalCount" field.
+	HasTotalCount bool
+}
+
+var defaultConnectionArguments = map[string]*graphql.InputValueDefinition{
+	"first": {
+		Type: graphql.IntType,
+	},
+	"last": {
+		Type: graphql.IntType,
+	},
+	"before": {
+		Type: graphql.StringType,
+	},
+	"after": {
+		Type: graphql.StringType,
+	},
+}
+
+func defaultConnectionCost(ctx *graphql.FieldCostContext) graphql.FieldCost {
+	maxCount, _ := ctx.Arguments["first"].(int)
+	if last, ok := ctx.Arguments["last"].(int); ok {
+		maxCount = last
+	}
+	return graphql.FieldCost{
+		Context:  context.WithValue(ctx.Context, maxEdgeCountContextKey, maxCount),
+		Resolver: 1,
+	}
+}
+
+// Returns an interface for a connection.
+func ConnectionInterface(config *ConnectionInterfaceConfig) *graphql.InterfaceType {
+	edgeFields := map[string]*graphql.FieldDefinition{
+		"cursor": &graphql.FieldDefinition{
+			Type: graphql.NewNonNullType(graphql.StringType),
+			Cost: graphql.FieldResolverCost(0),
+		},
+	}
+	for k, v := range config.EdgeFields {
+		edgeFields[k] = v
+	}
+
+	edge := &graphql.InterfaceType{
+		Name:   config.NamePrefix + "Edge",
+		Fields: edgeFields,
+	}
+
+	ret := &graphql.InterfaceType{
+		Name: config.NamePrefix + "Connection",
+		Fields: map[string]*graphql.FieldDefinition{
+			"edges": {
+				Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edge))),
+				Cost: func(ctx *graphql.FieldCostContext) graphql.FieldCost {
+					return graphql.FieldCost{
+						Resolver:   0,
+						Multiplier: ctx.Context.Value(maxEdgeCountContextKey).(int),
+					}
+				},
+			},
+			"pageInfo": {
+				Type: graphql.NewNonNullType(PageInfoType),
+				// The cost is already accounted for by the connection itself. Either
+				// ResolvePageInfo will be trivial or 0 edges were requested and all work was
+				// delayed until now.
+				Cost: graphql.FieldResolverCost(0),
+			},
+		},
+	}
+
+	if config.HasTotalCount {
+		ret.Fields["totalCount"] = &graphql.FieldDefinition{
+			Type: graphql.NewNonNullType(graphql.IntType),
+		}
+	}
+
+	return ret
+}
+
+// Returns a minimal connection field definition, with default arguments and cost function defined.
+func ConnectionFieldDefinition(t graphql.Type) *graphql.FieldDefinition {
+	ret := &graphql.FieldDefinition{
+		Type:      t,
+		Arguments: map[string]*graphql.InputValueDefinition{},
+		Cost:      defaultConnectionCost,
+	}
+	for name, def := range defaultConnectionArguments {
+		ret.Arguments[name] = def
+	}
+	return ret
+}
+
 type edge struct {
-	Value  interface{}
-	Cursor interface{}
+	Value    interface{}
+	Cursor   interface{}
+	typeName string
 }
 
 type connection struct {
 	ResolveTotalCount func() (interface{}, error)
 	Edges             []edge
 	ResolvePageInfo   func() (interface{}, error)
+	typeName          string
 }
 
 type maxEdgeCountContextKeyType int
@@ -185,6 +289,10 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	edgeType := &graphql.ObjectType{
 		Name:   config.NamePrefix + "Edge",
 		Fields: edgeFields,
+		IsTypeOf: func(obj interface{}) bool {
+			e, ok := obj.(edge)
+			return ok && e.typeName == config.NamePrefix+"Edge"
+		},
 	}
 	for _, iface := range config.ImplementedInterfaces {
 		if ifaceEdge, ok := iface.Fields["edges"]; ok {
@@ -222,6 +330,10 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			},
 		},
 		ImplementedInterfaces: config.ImplementedInterfaces,
+		IsTypeOf: func(obj interface{}) bool {
+			c, ok := obj.(*connection)
+			return ok && c.typeName == config.NamePrefix+"Connection"
+		},
 	}
 
 	if config.ResolveAllEdges != nil || config.ResolveTotalCount != nil {
@@ -233,107 +345,81 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		}
 	}
 
-	ret := &graphql.FieldDefinition{
-		Type: connectionType,
-		Arguments: map[string]*graphql.InputValueDefinition{
-			"first": {
-				Type: graphql.IntType,
-			},
-			"last": {
-				Type: graphql.IntType,
-			},
-			"before": {
-				Type: graphql.StringType,
-			},
-			"after": {
-				Type: graphql.StringType,
-			},
-		},
-		Cost: func(ctx *graphql.FieldCostContext) graphql.FieldCost {
-			maxCount, _ := ctx.Arguments["first"].(int)
-			if last, ok := ctx.Arguments["last"].(int); ok {
-				maxCount = last
+	ret := ConnectionFieldDefinition(connectionType)
+	ret.Description = config.Description
+	ret.Resolve = func(ctx *graphql.FieldContext) (interface{}, error) {
+		if first, ok := ctx.Arguments["first"].(int); ok {
+			if first < 0 {
+				return nil, fmt.Errorf("The `first` argument cannot be negative.")
+			} else if _, ok := ctx.Arguments["last"].(int); ok {
+				return nil, fmt.Errorf("You cannot provide both `first` and `last` arguments.")
 			}
-			return graphql.FieldCost{
-				Context:  context.WithValue(ctx.Context, maxEdgeCountContextKey, maxCount),
-				Resolver: 1,
+		} else if last, ok := ctx.Arguments["last"].(int); ok {
+			if last < 0 {
+				return nil, fmt.Errorf("The `last` argument cannot be negative.")
 			}
-		},
-		Description: config.Description,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-			if first, ok := ctx.Arguments["first"].(int); ok {
-				if first < 0 {
-					return nil, fmt.Errorf("The `first` argument cannot be negative.")
-				} else if _, ok := ctx.Arguments["last"].(int); ok {
-					return nil, fmt.Errorf("You cannot provide both `first` and `last` arguments.")
-				}
-			} else if last, ok := ctx.Arguments["last"].(int); ok {
-				if last < 0 {
-					return nil, fmt.Errorf("The `last` argument cannot be negative.")
-				}
-			} else {
-				return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
-			}
+		} else {
+			return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
+		}
 
-			var afterCursor interface{}
-			if after, _ := ctx.Arguments["after"].(string); after != "" {
-				if afterCursor = deserializeCursor(config.CursorType, after); afterCursor == nil {
-					return nil, fmt.Errorf("Invalid after cursor.")
-				}
+		var afterCursor interface{}
+		if after, _ := ctx.Arguments["after"].(string); after != "" {
+			if afterCursor = deserializeCursor(config.CursorType, after); afterCursor == nil {
+				return nil, fmt.Errorf("Invalid after cursor.")
 			}
+		}
 
-			var beforeCursor interface{}
-			if before, _ := ctx.Arguments["before"].(string); before != "" {
-				if beforeCursor = deserializeCursor(config.CursorType, before); beforeCursor == nil {
-					return nil, fmt.Errorf("Invalid before cursor.")
-				}
+		var beforeCursor interface{}
+		if before, _ := ctx.Arguments["before"].(string); before != "" {
+			if beforeCursor = deserializeCursor(config.CursorType, before); beforeCursor == nil {
+				return nil, fmt.Errorf("Invalid before cursor.")
 			}
+		}
 
-			var limit int
-			if first, ok := ctx.Arguments["first"].(int); ok {
-				limit = first + 1
-			} else {
-				limit = -(ctx.Arguments["last"].(int) + 1)
+		var limit int
+		if first, ok := ctx.Arguments["first"].(int); ok {
+			limit = first + 1
+		} else {
+			limit = -(ctx.Arguments["last"].(int) + 1)
+		}
+		resolve := func() (interface{}, func(a, b interface{}) bool, error) {
+			return config.ResolveAllEdges(ctx)
+		}
+		if config.ResolveAllEdges == nil {
+			resolve = func() (interface{}, func(a, b interface{}) bool, error) {
+				return config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
 			}
-			resolve := func() (interface{}, func(a, b interface{}) bool, error) {
-				return config.ResolveAllEdges(ctx)
-			}
-			if config.ResolveAllEdges == nil {
-				resolve = func() (interface{}, func(a, b interface{}) bool, error) {
-					return config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
-				}
-			}
-			if limit == 1 || limit == -1 {
-				// no edges. don't do anything unless pageInfo is requested
-				return &connection{
-					ResolveTotalCount: func() (interface{}, error) {
-						return config.ResolveTotalCount(ctx)
-					},
-					Edges: []edge{},
-					ResolvePageInfo: func() (interface{}, error) {
-						edgeSlice, cursorLess, err := resolve()
-						if !isNil(err) {
-							return nil, err
-						}
-						conn, err := completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
-						if !isNil(err) {
-							return nil, err
-						}
-						if promise, ok := conn.(graphql.ResolvePromise); ok {
-							return chain(ctx.Context, promise, func(conn interface{}) (interface{}, error) {
-								return conn.(*connection).ResolvePageInfo()
-							}), nil
-						}
-						return conn.(*connection).ResolvePageInfo()
-					},
-				}, nil
-			}
-			edgeSlice, cursorLess, err := resolve()
-			if !isNil(err) {
-				return nil, err
-			}
-			return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
-		},
+		}
+		if limit == 1 || limit == -1 {
+			// no edges. don't do anything unless pageInfo is requested
+			return &connection{
+				ResolveTotalCount: func() (interface{}, error) {
+					return config.ResolveTotalCount(ctx)
+				},
+				Edges: []edge{},
+				ResolvePageInfo: func() (interface{}, error) {
+					edgeSlice, cursorLess, err := resolve()
+					if !isNil(err) {
+						return nil, err
+					}
+					conn, err := completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
+					if !isNil(err) {
+						return nil, err
+					}
+					if promise, ok := conn.(graphql.ResolvePromise); ok {
+						return chain(ctx.Context, promise, func(conn interface{}) (interface{}, error) {
+							return conn.(*connection).ResolvePageInfo()
+						}), nil
+					}
+					return conn.(*connection).ResolvePageInfo()
+				},
+			}, nil
+		}
+		edgeSlice, cursorLess, err := resolve()
+		if !isNil(err) {
+			return nil, err
+		}
+		return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
 	}
 
 	for name, def := range config.Arguments {

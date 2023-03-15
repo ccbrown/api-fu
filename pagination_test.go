@@ -18,6 +18,20 @@ import (
 
 func TestConnection(t *testing.T) {
 	config := &Config{}
+
+	connectionInterface := ConnectionInterface(&ConnectionInterfaceConfig{
+		NamePrefix: "TestInterface",
+		EdgeFields: map[string]*graphql.FieldDefinition{
+			"node": {
+				Type: graphql.IntType,
+				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					return ctx.Object, nil
+				},
+			},
+		},
+		HasTotalCount: true,
+	})
+
 	config.AddQueryField("connection", Connection(&ConnectionConfig{
 		NamePrefix: "Test",
 		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
@@ -44,6 +58,7 @@ func TestConnection(t *testing.T) {
 				},
 			},
 		},
+		ImplementedInterfaces: []*graphql.InterfaceType{connectionInterface},
 	}))
 
 	api, err := NewAPI(config)
@@ -51,8 +66,14 @@ func TestConnection(t *testing.T) {
 
 	t.Run("Cost", func(t *testing.T) {
 		var cost int
-		_, errs := graphql.ParseAndValidate(`{
-		connection(first: 10) {
+		_, errs := graphql.ParseAndValidate(`
+		{
+			connection(first: 10) {
+				...connectionFields
+			}
+		}
+
+		fragment connectionFields on TestInterfaceConnection {
 			edges {
 				node
 				cursor
@@ -65,7 +86,7 @@ func TestConnection(t *testing.T) {
 			}
 			totalCount
 		}
-	}`, api.schema, graphql.ValidateCost("", nil, -1, &cost, graphql.FieldCost{Resolver: 1}))
+	`, api.schema, graphql.ValidateCost("", nil, -1, &cost, graphql.FieldCost{Resolver: 1}))
 		require.Empty(t, errs)
 		assert.Equal(t, (1 /*connection*/)+(10 /* edges */)*(1 /* node */)+(1 /*totalCount*/), cost)
 	})
