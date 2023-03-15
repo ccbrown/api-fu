@@ -229,14 +229,30 @@ func ConnectionInterface(config *ConnectionInterfaceConfig) *graphql.InterfaceTy
 	return ret
 }
 
+// Defines the configuration for a connection interface.
+type ConnectionFieldDefinitionConfig struct {
+	// The type of the connection.
+	Type graphql.Type
+
+	// An optional description for the connection field.
+	Description string
+
+	// An optional map of additional arguments to add to the field.
+	Arguments map[string]*graphql.InputValueDefinition
+}
+
 // Returns a minimal connection field definition, with default arguments and cost function defined.
-func ConnectionFieldDefinition(t graphql.Type) *graphql.FieldDefinition {
+func ConnectionFieldDefinition(config *ConnectionFieldDefinitionConfig) *graphql.FieldDefinition {
 	ret := &graphql.FieldDefinition{
-		Type:      t,
-		Arguments: map[string]*graphql.InputValueDefinition{},
-		Cost:      defaultConnectionCost,
+		Type:        config.Type,
+		Arguments:   map[string]*graphql.InputValueDefinition{},
+		Cost:        defaultConnectionCost,
+		Description: config.Description,
 	}
 	for name, def := range defaultConnectionArguments {
+		ret.Arguments[name] = def
+	}
+	for name, def := range config.Arguments {
 		ret.Arguments[name] = def
 	}
 	return ret
@@ -345,8 +361,11 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		}
 	}
 
-	ret := ConnectionFieldDefinition(connectionType)
-	ret.Description = config.Description
+	ret := ConnectionFieldDefinition(&ConnectionFieldDefinitionConfig{
+		Type:        connectionType,
+		Description: config.Description,
+		Arguments:   config.Arguments,
+	})
 	ret.Resolve = func(ctx *graphql.FieldContext) (interface{}, error) {
 		if first, ok := ctx.Arguments["first"].(int); ok {
 			if first < 0 {
@@ -421,11 +440,6 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		}
 		return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
 	}
-
-	for name, def := range config.Arguments {
-		ret.Arguments[name] = def
-	}
-
 	return ret
 }
 
