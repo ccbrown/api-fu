@@ -187,7 +187,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Fields: edgeFields,
 	}
 	for _, iface := range config.ImplementedInterfaces {
-		if ifaceEdge, ok := iface.Fields["edge"]; ok {
+		if ifaceEdge, ok := iface.Fields["edges"]; ok {
 			if edgeInterface, ok := schema.UnwrappedType(ifaceEdge.Type).(*graphql.InterfaceType); ok {
 				edgeType.ImplementedInterfaces = append(edgeType.ImplementedInterfaces, edgeInterface)
 			}
