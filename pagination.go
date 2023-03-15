@@ -13,6 +13,7 @@ import (
 	"github.com/vmihailenco/msgpack"
 
 	"github.com/ccbrown/api-fu/graphql"
+	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
 // ConnectionConfig defines the configuration for a connection that adheres to the GraphQL Cursor
@@ -66,6 +67,10 @@ type ConnectionConfig struct {
 	// EdgeFields should provide definitions for the fields of each node. You must provide the
 	// "node" field, but the "cursor" field will be provided for you.
 	EdgeFields map[string]*graphql.FieldDefinition
+
+	// The connection will implement these interfaces. If any of the interfaces define an edge
+	// field as an interface, this connection's edges will also implement that interface.
+	ImplementedInterfaces []*graphql.InterfaceType
 }
 
 func serializeCursor(cursor interface{}) (string, error) {
@@ -181,6 +186,13 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Name:   config.NamePrefix + "Edge",
 		Fields: edgeFields,
 	}
+	for _, iface := range config.ImplementedInterfaces {
+		if ifaceEdge, ok := iface.Fields["edge"]; ok {
+			if edgeInterface, ok := schema.UnwrappedType(ifaceEdge.Type).(*graphql.InterfaceType); ok {
+				edgeType.ImplementedInterfaces = append(edgeType.ImplementedInterfaces, edgeInterface)
+			}
+		}
+	}
 
 	connectionType := &graphql.ObjectType{
 		Name:        config.NamePrefix + "Connection",
@@ -209,6 +221,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				},
 			},
 		},
+		ImplementedInterfaces: config.ImplementedInterfaces,
 	}
 
 	if config.ResolveAllEdges != nil || config.ResolveTotalCount != nil {
@@ -447,6 +460,10 @@ type TimeBasedConnectionConfig struct {
 
 	// To support the "totalCount" connection field, you can provide this method.
 	ResolveTotalCount func(ctx *graphql.FieldContext) (interface{}, error)
+
+	// The connection will implement these interfaces. If any of the interfaces define an edge
+	// field as an interface, this connection's edges will also implement that interface.
+	ImplementedInterfaces []*graphql.InterfaceType
 }
 
 var distantFuture = time.Date(3000, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -547,5 +564,6 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 			}
 			return edges, timeBasedCursorLess, err
 		},
+		ImplementedInterfaces: config.ImplementedInterfaces,
 	})
 }
