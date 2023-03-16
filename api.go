@@ -27,6 +27,10 @@ type API struct {
 	graphqlWSConnections      map[*graphqlws.Connection]struct{}
 }
 
+func (api *API) Schema() *graphql.Schema {
+	return api.schema
+}
+
 type RequestInfo struct {
 	Cost int
 }
