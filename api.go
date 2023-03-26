@@ -12,7 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ccbrown/api-fu/graphql"
-	"github.com/ccbrown/api-fu/graphqlws"
 )
 
 // API is responsible for serving your API traffic. Construct an API by creating a Config, then
@@ -24,7 +23,7 @@ type API struct {
 	execute func(*graphql.Request, *RequestInfo) *graphql.Response
 
 	graphqlWSConnectionsMutex sync.Mutex
-	graphqlWSConnections      map[*graphqlws.Connection]struct{}
+	graphqlWSConnections      map[graphqlWSConnection]struct{}
 }
 
 func (api *API) Schema() *graphql.Schema {
@@ -63,7 +62,7 @@ func NewAPI(cfg *Config) (*API, error) {
 		schema:               schema,
 		logger:               logger,
 		execute:              execute,
-		graphqlWSConnections: map[*graphqlws.Connection]struct{}{},
+		graphqlWSConnections: map[graphqlWSConnection]struct{}{},
 	}, nil
 }
 
