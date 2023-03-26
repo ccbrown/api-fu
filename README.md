@@ -8,6 +8,7 @@
 * The top level `apifu` package is an opinionated library that aims to make it as easy as possible to build APIs that conform to API-fu's ideals. See the examples directory for example usage.
 * The `graphql` package is an unopinionated library for building GraphQL APIs. If you agree with API-fu's ideals, you should use `apifu` instead, but if you want something lower level, the `graphql` package is still an excellent standalone GraphQL library. It fully supports all features of the [June 2018 spec](https://graphql.github.io/graphql-spec/June2018/).
 * The `graphql/transport` directory contains unopinionated libraries for using various transport protocols. For example, it contains transport implementations that allow you to serve your GraphQL API via WebSockets and provide subscription functionality.
+* The `jsonapi` package is a library for building [JSON:API](https://jsonapi.org) APIs. It's somewhat high level, but is no more opinionated than JSON:API itself is. However, it does hold some of those opinions more strongly (i.e. it doesn't support violating many of the JSON:API spec's recommendations and "SHOULD"s).
 
 ## Usage
 
