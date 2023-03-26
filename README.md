@@ -93,7 +93,7 @@ fuCfg.AddQueryField("myField", &graphql.FieldDefinition{
 
 For example, the `apifu` package provides date-time and long (but JavaScript safe) integers.
 
-### 📡 Implements handlers for HTTP and the [Apollo graphql-ws protocol](https://github.com/apollographql/subscriptions-transport-ws).
+### 📡 Implements handlers for HTTP, the [Apollo graphql-ws protocol](https://github.com/apollographql/subscriptions-transport-ws), and the [newer graphql-transport-ws protocol](https://github.com/enisdenjo/graphql-ws).
 
 Once you've built your API, all you have to do is:
 
