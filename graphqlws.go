@@ -3,20 +3,32 @@ package apifu
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/ccbrown/api-fu/graphql"
-	"github.com/ccbrown/api-fu/graphqlws"
+	"github.com/ccbrown/api-fu/graphql/transport/graphqltransportws"
+	"github.com/ccbrown/api-fu/graphql/transport/graphqlws"
 )
+
+type graphqlWSConnection interface {
+	SendData(ctx context.Context, id string, response *graphql.Response) error
+	SendComplete(ctx context.Context, id string) error
+	Serve(conn *websocket.Conn)
+	io.Closer
+}
 
 type graphqlWSHandler struct {
 	API        *API
-	Connection *graphqlws.Connection
+	Connection graphqlWSConnection
 	Context    context.Context
+	Logger     logrus.FieldLogger
 
 	cancelContext func()
 	subscriptions map[string]*SubscriptionSourceStream
@@ -80,10 +92,10 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 						req := *req
 						req.InitialValue = event
 						if err := h.Connection.SendData(context.Background(), id, h.API.execute(&req, &info)); err != nil {
-							h.Connection.Logger.Warn(errors.Wrap(err, "error sending graphql-ws data"))
+							h.Logger.Warn(errors.Wrap(err, "error sending graphql-ws data"))
 						}
 					}); err != nil && err != context.Canceled {
-						h.Connection.Logger.Error(errors.Wrap(err, "error running source stream"))
+						h.Logger.Error(errors.Wrap(err, "error running source stream"))
 					}
 				}()
 			}
@@ -94,10 +106,10 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 
 	if resp != nil {
 		if err := h.Connection.SendData(context.Background(), id, resp); err != nil {
-			h.Connection.Logger.Warn(errors.Wrap(err, "error sending graphql-ws data"))
+			h.Logger.Warn(errors.Wrap(err, "error sending graphql-ws data"))
 		}
 		if err := h.Connection.SendComplete(context.Background(), id); err != nil {
-			h.Connection.Logger.Warn(errors.Wrap(err, "error sending graphql-ws complete"))
+			h.Logger.Warn(errors.Wrap(err, "error sending graphql-ws complete"))
 		}
 	}
 }
@@ -107,6 +119,10 @@ func (h *graphqlWSHandler) HandleStop(id string) {
 		stream.Stop()
 		delete(h.subscriptions, id)
 	}
+}
+
+func (h *graphqlWSHandler) LogError(err error) {
+	h.Logger.Error(err)
 }
 
 func (h *graphqlWSHandler) Cancel() {
@@ -147,8 +163,10 @@ func (ctx hijackedContext) Value(key any) any {
 	return ctx.valueContext.Value(key)
 }
 
-// ServeGraphQLWS serves a graphql-ws WebSocket connection. This method hijacks connections. To
-// gracefully close them, use CloseHijackedConnections.
+// ServeGraphQLWS serves a GraphQL WebSocket connection. It will serve connections for both the
+// deprecated graphql-ws subprotocol and the newer graphql-transport-ws subprotocol.
+//
+// This method hijacks connections. To gracefully close them, use CloseHijackedConnections.
 func (api *API) ServeGraphQLWS(w http.ResponseWriter, r *http.Request) {
 	if !websocket.IsWebSocketUpgrade(r) {
 		http.Error(w, "not a websocket upgrade", http.StatusBadRequest)
@@ -158,7 +176,7 @@ func (api *API) ServeGraphQLWS(w http.ResponseWriter, r *http.Request) {
 	var upgrader = websocket.Upgrader{
 		CheckOrigin:       api.config.WebSocketOriginCheck,
 		EnableCompression: true,
-		Subprotocols:      []string{"graphql-ws"},
+		Subprotocols:      []string{graphqlws.WebSocketSubprotocol, graphqltransportws.WebSocketSubprotocol},
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -167,45 +185,57 @@ func (api *API) ServeGraphQLWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	connection := &graphqlws.Connection{
-		Logger: api.logger,
+	// We've hijacked the request and can't use its context as it'll be cancelled once this handler
+	// returns. We create a new context and cancel it if we detect that the connection is closed.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	handler := &graphqlWSHandler{
+		API: api,
+		Context: hijackedContext{
+			newContext:   ctx,
+			valueContext: r.Context(),
+		},
+		Logger:        api.logger,
+		cancelContext: cancel,
 	}
+
+	var connection graphqlWSConnection
+	if conn.Subprotocol() == graphqltransportws.WebSocketSubprotocol {
+		connection = &graphqltransportws.Connection{
+			Handler: handler,
+		}
+	} else {
+		connection = &graphqlws.Connection{
+			Handler: handler,
+		}
+	}
+
+	handler.Connection = connection
 
 	api.graphqlWSConnectionsMutex.Lock()
 	api.graphqlWSConnections[connection] = struct{}{}
 	api.graphqlWSConnectionsMutex.Unlock()
 
-	// We've hijacked the request and can't use its context as it'll be cancelled once this handler
-	// returns. We create a new context and cancel it if we detect that the connection is closed.
-	ctx, cancel := context.WithCancel(context.Background())
-
-	connection.Handler = &graphqlWSHandler{
-		API:        api,
-		Connection: connection,
-		Context: hijackedContext{
-			newContext:   ctx,
-			valueContext: r.Context(),
-		},
-		cancelContext: cancel,
-	}
 	connection.Serve(conn)
 }
 
 // CloseHijackedConnections closes connections hijacked by ServeGraphQLWS.
-func (api *API) CloseHijackedConnections() {
+func (api *API) CloseHijackedConnections() error {
 	api.graphqlWSConnectionsMutex.Lock()
-	connections := make([]*graphqlws.Connection, len(api.graphqlWSConnections))
+	connections := make([]graphqlWSConnection, len(api.graphqlWSConnections))
 	i := 0
 	for connection := range api.graphqlWSConnections {
 		connections[i] = connection
 		i++
 	}
-	api.graphqlWSConnections = map[*graphqlws.Connection]struct{}{}
+	api.graphqlWSConnections = map[graphqlWSConnection]struct{}{}
 	api.graphqlWSConnectionsMutex.Unlock()
 
+	var ret error
 	for _, connection := range connections {
 		if err := connection.Close(); err != nil {
-			connection.Logger.Error(errors.Wrap(err, "error closing connection"))
+			ret = multierror.Append(ret, errors.Wrap(err, "error closing connection"))
 		}
 	}
+	return ret
 }

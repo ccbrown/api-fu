@@ -10,12 +10,10 @@ import (
 	"github.com/gorilla/websocket"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // Connection represents a server-side GraphQL-WS connection.
 type Connection struct {
-	Logger  logrus.FieldLogger
 	Handler ConnectionHandler
 
 	conn              *websocket.Conn
@@ -46,6 +44,10 @@ type ConnectionHandler interface {
 	// Called when the client wants to stop an operation. The handler should unsubscribe them from
 	// the corresponding subscription.
 	HandleStop(id string)
+
+	// Called when an unexpected error occurs. The connection will perform the appropriate response,
+	// but you may want to log it.
+	LogError(err error)
 
 	// Called when the connection begins closing and all in-flight operations should be canceled.
 	Cancel()
@@ -134,7 +136,7 @@ func (c *Connection) readLoop() {
 				select {
 				case <-c.close:
 				default:
-					c.Logger.Error(errors.Wrap(err, "websocket read error"))
+					c.Handler.LogError(errors.Wrap(err, "websocket read error"))
 				}
 			}
 			return
@@ -147,7 +149,7 @@ func (c *Connection) readLoop() {
 func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 	var msg Message
 	if err := json.Unmarshal(data, &msg); err != nil {
-		c.Logger.WithField("error", err.Error()).Info("malformed graphql-ws message received")
+		// ignore malformed messages
 		return
 	}
 
@@ -160,13 +162,13 @@ func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 				Message: err.Error(),
 			}
 			if buf, err := jsoniter.Marshal(payload); err != nil {
-				c.Logger.Error(errors.Wrap(err, "unable to marshal graphql-ws connection error payload"))
+				c.Handler.LogError(errors.Wrap(err, "unable to marshal graphql-ws connection error payload"))
 			} else if err := c.sendMessage(ctx, &Message{
 				Id:      msg.Id,
 				Type:    MessageTypeConnectionError,
 				Payload: buf,
 			}); err != nil {
-				c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws connection error"))
+				c.Handler.LogError(errors.Wrap(err, "unable to send graphql-ws connection error"))
 			}
 			c.beginClosing(websocket.CloseInternalServerErr, "connection init error")
 			return
@@ -177,12 +179,12 @@ func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 			Id:   msg.Id,
 			Type: MessageTypeConnectionAck,
 		}); err != nil {
-			c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws connection ack"))
+			c.Handler.LogError(errors.Wrap(err, "unable to send graphql-ws connection ack"))
 			c.beginClosing(websocket.CloseInternalServerErr, "ack send error")
 		} else if err := c.sendMessage(ctx, &Message{
 			Type: MessageTypeConnectionKeepAlive,
 		}); err != nil {
-			c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws initial keep-alive"))
+			c.Handler.LogError(errors.Wrap(err, "unable to send graphql-ws initial keep-alive"))
 			c.beginClosing(websocket.CloseInternalServerErr, "keep-alive send error")
 		}
 	case MessageTypeStart:
@@ -196,7 +198,7 @@ func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 			OperationName string                 `json:"operationName"`
 		}
 		if err := jsoniter.Unmarshal(msg.Payload, &payload); err != nil {
-			c.Logger.WithField("error", err.Error()).Info("malformed graphql-ws message received")
+			// ignore malformed messages
 			return
 		}
 		c.Handler.HandleStart(msg.Id, payload.Query, payload.Variables, payload.OperationName)
@@ -210,12 +212,12 @@ func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 			Id:   msg.Id,
 			Type: MessageTypeComplete,
 		}); err != nil {
-			c.Logger.Error(errors.Wrap(err, "unable to send graphql-ws stop response"))
+			c.Handler.LogError(errors.Wrap(err, "unable to send graphql-ws stop response"))
 		}
 	case MessageTypeConnectionTerminate:
 		c.beginClosing(websocket.CloseNormalClosure, "terminate requested by client")
 	default:
-		c.Logger.Info("unknown graphql-ws message type received")
+		// ignore unknown message types
 	}
 }
 
@@ -260,7 +262,7 @@ func (c *Connection) writeLoop() {
 					c.conn.SetWriteDeadline(time.Now().Add(time.Second))
 					if err := c.conn.WritePreparedMessage(msg); err != nil {
 						if !websocket.IsCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseGoingAway) && err != websocket.ErrCloseSent {
-							c.Logger.Error(errors.Wrap(err, "websocket write error"))
+							c.Handler.LogError(errors.Wrap(err, "websocket write error"))
 						}
 						done = true
 					}
@@ -271,7 +273,7 @@ func (c *Connection) writeLoop() {
 
 			// initiate the close handshake
 			if err := c.conn.WriteMessage(websocket.CloseMessage, msg); err != nil {
-				c.Logger.Error(errors.Wrap(err, "websocket control write error"))
+				c.Handler.LogError(errors.Wrap(err, "websocket control write error"))
 			}
 			// wait for the response, then close the connection
 			select {
@@ -283,7 +285,7 @@ func (c *Connection) writeLoop() {
 		case <-c.closeReceived:
 			// the client initiated the close handshake
 			if err := c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "close requested by client")); err != nil {
-				c.Logger.Error(errors.Wrap(err, "websocket control write error"))
+				c.Handler.LogError(errors.Wrap(err, "websocket control write error"))
 			}
 			return
 		}
@@ -292,7 +294,7 @@ func (c *Connection) writeLoop() {
 
 		if err := c.conn.WritePreparedMessage(msg); err != nil {
 			if !websocket.IsCloseError(err, websocket.CloseAbnormalClosure, websocket.CloseGoingAway) && err != websocket.ErrCloseSent {
-				c.Logger.Error(errors.Wrap(err, "websocket write error"))
+				c.Handler.LogError(errors.Wrap(err, "websocket write error"))
 			}
 			return
 		}

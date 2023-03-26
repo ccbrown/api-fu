@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 )
 
+const WebSocketSubprotocol = "graphql-ws"
+
 // MessageType represents a GraphQL-WS message type.
 type MessageType string
 
