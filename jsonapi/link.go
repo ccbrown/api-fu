@@ -7,10 +7,10 @@ package jsonapi
 // - a string whose value is a URI-reference [RFC3986 Section 4.1] pointing to the link’s target,
 // - a link object or
 // - null if the link does not exist.
-type LinksObject map[string]string
+type Links map[string]string
 
 // A “link object” is an object that represents a web link.
-type LinkObject struct {
+type Link struct {
 	// A string whose value is a URI-reference [RFC3986 Section 4.1] pointing to the link’s target.
 	HREF string `json:"href"`
 

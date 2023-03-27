@@ -6,7 +6,7 @@ type Error struct {
 	// A unique identifier for this particular occurrence of the problem.
 	Id string `json:"id,omitempty"`
 
-	Links LinksObject `json:"links,omitempty"`
+	Links Links `json:"links,omitempty"`
 
 	// The HTTP status code applicable to this problem, expressed as a string value.
 	Status string `json:"status,omitempty"`

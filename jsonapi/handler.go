@@ -1,6 +1,7 @@
 package jsonapi
 
 import (
+	"context"
 	"mime"
 	"net/http"
 	"strconv"
@@ -46,6 +47,27 @@ func errorForHTTPStatus(status int) Error {
 	}
 }
 
+func (api API) getResource(ctx context.Context, id ResourceId) (*Resource, *Error) {
+	if resourceType, ok := api.Schema.resourceTypes[id.Type]; ok {
+		return resourceType.get(ctx, id)
+	}
+	return nil, nil
+}
+
+func (api API) getResources(ctx context.Context, ids []ResourceId) ([]Resource, *Error) {
+	var ret []Resource
+	for _, id := range ids {
+		if resourceType, ok := api.Schema.resourceTypes[id.Type]; ok {
+			if resource, err := resourceType.get(ctx, id); err != nil {
+				return nil, err
+			} else if resource != nil {
+				ret = append(ret, *resource)
+			}
+		}
+	}
+	return ret, nil
+}
+
 func (api API) executeRequest(r *http.Request) *ResponseDocument {
 	/*
 		If a request’s Accept header contains an instance of the JSON:API media type, servers MUST
@@ -87,26 +109,71 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 	ctx := r.Context()
 	pathComponents := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 
-	linkURL := func(path string) string {
-		return r.URL.Scheme + "://" + r.URL.Host + path
-	}
-
-	// handle requests for resources based on id
-	if len(pathComponents) == 2 {
+	if r.Method == "GET" && len(pathComponents) >= 1 {
 		typeName := pathComponents[0]
-		resourceId := pathComponents[1]
 		if resourceType, ok := api.Schema.resourceTypes[typeName]; ok {
-			if resource, err := resourceType.get(ctx, typeName, resourceId); err != nil {
-				return &ResponseDocument{
-					Errors: []Error{*err},
+			if len(pathComponents) >= 2 {
+				resourceId := ResourceId{
+					Type: typeName,
+					Id:   pathComponents[1],
 				}
-			} else if resource != nil {
-				var data any = resource
-				return &ResponseDocument{
-					Data: &data,
-					Links: LinksObject{
-						"self": linkURL(r.URL.Path),
-					},
+
+				if len(pathComponents) == 2 {
+					// just return the resource
+					if resource, err := resourceType.get(ctx, resourceId); err != nil {
+						return &ResponseDocument{
+							Errors: []Error{*err},
+						}
+					} else if resource != nil {
+						var data any = resource
+						return &ResponseDocument{
+							Data: &data,
+							Links: Links{
+								"self": r.URL.Path,
+							},
+						}
+					}
+				} else if len(pathComponents) == 3 {
+					// get a related resource
+					relationshipName := pathComponents[2]
+					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName); err != nil {
+						return &ResponseDocument{
+							Errors: []Error{*err},
+						}
+					} else if relationship != nil {
+						var data any = nil
+						var err *Error
+						switch ids := relationship.Data.(type) {
+						case ResourceId:
+							data, err = api.getResource(ctx, ids)
+						case []ResourceId:
+							data, err = api.getResources(ctx, ids)
+						}
+						if err != nil {
+							return &ResponseDocument{
+								Errors: []Error{*err},
+							}
+						}
+						return &ResponseDocument{
+							Data: &data,
+							Links: Links{
+								"self": r.URL.Path,
+							},
+						}
+					}
+				} else if len(pathComponents) == 4 && pathComponents[2] == "relationships" {
+					// get a relationship
+					relationshipName := pathComponents[3]
+					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName); err != nil {
+						return &ResponseDocument{
+							Errors: []Error{*err},
+						}
+					} else if relationship != nil {
+						return &ResponseDocument{
+							Data:  &relationship.Data,
+							Links: relationship.Links,
+						}
+					}
 				}
 			}
 		}

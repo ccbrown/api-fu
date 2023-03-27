@@ -24,7 +24,7 @@ type ResponseDocument struct {
 	Implementation map[string]any `json:"jsonapi,omitempty"`
 
 	// A links object related to the primary data.
-	Links LinksObject `json:"links,omitempty"`
+	Links Links `json:"links,omitempty"`
 }
 
 func isGloballyAllowedCharacter(r rune) bool {
