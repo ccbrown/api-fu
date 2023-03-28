@@ -130,6 +130,16 @@ func TestNonsensePath(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
+func TestUnsupportedQueryParameter(t *testing.T) {
+	w := httptest.NewRecorder()
+	r, err := http.NewRequest("GET", "/articles/1?foo=bar", nil)
+	require.NoError(t, err)
+	r.Header.Set("Accept", "application/vnd.api+json")
+	API{Schema: testSchema}.ServeHTTP(w, r)
+	resp := w.Result()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
 func TestGetResource_Error(t *testing.T) {
 	w := httptest.NewRecorder()
 	r, err := http.NewRequest("GET", "/articles/make-error", nil)
@@ -143,7 +153,10 @@ func TestGetResource_Error(t *testing.T) {
 	  "errors": [{
 		"title": "Error!",
 		"status": "400"
-	  }]
+	  }],
+	  "jsonapi": {
+	  	"version": "1.1"
+	  }
 	}`, string(body))
 }
 
@@ -185,6 +198,9 @@ func TestGetResource(t *testing.T) {
 			]
 		  }
 		}
+	  },
+	  "jsonapi": {
+	  	"version": "1.1"
 	  }
 	}`, string(body))
 }
@@ -203,7 +219,10 @@ func TestGetResourceRelationship(t *testing.T) {
 		"self": "/articles/1/relationships/author",
 		"related": "/articles/1/author"
 	  },
-	  "data": { "type": "people", "id": "9" }
+	  "data": { "type": "people", "id": "9" },
+	  "jsonapi": {
+	  	"version": "1.1"
+	  }
 	}`, string(body))
 }
 
@@ -228,6 +247,9 @@ func TestGetRelatedResource(t *testing.T) {
 		  "lastName": "Gebhardt",
 		  "twitter": "dgeb"
 		}
+	  },
+	  "jsonapi": {
+	  	"version": "1.1"
 	  }
 	}`, string(body))
 }

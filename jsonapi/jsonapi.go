@@ -21,10 +21,24 @@ type ResponseDocument struct {
 	Meta map[string]any `json:"meta,omitempty"`
 
 	// An object describing the server’s implementation.
-	Implementation map[string]any `json:"jsonapi,omitempty"`
+	JSONAPI *JSONAPI `json:"jsonapi,omitempty"`
 
 	// A links object related to the primary data.
 	Links Links `json:"links,omitempty"`
+}
+
+type JSONAPI struct {
+	// A string indicating the highest JSON:API version supported.
+	Version string `json:"version,omitempty"`
+
+	// An array of URIs for all applied extensions.
+	Ext []string `json:"ext,omitempty"`
+
+	// An array of URIs for all applied profiles.
+	Profile []string `json:"profile,omitempty"`
+
+	// A meta object containing non-standard meta-information.
+	Meta map[string]any `json:"meta,omitempty"`
 }
 
 func isGloballyAllowedCharacter(r rune) bool {

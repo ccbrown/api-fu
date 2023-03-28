@@ -12,6 +12,9 @@ import (
 
 func (api API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := api.executeRequest(r)
+	resp.JSONAPI = &JSONAPI{
+		Version: "1.1",
+	}
 
 	w.Header().Set("Content-Type", "application/vnd.api+json")
 
@@ -108,6 +111,24 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 
 	ctx := r.Context()
 	pathComponents := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+
+	q := r.URL.Query()
+
+	// If an endpoint does not support the include parameter, it MUST respond with 400 Bad Request
+	// to any requests that include it.
+	//
+	// If the server does not support sorting as specified in the query parameter sort, it MUST
+	// return 400 Bad Request.
+	//
+	// If a server encounters a query parameter that does not follow the naming conventions defined
+	// by section 10.3, Implementation-Specific Query Parameters, or the server does not know how to
+	// process it as a query parameter from this specification, it MUST return 400 Bad Request.
+	if len(q) > 0 {
+		// We don't support any query parameters currently.
+		return &ResponseDocument{
+			Errors: []Error{errorForHTTPStatus(http.StatusBadRequest)},
+		}
+	}
 
 	if r.Method == "GET" && len(pathComponents) >= 1 {
 		typeName := pathComponents[0]
