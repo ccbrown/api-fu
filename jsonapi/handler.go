@@ -72,17 +72,15 @@ func (api API) getResources(ctx context.Context, ids []ResourceId) ([]Resource, 
 }
 
 func (api API) executeRequest(r *http.Request) *ResponseDocument {
-	/*
-		If a request’s Accept header contains an instance of the JSON:API media type, servers MUST
-		ignore instances of that media type which are modified by a media type parameter other than ext
-		or profile. If all instances of that media type are modified with a media type parameter other
-		than ext or profile, servers MUST respond with a 406 Not Acceptable status code. If every
-		instance of that media type is modified by the ext parameter and each contains at least one
-		unsupported extension URI, the server MUST also respond with a 406 Not Acceptable.
-
-		If the profile parameter is received, a server SHOULD attempt to apply any requested profile(s)
-		to its response. A server MUST ignore any profiles that it does not recognize.
-	*/
+	// If a request’s Accept header contains an instance of the JSON:API media type, servers MUST
+	// ignore instances of that media type which are modified by a media type parameter other than
+	// ext or profile. If all instances of that media type are modified with a media type parameter
+	// other than ext or profile, servers MUST respond with a 406 Not Acceptable status code. If
+	// every instance of that media type is modified by the ext parameter and each contains at least
+	// one unsupported extension URI, the server MUST also respond with a 406 Not Acceptable.
+	//
+	// If the profile parameter is received, a server SHOULD attempt to apply any requested
+	// profile(s) to its response. A server MUST ignore any profiles that it does not recognize.
 	isAcceptable := false
 	for _, accept := range r.Header.Values("Accept") {
 		mediaType, params, err := mime.ParseMediaType(accept)
