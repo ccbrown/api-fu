@@ -25,6 +25,7 @@ func init() {
 				Relationships: map[string]*RelationshipDefinition[struct{}]{
 					"author": {
 						Resolver: ToOneRelationshipResolver[struct{}]{
+							ResolveByDefault: true,
 							Resolve: func(ctx context.Context, resource struct{}) (*ResourceId, *Error) {
 								return &ResourceId{
 									Type: "people",
@@ -191,11 +192,7 @@ func TestGetResource(t *testing.T) {
 			"links": {
 			  "self": "/articles/1/relationships/comments",
 			  "related": "/articles/1/comments"
-			},
-			"data": [
-			  { "type": "comments", "id": "5" },
-			  { "type": "comments", "id": "12" }
-			]
+			}
 		  }
 		}
 	  },

@@ -162,7 +162,7 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 					} else if relationship != nil {
 						var data any = nil
 						var err *Error
-						switch ids := relationship.Data.(type) {
+						switch ids := (*relationship.Data).(type) {
 						case ResourceId:
 							data, err = api.getResource(ctx, ids)
 						case []ResourceId:
@@ -189,7 +189,7 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 						}
 					} else if relationship != nil {
 						return &ResponseDocument{
-							Data:  &relationship.Data,
+							Data:  relationship.Data,
 							Links: relationship.Links,
 						}
 					}

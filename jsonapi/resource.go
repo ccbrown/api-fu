@@ -24,57 +24,55 @@ func (def *AttributeDefinition[T]) validate() error {
 }
 
 type RelationshipResolver[T any] interface {
-	// Resolve implementations should compute a value and return a JSON-serializable resource
-	// linkage object.
+	// If true, the relationship will be resolved by default when the resource is requested.
+	// Generally this should only by true for relationships that are trivially resolved, e.g.
+	// because the related resource ids are available on `T` itself.
+	ResolveRelationshipByDefault() bool
+
+	// Resolve implementations should compute a value and return data of type `nil`, `Relationship`
+	// or `[]Relationship`.
 	//
 	// Generally you should use `ToOneRelationshipResolver` or `ToManyRelationshipResolver` instead
 	// of implementing this directly.
-	ResolveRelationship(ctx context.Context, resource T, resourceId ResourceId, relationshipName string) (Relationship, *Error)
+	ResolveRelationship(ctx context.Context, resource T) (any, *Error)
 }
 
 type ToOneRelationshipResolver[T any] struct {
+	ResolveByDefault bool
+
 	Resolve func(ctx context.Context, resource T) (*ResourceId, *Error)
 }
 
-func (r ToOneRelationshipResolver[T]) ResolveRelationship(ctx context.Context, resource T, resourceId ResourceId, relationshipName string) (Relationship, *Error) {
+func (r ToOneRelationshipResolver[T]) ResolveRelationshipByDefault() bool {
+	return r.ResolveByDefault
+}
+
+func (r ToOneRelationshipResolver[T]) ResolveRelationship(ctx context.Context, resource T) (any, *Error) {
 	if id, err := r.Resolve(ctx, resource); err != nil {
 		return Relationship{}, err
-	} else {
-		links := Links{
-			"self":    "/" + resourceId.Type + "/" + resourceId.Id + "/relationships/" + relationshipName,
-			"related": "/" + resourceId.Type + "/" + resourceId.Id + "/" + relationshipName,
-		}
-		var data any = nil
-		if id != nil {
-			data = *id
-		}
-		return Relationship{
-			Links: links,
-			Data:  data,
-		}, nil
+	} else if id != nil {
+		return *id, nil
 	}
+	return nil, nil
 }
 
 type ToManyRelationshipResolver[T any] struct {
+	ResolveByDefault bool
+
 	Resolve func(ctx context.Context, resource T) ([]ResourceId, *Error)
 }
 
-func (r ToManyRelationshipResolver[T]) ResolveRelationship(ctx context.Context, resource T, resourceId ResourceId, relationshipName string) (Relationship, *Error) {
+func (r ToManyRelationshipResolver[T]) ResolveRelationshipByDefault() bool {
+	return r.ResolveByDefault
+}
+
+func (r ToManyRelationshipResolver[T]) ResolveRelationship(ctx context.Context, resource T) (any, *Error) {
 	if data, err := r.Resolve(ctx, resource); err != nil {
 		return Relationship{}, err
-	} else {
-		if len(data) == 0 {
-			data = []ResourceId{}
-		}
-		links := Links{
-			"self":    "/" + resourceId.Type + "/" + resourceId.Id + "/relationships/" + relationshipName,
-			"related": "/" + resourceId.Type + "/" + resourceId.Id + "/" + relationshipName,
-		}
-		return Relationship{
-			Links: links,
-			Data:  data,
-		}, nil
+	} else if len(data) > 0 {
+		return data, nil
 	}
+	return nil, nil
 }
 
 type RelationshipDefinition[T any] struct {
@@ -147,11 +145,21 @@ func (t ResourceType[T]) get(ctx context.Context, id ResourceId) (*Resource, *Er
 		ret.Relationships = make(map[string]any, len(t.Relationships))
 
 		for name, def := range t.Relationships {
-			if rel, err := def.Resolver.ResolveRelationship(ctx, resource, id, name); err != nil {
-				return nil, err
-			} else {
-				ret.Relationships[name] = rel
+			links := Links{
+				"self":    "/" + id.Type + "/" + id.Id + "/relationships/" + name,
+				"related": "/" + id.Type + "/" + id.Id + "/" + name,
 			}
+			rel := Relationship{
+				Links: links,
+			}
+			if def.Resolver.ResolveRelationshipByDefault() {
+				if data, err := def.Resolver.ResolveRelationship(ctx, resource); err != nil {
+					return nil, err
+				} else {
+					rel.Data = &data
+				}
+			}
+			ret.Relationships[name] = rel
 		}
 	}
 
@@ -169,10 +177,17 @@ func (t ResourceType[T]) getRelationship(ctx context.Context, id ResourceId, rel
 	}
 
 	if def, ok := t.Relationships[relationshipName]; ok {
-		if ret, err := def.Resolver.ResolveRelationship(ctx, resource, id, relationshipName); err != nil {
+		if data, err := def.Resolver.ResolveRelationship(ctx, resource); err != nil {
 			return nil, err
 		} else {
-			return &ret, nil
+			links := Links{
+				"self":    "/" + id.Type + "/" + id.Id + "/relationships/" + relationshipName,
+				"related": "/" + id.Type + "/" + id.Id + "/" + relationshipName,
+			}
+			return &Relationship{
+				Links: links,
+				Data:  &data,
+			}, nil
 		}
 	}
 
@@ -235,8 +250,8 @@ type Relationship struct {
 
 	// The resource linkage.
 	//
-	// This must be `nil`, `ResourceId`, or `[]ResourceId`.
-	Data any `json:"data,omitempty"`
+	// If given, this must be `nil`, `ResourceId`, or `[]ResourceId`.
+	Data *any `json:"data,omitempty"`
 
 	// A meta object containing non-standard meta-information about the relationship.
 	Meta map[string]any `json:"meta,omitempty"`
