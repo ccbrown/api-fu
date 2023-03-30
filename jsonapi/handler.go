@@ -155,7 +155,7 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 				} else if len(pathComponents) == 3 {
 					// get a related resource
 					relationshipName := pathComponents[2]
-					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName); err != nil {
+					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
 						return &ResponseDocument{
 							Errors: []Error{*err},
 						}
@@ -183,7 +183,7 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 				} else if len(pathComponents) == 4 && pathComponents[2] == "relationships" {
 					// get a relationship
 					relationshipName := pathComponents[3]
-					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName); err != nil {
+					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
 						return &ResponseDocument{
 							Errors: []Error{*err},
 						}
