@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ccbrown/api-fu/jsonapi/types"
 )
 
 var testSchema *Schema
@@ -26,8 +28,8 @@ func init() {
 					"author": {
 						Resolver: ToOneRelationshipResolver[struct{}]{
 							ResolveByDefault: true,
-							Resolve: func(ctx context.Context, resource struct{}) (*ResourceId, *Error) {
-								return &ResourceId{
+							Resolve: func(ctx context.Context, resource struct{}) (*types.ResourceId, *types.Error) {
+								return &types.ResourceId{
 									Type: "people",
 									Id:   "9",
 								}, nil
@@ -36,8 +38,8 @@ func init() {
 					},
 					"comments": {
 						Resolver: ToManyRelationshipResolver[struct{}]{
-							Resolve: func(ctx context.Context, resource struct{}) ([]ResourceId, *Error) {
-								return []ResourceId{
+							Resolve: func(ctx context.Context, resource struct{}) ([]types.ResourceId, *types.Error) {
+								return []types.ResourceId{
 									{
 										Type: "comments",
 										Id:   "5",
@@ -51,9 +53,9 @@ func init() {
 						},
 					},
 				},
-				Getter: func(ctx context.Context, id string) (struct{}, *Error) {
+				Getter: func(ctx context.Context, id string) (struct{}, *types.Error) {
 					if id == "make-error" {
-						return struct{}{}, &Error{
+						return struct{}{}, &types.Error{
 							Title:  "Error!",
 							Status: "400",
 						}
@@ -62,7 +64,7 @@ func init() {
 				},
 			},
 			"comments": ResourceType[struct{}]{
-				Getter: func(ctx context.Context, id string) (struct{}, *Error) {
+				Getter: func(ctx context.Context, id string) (struct{}, *types.Error) {
 					return struct{}{}, nil
 				},
 			},
@@ -78,7 +80,7 @@ func init() {
 						Resolver: ConstantString[struct{}]("dgeb"),
 					},
 				},
-				Getter: func(ctx context.Context, id string) (struct{}, *Error) {
+				Getter: func(ctx context.Context, id string) (struct{}, *types.Error) {
 					return struct{}{}, nil
 				},
 			},
@@ -131,14 +133,32 @@ func TestNonsensePath(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func TestUnsupportedQueryParameter(t *testing.T) {
-	w := httptest.NewRecorder()
-	r, err := http.NewRequest("GET", "/articles/1?foo=bar", nil)
-	require.NoError(t, err)
-	r.Header.Set("Accept", "application/vnd.api+json")
-	API{Schema: testSchema}.ServeHTTP(w, r)
-	resp := w.Result()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+func TestQueryParameters(t *testing.T) {
+	for name, tc := range map[string]struct {
+		Query string
+		Okay  bool
+	}{
+		"Reserved":              {Query: "foo=bar"},
+		"Extension":             {Query: "foo:bar=bar"},
+		"InvalidChars":          {Query: "aa123@!@#$=bar"},
+		"UnbalancedBracket":     {Query: "foo[asd=bar"},
+		"Pagination":            {Query: "page[size]=foo", Okay: true},
+		"ImplementationDefined": {Query: "Foo=bar&Foo[bar]=baz", Okay: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest("GET", "/articles/1?"+tc.Query, nil)
+			require.NoError(t, err)
+			r.Header.Set("Accept", "application/vnd.api+json")
+			API{Schema: testSchema}.ServeHTTP(w, r)
+			resp := w.Result()
+			if tc.Okay {
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+			} else {
+				assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+			}
+		})
+	}
 }
 
 func TestGetResource_Error(t *testing.T) {

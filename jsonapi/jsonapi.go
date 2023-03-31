@@ -9,38 +9,6 @@ type API struct {
 	Schema *Schema
 }
 
-// This object defines a document’s “top level”.
-type ResponseDocument struct {
-	// The document’s “primary data”.
-	Data *any `json:"data,omitempty"`
-
-	// An array of error objects.
-	Errors []Error `json:"errors,omitempty"`
-
-	// A meta object containing non-standard meta-information.
-	Meta map[string]any `json:"meta,omitempty"`
-
-	// An object describing the server’s implementation.
-	JSONAPI *JSONAPI `json:"jsonapi,omitempty"`
-
-	// A links object related to the primary data.
-	Links Links `json:"links,omitempty"`
-}
-
-type JSONAPI struct {
-	// A string indicating the highest JSON:API version supported.
-	Version string `json:"version,omitempty"`
-
-	// An array of URIs for all applied extensions.
-	Ext []string `json:"ext,omitempty"`
-
-	// An array of URIs for all applied profiles.
-	Profile []string `json:"profile,omitempty"`
-
-	// A meta object containing non-standard meta-information.
-	Meta map[string]any `json:"meta,omitempty"`
-}
-
 func isGloballyAllowedCharacter(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 }

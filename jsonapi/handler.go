@@ -8,11 +8,13 @@ import (
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
+
+	"github.com/ccbrown/api-fu/jsonapi/types"
 )
 
 func (api API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := api.executeRequest(r)
-	resp.JSONAPI = &JSONAPI{
+	resp.JSONAPI = &types.JSONAPI{
 		Version: "1.1",
 	}
 
@@ -43,22 +45,22 @@ func (api API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
-func errorForHTTPStatus(status int) Error {
-	return Error{
+func errorForHTTPStatus(status int) types.Error {
+	return types.Error{
 		Status: strconv.Itoa(status),
 		Title:  http.StatusText(status),
 	}
 }
 
-func (api API) getResource(ctx context.Context, id ResourceId) (*Resource, *Error) {
+func (api API) getResource(ctx context.Context, id types.ResourceId) (*types.Resource, *types.Error) {
 	if resourceType, ok := api.Schema.resourceTypes[id.Type]; ok {
 		return resourceType.get(ctx, id)
 	}
 	return nil, nil
 }
 
-func (api API) getResources(ctx context.Context, ids []ResourceId) ([]Resource, *Error) {
-	var ret []Resource
+func (api API) getResources(ctx context.Context, ids []types.ResourceId) ([]types.Resource, *types.Error) {
+	var ret []types.Resource
 	for _, id := range ids {
 		if resourceType, ok := api.Schema.resourceTypes[id.Type]; ok {
 			if resource, err := resourceType.get(ctx, id); err != nil {
@@ -71,7 +73,7 @@ func (api API) getResources(ctx context.Context, ids []ResourceId) ([]Resource, 
 	return ret, nil
 }
 
-func (api API) executeRequest(r *http.Request) *ResponseDocument {
+func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 	// If a request’s Accept header contains an instance of the JSON:API media type, servers MUST
 	// ignore instances of that media type which are modified by a media type parameter other than
 	// ext or profile. If all instances of that media type are modified with a media type parameter
@@ -102,8 +104,8 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 		break
 	}
 	if !isAcceptable {
-		return &ResponseDocument{
-			Errors: []Error{errorForHTTPStatus(http.StatusNotAcceptable)},
+		return &types.ResponseDocument{
+			Errors: []types.Error{errorForHTTPStatus(http.StatusNotAcceptable)},
 		}
 	}
 
@@ -112,19 +114,40 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 
 	q := r.URL.Query()
 
-	// If an endpoint does not support the include parameter, it MUST respond with 400 Bad Request
-	// to any requests that include it.
-	//
-	// If the server does not support sorting as specified in the query parameter sort, it MUST
-	// return 400 Bad Request.
-	//
-	// If a server encounters a query parameter that does not follow the naming conventions defined
-	// by section 10.3, Implementation-Specific Query Parameters, or the server does not know how to
-	// process it as a query parameter from this specification, it MUST return 400 Bad Request.
-	if len(q) > 0 {
-		// We don't support any query parameters currently.
-		return &ResponseDocument{
-			Errors: []Error{errorForHTTPStatus(http.StatusBadRequest)},
+	// Check for unsupported parameters.
+	for k := range q {
+		parts := strings.Split(k, "[")
+		familyName := parts[0]
+
+		for _, part := range parts[1:] {
+			if len(part) < 1 || part[len(part)-1] != ']' || validateMemberName(part[:len(part)-1]) != nil {
+				// This is not a valid query parameter.
+				return &types.ResponseDocument{
+					Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+				}
+			}
+		}
+
+		if validateMemberName(familyName) != nil {
+			// This is either an extension parameter or an invalid family name. Either way, we don't
+			// support it.
+			return &types.ResponseDocument{
+				Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+			}
+		}
+
+		if strings.IndexFunc(familyName, func(r rune) bool {
+			return !(r >= 'a' && r <= 'z')
+		}) < 0 {
+			// This is not an implementation-specific parameter, and if it's not one we support, we
+			// must return a 400 error.
+			switch familyName {
+			case "page":
+			default:
+				return &types.ResponseDocument{
+					Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+				}
+			}
 		}
 	}
 
@@ -132,7 +155,7 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 		typeName := pathComponents[0]
 		if resourceType, ok := api.Schema.resourceTypes[typeName]; ok {
 			if len(pathComponents) >= 2 {
-				resourceId := ResourceId{
+				resourceId := types.ResourceId{
 					Type: typeName,
 					Id:   pathComponents[1],
 				}
@@ -140,14 +163,14 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 				if len(pathComponents) == 2 {
 					// just return the resource
 					if resource, err := resourceType.get(ctx, resourceId); err != nil {
-						return &ResponseDocument{
-							Errors: []Error{*err},
+						return &types.ResponseDocument{
+							Errors: []types.Error{*err},
 						}
 					} else if resource != nil {
 						var data any = resource
-						return &ResponseDocument{
+						return &types.ResponseDocument{
 							Data: &data,
-							Links: Links{
+							Links: types.Links{
 								"self": r.URL.Path,
 							},
 						}
@@ -156,26 +179,26 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 					// get a related resource
 					relationshipName := pathComponents[2]
 					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
-						return &ResponseDocument{
-							Errors: []Error{*err},
+						return &types.ResponseDocument{
+							Errors: []types.Error{*err},
 						}
 					} else if relationship != nil {
 						var data any = nil
-						var err *Error
+						var err *types.Error
 						switch ids := (*relationship.Data).(type) {
-						case ResourceId:
+						case types.ResourceId:
 							data, err = api.getResource(ctx, ids)
-						case []ResourceId:
+						case []types.ResourceId:
 							data, err = api.getResources(ctx, ids)
 						}
 						if err != nil {
-							return &ResponseDocument{
-								Errors: []Error{*err},
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
 							}
 						}
-						return &ResponseDocument{
+						return &types.ResponseDocument{
 							Data: &data,
-							Links: Links{
+							Links: types.Links{
 								"self": r.URL.Path,
 							},
 						}
@@ -184,11 +207,11 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 					// get a relationship
 					relationshipName := pathComponents[3]
 					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
-						return &ResponseDocument{
-							Errors: []Error{*err},
+						return &types.ResponseDocument{
+							Errors: []types.Error{*err},
 						}
 					} else if relationship != nil {
-						return &ResponseDocument{
+						return &types.ResponseDocument{
 							Data:  relationship.Data,
 							Links: relationship.Links,
 						}
@@ -198,7 +221,7 @@ func (api API) executeRequest(r *http.Request) *ResponseDocument {
 		}
 	}
 
-	return &ResponseDocument{
-		Errors: []Error{errorForHTTPStatus(http.StatusNotFound)},
+	return &types.ResponseDocument{
+		Errors: []types.Error{errorForHTTPStatus(http.StatusNotFound)},
 	}
 }

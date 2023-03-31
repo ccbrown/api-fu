@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+
+	"github.com/ccbrown/api-fu/jsonapi/types"
 )
 
 type RelationshipDefinition[T any] struct {
@@ -21,8 +23,8 @@ func (def *RelationshipDefinition[T]) validate() error {
 
 // An interface which all ResourceType instantiations implement.
 type AnyResourceType interface {
-	get(ctx context.Context, id ResourceId) (*Resource, *Error)
-	getRelationship(ctx context.Context, id ResourceId, relationshipName string, params url.Values) (*Relationship, *Error)
+	get(ctx context.Context, id types.ResourceId) (*types.Resource, *types.Error)
+	getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error)
 	validate() error
 }
 
@@ -35,7 +37,7 @@ type ResourceType[T any] struct {
 
 	// If given, the resource can be directly referenced using an id, e.g. via the /{type_name}/{id}
 	// endpoint.
-	Getter func(ctx context.Context, id string) (T, *Error)
+	Getter func(ctx context.Context, id string) (T, *types.Error)
 }
 
 func isNil(v interface{}) bool {
@@ -46,7 +48,7 @@ func isNil(v interface{}) bool {
 	return (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) && rv.IsNil()
 }
 
-func (t ResourceType[T]) get(ctx context.Context, id ResourceId) (*Resource, *Error) {
+func (t ResourceType[T]) get(ctx context.Context, id types.ResourceId) (*types.Resource, *types.Error) {
 	if t.Getter == nil {
 		return nil, nil
 	}
@@ -56,7 +58,7 @@ func (t ResourceType[T]) get(ctx context.Context, id ResourceId) (*Resource, *Er
 		return nil, err
 	}
 
-	ret := Resource{
+	ret := types.Resource{
 		Type: id.Type,
 		Id:   id.Id,
 	}
@@ -80,7 +82,7 @@ func (t ResourceType[T]) get(ctx context.Context, id ResourceId) (*Resource, *Er
 			if rel, err := def.Resolver.ResolveRelationship(ctx, resource, false, nil); err != nil {
 				return nil, err
 			} else {
-				links := Links{
+				links := types.Links{
 					"self":    "/" + id.Type + "/" + id.Id + "/relationships/" + name,
 					"related": "/" + id.Type + "/" + id.Id + "/" + name,
 				}
@@ -96,7 +98,7 @@ func (t ResourceType[T]) get(ctx context.Context, id ResourceId) (*Resource, *Er
 	return &ret, nil
 }
 
-func (t ResourceType[T]) getRelationship(ctx context.Context, id ResourceId, relationshipName string, params url.Values) (*Relationship, *Error) {
+func (t ResourceType[T]) getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error) {
 	if t.Getter == nil {
 		return nil, nil
 	}
@@ -110,7 +112,7 @@ func (t ResourceType[T]) getRelationship(ctx context.Context, id ResourceId, rel
 		if rel, err := def.Resolver.ResolveRelationship(ctx, resource, true, params); err != nil {
 			return nil, err
 		} else {
-			links := Links{
+			links := types.Links{
 				"self":    "/" + id.Type + "/" + id.Id + "/relationships/" + relationshipName,
 				"related": "/" + id.Type + "/" + id.Id + "/" + relationshipName,
 			}
@@ -149,47 +151,4 @@ func (t ResourceType[T]) validate() error {
 	}
 
 	return nil
-}
-
-type Resource struct {
-	Type string `json:"type"`
-
-	Id string `json:"id"`
-
-	// An attributes object representing some of the resource’s data.
-	Attributes map[string]any `json:"attributes,omitempty"`
-
-	// A relationships object describing relationships between the resource and other JSON:API
-	// resources.
-	Relationships map[string]any `json:"relationships,omitempty"`
-
-	// A links object containing links related to the resource.
-	Links Links `json:"links,omitempty"`
-
-	// A meta object containing non-standard meta-information about the resource that can not be
-	// represented as an attribute or relationship.
-	Meta map[string]any `json:"meta,omitempty"`
-}
-
-type Relationship struct {
-	// A links object containing at least one of the following:
-	//
-	// - self: a link for the relationship itself (a “relationship link”)
-	// - related: a related resource link
-	// - a member defined by an applied extension
-	Links Links `json:"links,omitempty"`
-
-	// The resource linkage.
-	//
-	// If given, this must be `nil`, `ResourceId`, or `[]ResourceId`.
-	Data *any `json:"data,omitempty"`
-
-	// A meta object containing non-standard meta-information about the relationship.
-	Meta map[string]any `json:"meta,omitempty"`
-}
-
-type ResourceId struct {
-	Type string `json:"type"`
-
-	Id string `json:"id"`
 }
