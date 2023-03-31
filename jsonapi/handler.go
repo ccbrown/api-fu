@@ -151,7 +151,7 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 		}
 	}
 
-	if r.Method == "GET" && len(pathComponents) >= 1 {
+	if len(pathComponents) >= 1 {
 		typeName := pathComponents[0]
 		if resourceType, ok := api.Schema.resourceTypes[typeName]; ok {
 			if len(pathComponents) >= 2 {
@@ -161,59 +161,169 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 				}
 
 				if len(pathComponents) == 2 {
-					// just return the resource
-					if resource, err := resourceType.get(ctx, resourceId); err != nil {
-						return &types.ResponseDocument{
-							Errors: []types.Error{*err},
+					// resource request
+					switch r.Method {
+					case "GET":
+						if resource, err := resourceType.get(ctx, resourceId); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
+							}
+						} else if resource != nil {
+							var data any = resource
+							return &types.ResponseDocument{
+								Data: &data,
+								Links: types.Links{
+									"self": r.URL.Path,
+								},
+							}
 						}
-					} else if resource != nil {
-						var data any = resource
-						return &types.ResponseDocument{
-							Data: &data,
-							Links: types.Links{
-								"self": r.URL.Path,
-							},
+					case "PATCH":
+						var patch types.PatchRequest
+						if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+							}
 						}
-					}
-				} else if len(pathComponents) == 3 {
-					// get a related resource
-					relationshipName := pathComponents[2]
-					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
-						return &types.ResponseDocument{
-							Errors: []types.Error{*err},
+
+						if patch.Data.Type != resourceId.Type || patch.Data.Id != resourceId.Id {
+							// A server MUST return 409 Conflict when processing a PATCH request in
+							// which the resource object’s type or id do not match the server’s
+							// endpoint.
+							return &types.ResponseDocument{
+								Errors: []types.Error{errorForHTTPStatus(http.StatusConflict)},
+							}
 						}
-					} else if relationship != nil {
-						var data any = nil
-						var err *types.Error
-						switch ids := (*relationship.Data).(type) {
-						case types.ResourceId:
-							data, err = api.getResource(ctx, ids)
-						case []types.ResourceId:
-							data, err = api.getResources(ctx, ids)
+
+						relationships := make(map[string]any, len(patch.Data.Relationships))
+						for k, v := range patch.Data.Relationships {
+							relationships[k] = v.Data
 						}
-						if err != nil {
+
+						if resource, err := resourceType.patch(ctx, resourceId, patch.Data.Attributes, relationships); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
+							}
+						} else if resource != nil {
+							var data any = resource
+							return &types.ResponseDocument{
+								Data: &data,
+								Links: types.Links{
+									"self": r.URL.Path,
+								},
+							}
+						}
+					case "DELETE":
+						if err := resourceType.delete(ctx, resourceId); err != nil {
 							return &types.ResponseDocument{
 								Errors: []types.Error{*err},
 							}
 						}
+
+						return &types.ResponseDocument{}
+					default:
 						return &types.ResponseDocument{
-							Data: &data,
-							Links: types.Links{
-								"self": r.URL.Path,
-							},
+							Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
+						}
+					}
+				} else if len(pathComponents) == 3 {
+					// related resource request
+					switch r.Method {
+					case "GET":
+						relationshipName := pathComponents[2]
+						if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
+							}
+						} else if relationship != nil {
+							var data any = nil
+							var err *types.Error
+							switch ids := (*relationship.Data).(type) {
+							case types.ResourceId:
+								data, err = api.getResource(ctx, ids)
+							case []types.ResourceId:
+								data, err = api.getResources(ctx, ids)
+							}
+							if err != nil {
+								return &types.ResponseDocument{
+									Errors: []types.Error{*err},
+								}
+							}
+							return &types.ResponseDocument{
+								Data: &data,
+								Links: types.Links{
+									"self": r.URL.Path,
+								},
+							}
+						}
+					case "PATCH":
+						relationshipName := pathComponents[2]
+						if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
+							}
+						} else if relationship != nil {
+							if relatedId, ok := (*relationship.Data).(types.ResourceId); ok {
+								if relatedResourceType, ok := api.Schema.resourceTypes[relatedId.Type]; ok {
+									var patch types.PatchRequest
+									if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
+										return &types.ResponseDocument{
+											Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+										}
+									}
+
+									if patch.Data.Type != relatedId.Type || patch.Data.Id != relatedId.Id {
+										// A server MUST return 409 Conflict when processing a PATCH request in
+										// which the resource object’s type or id do not match the server’s
+										// endpoint.
+										return &types.ResponseDocument{
+											Errors: []types.Error{errorForHTTPStatus(http.StatusConflict)},
+										}
+									}
+
+									relationships := make(map[string]any, len(patch.Data.Relationships))
+									for k, v := range patch.Data.Relationships {
+										relationships[k] = v.Data
+									}
+
+									if resource, err := relatedResourceType.patch(ctx, relatedId, patch.Data.Attributes, relationships); err != nil {
+										return &types.ResponseDocument{
+											Errors: []types.Error{*err},
+										}
+									} else if resource != nil {
+										var data any = resource
+										return &types.ResponseDocument{
+											Data: &data,
+											Links: types.Links{
+												"self": r.URL.Path,
+											},
+										}
+									}
+								}
+							}
+						}
+					default:
+						return &types.ResponseDocument{
+							Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
 						}
 					}
 				} else if len(pathComponents) == 4 && pathComponents[2] == "relationships" {
-					// get a relationship
-					relationshipName := pathComponents[3]
-					if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
-						return &types.ResponseDocument{
-							Errors: []types.Error{*err},
+					// relationship request
+					switch r.Method {
+					case "GET":
+						relationshipName := pathComponents[3]
+						if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
+							}
+						} else if relationship != nil {
+							return &types.ResponseDocument{
+								Data:  relationship.Data,
+								Links: relationship.Links,
+							}
 						}
-					} else if relationship != nil {
+					default:
 						return &types.ResponseDocument{
-							Data:  relationship.Data,
-							Links: relationship.Links,
+							Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
 						}
 					}
 				}

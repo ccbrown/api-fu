@@ -1,5 +1,11 @@
 package types
 
+import (
+	"encoding/json"
+
+	jsoniter "github.com/json-iterator/go"
+)
+
 // This object defines a document’s “top level”.
 type ResponseDocument struct {
 	// The document’s “primary data”.
@@ -151,4 +157,55 @@ type ResourceId struct {
 	Type string `json:"type"`
 
 	Id string `json:"id"`
+}
+
+type PatchRequest struct {
+	// The document’s “primary data”.
+	Data PatchRequestData `json:"data"`
+}
+
+type PatchRequestData struct {
+	Type string `json:"type"`
+
+	Id string `json:"id"`
+
+	// An object containing the attributes to be updated.
+	Attributes map[string]json.RawMessage `json:"attributes,omitempty"`
+
+	// An object containing the relationships to be updated.
+	Relationships map[string]PatchRequestDataRelationship `json:"relationships,omitempty"`
+}
+
+type PatchRequestDataRelationship struct {
+	// Either nil, `ResourceId`, or `[]ResourceId`.
+	Data any `json:"data"`
+}
+
+func (r *PatchRequestDataRelationship) UnmarshalJSON(buf []byte) error {
+	var tmp struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := jsoniter.Unmarshal(buf, &tmp); err != nil {
+		return err
+	}
+
+	if len(tmp.Data) > 0 {
+		if tmp.Data[0] == '[' {
+			var data []ResourceId
+			if err := jsoniter.Unmarshal(tmp.Data, &data); err != nil {
+				return err
+			}
+			r.Data = data
+		} else {
+			var data *ResourceId
+			if err := jsoniter.Unmarshal(tmp.Data, &data); err != nil {
+				return err
+			}
+			if data != nil {
+				r.Data = *data
+			}
+		}
+	}
+
+	return nil
 }

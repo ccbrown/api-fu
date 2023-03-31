@@ -2,9 +2,11 @@ package jsonapi
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,7 +55,7 @@ func init() {
 						},
 					},
 				},
-				Getter: func(ctx context.Context, id string) (struct{}, *types.Error) {
+				Get: func(ctx context.Context, id string) (struct{}, *types.Error) {
 					if id == "make-error" {
 						return struct{}{}, &types.Error{
 							Title:  "Error!",
@@ -64,8 +66,11 @@ func init() {
 				},
 			},
 			"comments": ResourceType[struct{}]{
-				Getter: func(ctx context.Context, id string) (struct{}, *types.Error) {
+				Get: func(ctx context.Context, id string) (struct{}, *types.Error) {
 					return struct{}{}, nil
+				},
+				Delete: func(ctx context.Context, id string) *types.Error {
+					return nil
 				},
 			},
 			"people": ResourceType[struct{}]{
@@ -80,7 +85,10 @@ func init() {
 						Resolver: ConstantString[struct{}]("dgeb"),
 					},
 				},
-				Getter: func(ctx context.Context, id string) (struct{}, *types.Error) {
+				Get: func(ctx context.Context, id string) (struct{}, *types.Error) {
+					return struct{}{}, nil
+				},
+				Patch: func(ctx context.Context, id string, attributes map[string]json.RawMessage, relationships map[string]any) (struct{}, *types.Error) {
 					return struct{}{}, nil
 				},
 			},
@@ -269,4 +277,96 @@ func TestGetRelatedResource(t *testing.T) {
 	  	"version": "1.1"
 	  }
 	}`, string(body))
+}
+
+func TestDelete(t *testing.T) {
+	for name, tc := range map[string]struct {
+		Path           string
+		ExpectedStatus int
+	}{
+		"Okay": {
+			Path:           "/comments/1",
+			ExpectedStatus: http.StatusOK,
+		},
+		"Unsupported": {
+			Path:           "/people/1",
+			ExpectedStatus: http.StatusMethodNotAllowed,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest("DELETE", tc.Path, nil)
+			require.NoError(t, err)
+			r.Header.Set("Accept", "application/vnd.api+json")
+			API{Schema: testSchema}.ServeHTTP(w, r)
+			resp := w.Result()
+			assert.Equal(t, tc.ExpectedStatus, resp.StatusCode)
+			if tc.ExpectedStatus == http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				assert.JSONEq(t, `{
+				  "jsonapi": {
+					"version": "1.1"
+				  }
+				}`, string(body))
+			}
+		})
+	}
+}
+
+func TestPatch(t *testing.T) {
+	for name, tc := range map[string]struct {
+		Path           string
+		ExpectedStatus int
+	}{
+		"Okay": {
+			Path:           "/people/9",
+			ExpectedStatus: http.StatusOK,
+		},
+		"OkayRelatedResource": {
+			Path:           "/articles/1/author",
+			ExpectedStatus: http.StatusOK,
+		},
+		"Mismatch": {
+			Path:           "/comments/1",
+			ExpectedStatus: http.StatusConflict,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest("PATCH", tc.Path, strings.NewReader(`{
+				"data": {
+					"type": "people",
+					"id": "9",
+					"attributes": {
+						"firstName": "Dan"
+					}
+				}
+			}`))
+			require.NoError(t, err)
+			r.Header.Set("Accept", "application/vnd.api+json")
+			API{Schema: testSchema}.ServeHTTP(w, r)
+			resp := w.Result()
+			assert.Equal(t, tc.ExpectedStatus, resp.StatusCode)
+			if tc.ExpectedStatus == http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				assert.JSONEq(t, `{
+				  "links": {
+					"self": "`+r.URL.Path+`"
+				  },
+				  "data": {
+					"type": "people",
+					"id": "9",
+					"attributes": {
+					  "firstName": "Dan",
+					  "lastName": "Gebhardt",
+					  "twitter": "dgeb"
+					}
+				  },
+				  "jsonapi": {
+					"version": "1.1"
+				  }
+				}`, string(body))
+			}
+		})
+	}
 }

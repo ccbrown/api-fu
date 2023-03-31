@@ -2,7 +2,9 @@ package jsonapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"reflect"
 
@@ -24,6 +26,8 @@ func (def *RelationshipDefinition[T]) validate() error {
 // An interface which all ResourceType instantiations implement.
 type AnyResourceType interface {
 	get(ctx context.Context, id types.ResourceId) (*types.Resource, *types.Error)
+	patch(ctx context.Context, id types.ResourceId, attributes map[string]json.RawMessage, relationships map[string]any) (*types.Resource, *types.Error)
+	delete(ctx context.Context, id types.ResourceId) *types.Error
 	getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error)
 	validate() error
 }
@@ -37,7 +41,15 @@ type ResourceType[T any] struct {
 
 	// If given, the resource can be directly referenced using an id, e.g. via the /{type_name}/{id}
 	// endpoint.
-	Getter func(ctx context.Context, id string) (T, *types.Error)
+	Get func(ctx context.Context, id string) (T, *types.Error)
+
+	// If given, the resource can be updated, e.g. via the PATCH method on the /{type_name}/{id}
+	// endpoint.
+	Patch func(ctx context.Context, id string, attributes map[string]json.RawMessage, relationships map[string]any) (T, *types.Error)
+
+	// If given, the resource can be deleted via the DELETE method on the /{type_name}/{id}
+	// endpoint.
+	Delete func(ctx context.Context, id string) *types.Error
 }
 
 func isNil(v interface{}) bool {
@@ -49,15 +61,20 @@ func isNil(v interface{}) bool {
 }
 
 func (t ResourceType[T]) get(ctx context.Context, id types.ResourceId) (*types.Resource, *types.Error) {
-	if t.Getter == nil {
-		return nil, nil
+	if t.Get == nil {
+		err := errorForHTTPStatus(http.StatusMethodNotAllowed)
+		return nil, &err
 	}
 
-	resource, err := t.Getter(ctx, id.Id)
+	resource, err := t.Get(ctx, id.Id)
 	if err != nil || isNil(resource) {
 		return nil, err
 	}
 
+	return t.complete(ctx, id, resource)
+}
+
+func (t ResourceType[T]) complete(ctx context.Context, id types.ResourceId, resource T) (*types.Resource, *types.Error) {
 	ret := types.Resource{
 		Type: id.Type,
 		Id:   id.Id,
@@ -98,12 +115,35 @@ func (t ResourceType[T]) get(ctx context.Context, id types.ResourceId) (*types.R
 	return &ret, nil
 }
 
+func (t ResourceType[T]) patch(ctx context.Context, id types.ResourceId, attributes map[string]json.RawMessage, relationships map[string]any) (*types.Resource, *types.Error) {
+	if t.Patch == nil {
+		err := errorForHTTPStatus(http.StatusMethodNotAllowed)
+		return nil, &err
+	}
+
+	resource, err := t.Patch(ctx, id.Id, attributes, relationships)
+	if err != nil || isNil(resource) {
+		return nil, err
+	}
+
+	return t.complete(ctx, id, resource)
+}
+
+func (t ResourceType[T]) delete(ctx context.Context, id types.ResourceId) *types.Error {
+	if t.Delete == nil {
+		err := errorForHTTPStatus(http.StatusMethodNotAllowed)
+		return &err
+	}
+
+	return t.Delete(ctx, id.Id)
+}
+
 func (t ResourceType[T]) getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error) {
-	if t.Getter == nil {
+	if t.Get == nil {
 		return nil, nil
 	}
 
-	resource, err := t.Getter(ctx, id.Id)
+	resource, err := t.Get(ctx, id.Id)
 	if err != nil || isNil(resource) {
 		return nil, err
 	}
