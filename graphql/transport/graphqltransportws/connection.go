@@ -164,7 +164,7 @@ func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 		if err := c.sendMessage(ctx, &Message{
 			Type: MessageTypeConnectionAck,
 		}); err != nil {
-			c.Handler.LogError(errors.Wrap(err, "unable to send graphql-ws connection ack"))
+			c.Handler.LogError(errors.Wrap(err, "unable to send graphql-transport-ws connection ack"))
 			c.beginClosing(websocket.CloseInternalServerErr, "ack send error")
 		}
 	case MessageTypeSubscribe:
@@ -192,8 +192,10 @@ func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 			Id:   msg.Id,
 			Type: MessageTypeComplete,
 		}); err != nil {
-			c.Handler.LogError(errors.Wrap(err, "unable to send graphql-ws complete response"))
+			c.Handler.LogError(errors.Wrap(err, "unable to send graphql-transport-ws complete response"))
 		}
+	case MessageTypePong:
+		// do nothing
 	default:
 		c.beginClosing(4400, "unknown message type")
 	}
