@@ -47,8 +47,11 @@ func (r ToOneRelationshipResolver[T]) ResolveRelationship(ctx context.Context, r
 	if dataRequested || r.ResolveByDefault {
 		if id, err := r.Resolve(ctx, resource); err != nil {
 			return types.Relationship{}, err
-		} else if id != nil {
-			var data any = *id
+		} else {
+			var data any
+			if id != nil {
+				data = *id
+			}
 			return types.Relationship{Data: &data}, nil
 		}
 	}

@@ -29,6 +29,7 @@ type AnyResourceType interface {
 	patch(ctx context.Context, id types.ResourceId, attributes map[string]json.RawMessage, relationships map[string]any) (*types.Resource, *types.Error)
 	delete(ctx context.Context, id types.ResourceId) *types.Error
 	getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error)
+	patchRelationship(ctx context.Context, id types.ResourceId, relationshipName string, data any) (*types.Relationship, *types.Error)
 	validate() error
 }
 
@@ -45,6 +46,8 @@ type ResourceType[T any] struct {
 
 	// If given, the resource can be updated, e.g. via the PATCH method on the /{type_name}/{id}
 	// endpoint.
+	//
+	// Relationship values are either `nil`, `types.ResourceId`, or `[]types.ResourceId`.
 	Patch func(ctx context.Context, id string, attributes map[string]json.RawMessage, relationships map[string]any) (T, *types.Error)
 
 	// If given, the resource can be deleted via the DELETE method on the /{type_name}/{id}
@@ -138,16 +141,7 @@ func (t ResourceType[T]) delete(ctx context.Context, id types.ResourceId) *types
 	return t.Delete(ctx, id.Id)
 }
 
-func (t ResourceType[T]) getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error) {
-	if t.Get == nil {
-		return nil, nil
-	}
-
-	resource, err := t.Get(ctx, id.Id)
-	if err != nil || isNil(resource) {
-		return nil, err
-	}
-
+func (t ResourceType[T]) completeRelationship(ctx context.Context, id types.ResourceId, resource T, relationshipName string, params url.Values) (*types.Relationship, *types.Error) {
 	if def, ok := t.Relationships[relationshipName]; ok {
 		if rel, err := def.Resolver.ResolveRelationship(ctx, resource, true, params); err != nil {
 			return nil, err
@@ -165,6 +159,32 @@ func (t ResourceType[T]) getRelationship(ctx context.Context, id types.ResourceI
 	}
 
 	return nil, nil
+}
+
+func (t ResourceType[T]) getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error) {
+	if t.Get == nil {
+		return nil, nil
+	}
+
+	resource, err := t.Get(ctx, id.Id)
+	if err != nil || isNil(resource) {
+		return nil, err
+	}
+
+	return t.completeRelationship(ctx, id, resource, relationshipName, params)
+}
+
+func (t ResourceType[T]) patchRelationship(ctx context.Context, id types.ResourceId, relationshipName string, value any) (*types.Relationship, *types.Error) {
+	if t.Patch == nil {
+		return nil, nil
+	}
+
+	resource, err := t.Patch(ctx, id.Id, nil, map[string]any{relationshipName: value})
+	if err != nil || isNil(resource) {
+		return nil, err
+	}
+
+	return t.completeRelationship(ctx, id, resource, relationshipName, nil)
 }
 
 func (t ResourceType[T]) validate() error {

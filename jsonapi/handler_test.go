@@ -17,52 +17,84 @@ import (
 
 var testSchema *Schema
 
+type Article struct {
+	Author   *types.ResourceId
+	Comments []types.ResourceId
+}
+
 func init() {
 	if s, err := NewSchema(&SchemaDefinition{
 		ResourceTypes: map[string]AnyResourceType{
-			"articles": ResourceType[struct{}]{
-				Attributes: map[string]*AttributeDefinition[struct{}]{
+			"articles": ResourceType[Article]{
+				Attributes: map[string]*AttributeDefinition[Article]{
 					"title": {
-						Resolver: ConstantString[struct{}]("JSON:API paints my bikeshed!"),
+						Resolver: ConstantString[Article]("JSON:API paints my bikeshed!"),
 					},
 				},
-				Relationships: map[string]*RelationshipDefinition[struct{}]{
+				Relationships: map[string]*RelationshipDefinition[Article]{
 					"author": {
-						Resolver: ToOneRelationshipResolver[struct{}]{
+						Resolver: ToOneRelationshipResolver[Article]{
 							ResolveByDefault: true,
-							Resolve: func(ctx context.Context, resource struct{}) (*types.ResourceId, *types.Error) {
-								return &types.ResourceId{
-									Type: "people",
-									Id:   "9",
-								}, nil
+							Resolve: func(ctx context.Context, resource Article) (*types.ResourceId, *types.Error) {
+								return resource.Author, nil
 							},
 						},
 					},
 					"comments": {
-						Resolver: ToManyRelationshipResolver[struct{}]{
-							Resolve: func(ctx context.Context, resource struct{}) ([]types.ResourceId, *types.Error) {
-								return []types.ResourceId{
-									{
-										Type: "comments",
-										Id:   "5",
-									},
-									{
-										Type: "comments",
-										Id:   "12",
-									},
-								}, nil
+						Resolver: ToManyRelationshipResolver[Article]{
+							Resolve: func(ctx context.Context, resource Article) ([]types.ResourceId, *types.Error) {
+								return resource.Comments, nil
 							},
 						},
 					},
 				},
-				Get: func(ctx context.Context, id string) (struct{}, *types.Error) {
+				Get: func(ctx context.Context, id string) (Article, *types.Error) {
 					if id == "make-error" {
-						return struct{}{}, &types.Error{
+						return Article{}, &types.Error{
 							Title:  "Error!",
 							Status: "400",
 						}
 					}
-					return struct{}{}, nil
+
+					return Article{
+						Author: &types.ResourceId{Type: "people", Id: "9"},
+						Comments: []types.ResourceId{
+							{
+								Type: "comments",
+								Id:   "5",
+							},
+							{
+								Type: "comments",
+								Id:   "12",
+							},
+						},
+					}, nil
+				},
+				Patch: func(ctx context.Context, id string, attributes map[string]json.RawMessage, relationships map[string]any) (Article, *types.Error) {
+					ret, err := testSchema.resourceTypes["articles"].(ResourceType[Article]).Get(ctx, id)
+					if err != nil {
+						return Article{}, err
+					}
+
+					if _, ok := relationships["author"]; ok {
+						switch author := relationships["author"].(type) {
+						case types.ResourceId:
+							ret.Author = &author
+						case nil:
+							ret.Author = nil
+						}
+					}
+
+					if _, ok := relationships["comments"]; ok {
+						switch comments := relationships["comments"].(type) {
+						case []types.ResourceId:
+							ret.Comments = comments
+						case nil:
+							ret.Comments = nil
+						}
+					}
+
+					return ret, nil
 				},
 			},
 			"comments": ResourceType[struct{}]{
@@ -366,6 +398,63 @@ func TestPatch(t *testing.T) {
 					"version": "1.1"
 				  }
 				}`, string(body))
+			}
+		})
+	}
+}
+
+func TestPatchRelationship(t *testing.T) {
+	for name, tc := range map[string]struct {
+		Path             string
+		Body             string
+		ExpectedStatus   int
+		ExpectedResponse string
+	}{
+		"NewAuthor": {
+			Path:           "/articles/1/relationships/author",
+			Body:           `{"data": {"type": "people", "id": "12"}}`,
+			ExpectedStatus: http.StatusOK,
+			ExpectedResponse: `{
+			  "links": {
+				"self": "/articles/1/relationships/author",
+			  	"related": "/articles/1/author"
+			  },
+			  "data": {
+				"type": "people",
+				"id": "12"
+			  },
+			  "jsonapi": {
+				"version": "1.1"
+			  }
+			}`,
+		},
+		"ClearAuthor": {
+			Path:           "/articles/1/relationships/author",
+			Body:           `{"data": null}`,
+			ExpectedStatus: http.StatusOK,
+			ExpectedResponse: `{
+			  "links": {
+				"self": "/articles/1/relationships/author",
+			  	"related": "/articles/1/author"
+			  },
+			  "data": null,
+			  "jsonapi": {
+				"version": "1.1"
+			  }
+			}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest("PATCH", tc.Path, strings.NewReader(tc.Body))
+			require.NoError(t, err)
+			r.Header.Set("Accept", "application/vnd.api+json")
+			API{Schema: testSchema}.ServeHTTP(w, r)
+			resp := w.Result()
+			assert.Equal(t, tc.ExpectedStatus, resp.StatusCode)
+			if tc.ExpectedStatus == http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				assert.JSONEq(t, tc.ExpectedResponse, string(body))
 			}
 		})
 	}

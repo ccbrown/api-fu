@@ -308,10 +308,26 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 					}
 				} else if len(pathComponents) == 4 && pathComponents[2] == "relationships" {
 					// relationship request
+					relationshipName := pathComponents[3]
 					switch r.Method {
 					case "GET":
-						relationshipName := pathComponents[3]
 						if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
+							}
+						} else if relationship != nil {
+							return &types.ResponseDocument{
+								Data:  relationship.Data,
+								Links: relationship.Links,
+							}
+						}
+					case "PATCH":
+						var patch types.PatchRequestDataRelationship
+						if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+							}
+						} else if relationship, err := resourceType.patchRelationship(ctx, resourceId, relationshipName, patch.Data); err != nil {
 							return &types.ResponseDocument{
 								Errors: []types.Error{*err},
 							}
