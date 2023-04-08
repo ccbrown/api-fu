@@ -96,6 +96,61 @@ func init() {
 
 					return ret, nil
 				},
+				AddRelationshipMembers: func(ctx context.Context, id string, relationshipName string, members []types.ResourceId) (Article, *types.Error) {
+					ret, err := testSchema.resourceTypes["articles"].(ResourceType[Article]).Get(ctx, id)
+					if err != nil {
+						return Article{}, err
+					}
+
+					switch relationshipName {
+					case "comments":
+						existing := map[types.ResourceId]struct{}{}
+						for _, comment := range ret.Comments {
+							existing[comment] = struct{}{}
+						}
+						for _, member := range members {
+							if _, ok := existing[member]; !ok {
+								ret.Comments = append(ret.Comments, member)
+								existing[member] = struct{}{}
+							}
+						}
+					default:
+						return Article{}, &types.Error{
+							Title:  "Invalid relationship",
+							Status: "400",
+						}
+					}
+
+					return ret, nil
+				},
+				RemoveRelationshipMembers: func(ctx context.Context, id string, relationshipName string, members []types.ResourceId) (Article, *types.Error) {
+					ret, err := testSchema.resourceTypes["articles"].(ResourceType[Article]).Get(ctx, id)
+					if err != nil {
+						return Article{}, err
+					}
+
+					switch relationshipName {
+					case "comments":
+						toRemove := map[types.ResourceId]struct{}{}
+						for _, member := range members {
+							toRemove[member] = struct{}{}
+						}
+						var newComments []types.ResourceId
+						for _, comment := range ret.Comments {
+							if _, ok := toRemove[comment]; !ok {
+								newComments = append(newComments, comment)
+							}
+						}
+						ret.Comments = newComments
+					default:
+						return Article{}, &types.Error{
+							Title:  "Invalid relationship",
+							Status: "400",
+						}
+					}
+
+					return ret, nil
+				},
 			},
 			"comments": ResourceType[struct{}]{
 				Get: func(ctx context.Context, id string) (struct{}, *types.Error) {
@@ -447,6 +502,100 @@ func TestPatchRelationship(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			r, err := http.NewRequest("PATCH", tc.Path, strings.NewReader(tc.Body))
+			require.NoError(t, err)
+			r.Header.Set("Accept", "application/vnd.api+json")
+			API{Schema: testSchema}.ServeHTTP(w, r)
+			resp := w.Result()
+			assert.Equal(t, tc.ExpectedStatus, resp.StatusCode)
+			if tc.ExpectedStatus == http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				assert.JSONEq(t, tc.ExpectedResponse, string(body))
+			}
+		})
+	}
+}
+
+func TestPostRelationship(t *testing.T) {
+	for name, tc := range map[string]struct {
+		Path             string
+		Body             string
+		ExpectedStatus   int
+		ExpectedResponse string
+	}{
+		"AddComments": {
+			Path: "/articles/1/relationships/comments",
+			Body: `{
+			  "data": [
+				{ "type": "comments", "id": "12" },
+				{ "type": "comments", "id": "13" }
+			  ]
+			}`,
+			ExpectedStatus: http.StatusOK,
+			ExpectedResponse: `{
+			  "links": {
+				"self": "/articles/1/relationships/comments",
+			  	"related": "/articles/1/comments"
+			  },
+			  "data": [
+				{ "type": "comments", "id": "5" },
+				{ "type": "comments", "id": "12" },
+				{ "type": "comments", "id": "13" }
+			  ],
+			  "jsonapi": {
+				"version": "1.1"
+			  }
+			}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest("POST", tc.Path, strings.NewReader(tc.Body))
+			require.NoError(t, err)
+			r.Header.Set("Accept", "application/vnd.api+json")
+			API{Schema: testSchema}.ServeHTTP(w, r)
+			resp := w.Result()
+			assert.Equal(t, tc.ExpectedStatus, resp.StatusCode)
+			if tc.ExpectedStatus == http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				assert.JSONEq(t, tc.ExpectedResponse, string(body))
+			}
+		})
+	}
+}
+
+func TestDeleteRelationship(t *testing.T) {
+	for name, tc := range map[string]struct {
+		Path             string
+		Body             string
+		ExpectedStatus   int
+		ExpectedResponse string
+	}{
+		"AddComments": {
+			Path: "/articles/1/relationships/comments",
+			Body: `{
+			  "data": [
+				{ "type": "comments", "id": "12" },
+				{ "type": "comments", "id": "13" }
+			  ]
+			}`,
+			ExpectedStatus: http.StatusOK,
+			ExpectedResponse: `{
+			  "links": {
+				"self": "/articles/1/relationships/comments",
+			  	"related": "/articles/1/comments"
+			  },
+			  "data": [
+				{ "type": "comments", "id": "5" }
+			  ],
+			  "jsonapi": {
+				"version": "1.1"
+			  }
+			}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest("DELETE", tc.Path, strings.NewReader(tc.Body))
 			require.NoError(t, err)
 			r.Header.Set("Accept", "application/vnd.api+json")
 			API{Schema: testSchema}.ServeHTTP(w, r)

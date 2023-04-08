@@ -337,6 +337,38 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 								Links: relationship.Links,
 							}
 						}
+					case "POST":
+						var patch types.PostRelationshipRequest
+						if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+							}
+						} else if relationship, err := resourceType.addRelationshipMembers(ctx, resourceId, relationshipName, patch.Data); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
+							}
+						} else if relationship != nil {
+							return &types.ResponseDocument{
+								Data:  relationship.Data,
+								Links: relationship.Links,
+							}
+						}
+					case "DELETE":
+						var patch types.DeleteRelationshipRequest
+						if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+							}
+						} else if relationship, err := resourceType.removeRelationshipMembers(ctx, resourceId, relationshipName, patch.Data); err != nil {
+							return &types.ResponseDocument{
+								Errors: []types.Error{*err},
+							}
+						} else if relationship != nil {
+							return &types.ResponseDocument{
+								Data:  relationship.Data,
+								Links: relationship.Links,
+							}
+						}
 					default:
 						return &types.ResponseDocument{
 							Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},

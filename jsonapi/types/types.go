@@ -209,3 +209,11 @@ func (r *PatchRequestDataRelationship) UnmarshalJSON(buf []byte) error {
 
 	return nil
 }
+
+type PostRelationshipRequest struct {
+	Data []ResourceId `json:"data"`
+}
+
+type DeleteRelationshipRequest struct {
+	Data []ResourceId `json:"data"`
+}

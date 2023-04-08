@@ -30,6 +30,8 @@ type AnyResourceType interface {
 	delete(ctx context.Context, id types.ResourceId) *types.Error
 	getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error)
 	patchRelationship(ctx context.Context, id types.ResourceId, relationshipName string, data any) (*types.Relationship, *types.Error)
+	addRelationshipMembers(ctx context.Context, id types.ResourceId, relationshipName string, members []types.ResourceId) (*types.Relationship, *types.Error)
+	removeRelationshipMembers(ctx context.Context, id types.ResourceId, relationshipName string, members []types.ResourceId) (*types.Relationship, *types.Error)
 	validate() error
 }
 
@@ -53,6 +55,14 @@ type ResourceType[T any] struct {
 	// If given, the resource can be deleted via the DELETE method on the /{type_name}/{id}
 	// endpoint.
 	Delete func(ctx context.Context, id string) *types.Error
+
+	// If given, members can be added to to-many relationships via the POST method on the
+	// /{type_name}/{id}/relationships/{relationship_name} endpoint.
+	AddRelationshipMembers func(ctx context.Context, id string, relationshipName string, members []types.ResourceId) (T, *types.Error)
+
+	// If given, members can be removed from to-many relationships via the POST method on the
+	// /{type_name}/{id}/relationships/{relationship_name} endpoint.
+	RemoveRelationshipMembers func(ctx context.Context, id string, relationshipName string, members []types.ResourceId) (T, *types.Error)
 }
 
 func isNil(v interface{}) bool {
@@ -180,6 +190,32 @@ func (t ResourceType[T]) patchRelationship(ctx context.Context, id types.Resourc
 	}
 
 	resource, err := t.Patch(ctx, id.Id, nil, map[string]any{relationshipName: value})
+	if err != nil || isNil(resource) {
+		return nil, err
+	}
+
+	return t.completeRelationship(ctx, id, resource, relationshipName, nil)
+}
+
+func (t ResourceType[T]) addRelationshipMembers(ctx context.Context, id types.ResourceId, relationshipName string, members []types.ResourceId) (*types.Relationship, *types.Error) {
+	if t.AddRelationshipMembers == nil {
+		return nil, nil
+	}
+
+	resource, err := t.AddRelationshipMembers(ctx, id.Id, relationshipName, members)
+	if err != nil || isNil(resource) {
+		return nil, err
+	}
+
+	return t.completeRelationship(ctx, id, resource, relationshipName, nil)
+}
+
+func (t ResourceType[T]) removeRelationshipMembers(ctx context.Context, id types.ResourceId, relationshipName string, members []types.ResourceId) (*types.Relationship, *types.Error) {
+	if t.RemoveRelationshipMembers == nil {
+		return nil, nil
+	}
+
+	resource, err := t.RemoveRelationshipMembers(ctx, id.Id, relationshipName, members)
 	if err != nil || isNil(resource) {
 		return nil, err
 	}
