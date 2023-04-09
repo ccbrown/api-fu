@@ -55,14 +55,6 @@ type ResourceType[T any] struct {
 	// If given, the resource can be deleted via the DELETE method on the /{type_name}/{id}
 	// endpoint.
 	Delete func(ctx context.Context, id string) *types.Error
-
-	// If given, members can be added to to-many relationships via the POST method on the
-	// /{type_name}/{id}/relationships/{relationship_name} endpoint.
-	AddRelationshipMembers func(ctx context.Context, id string, relationshipName string, members []types.ResourceId) (T, *types.Error)
-
-	// If given, members can be removed from to-many relationships via the POST method on the
-	// /{type_name}/{id}/relationships/{relationship_name} endpoint.
-	RemoveRelationshipMembers func(ctx context.Context, id string, relationshipName string, members []types.ResourceId) (T, *types.Error)
 }
 
 func isNil(v interface{}) bool {
@@ -85,6 +77,17 @@ func (t ResourceType[T]) get(ctx context.Context, id types.ResourceId) (*types.R
 	}
 
 	return t.complete(ctx, id, resource)
+}
+
+func addStandardRelationshipLinks(id types.ResourceId, name string, rel *types.Relationship) {
+	links := types.Links{
+		"self":    "/" + id.Type + "/" + id.Id + "/relationships/" + name,
+		"related": "/" + id.Type + "/" + id.Id + "/" + name,
+	}
+	for k, v := range rel.Links {
+		links[k] = v
+	}
+	rel.Links = links
 }
 
 func (t ResourceType[T]) complete(ctx context.Context, id types.ResourceId, resource T) (*types.Resource, *types.Error) {
@@ -112,14 +115,7 @@ func (t ResourceType[T]) complete(ctx context.Context, id types.ResourceId, reso
 			if rel, err := def.Resolver.ResolveRelationship(ctx, resource, false, nil); err != nil {
 				return nil, err
 			} else {
-				links := types.Links{
-					"self":    "/" + id.Type + "/" + id.Id + "/relationships/" + name,
-					"related": "/" + id.Type + "/" + id.Id + "/" + name,
-				}
-				for k, v := range rel.Links {
-					links[k] = v
-				}
-				rel.Links = links
+				addStandardRelationshipLinks(id, name, &rel)
 				ret.Relationships[name] = rel
 			}
 		}
@@ -156,14 +152,7 @@ func (t ResourceType[T]) completeRelationship(ctx context.Context, id types.Reso
 		if rel, err := def.Resolver.ResolveRelationship(ctx, resource, true, params); err != nil {
 			return nil, err
 		} else {
-			links := types.Links{
-				"self":    "/" + id.Type + "/" + id.Id + "/relationships/" + relationshipName,
-				"related": "/" + id.Type + "/" + id.Id + "/" + relationshipName,
-			}
-			for k, v := range rel.Links {
-				links[k] = v
-			}
-			rel.Links = links
+			addStandardRelationshipLinks(id, relationshipName, &rel)
 			return &rel, nil
 		}
 	}
@@ -198,29 +187,49 @@ func (t ResourceType[T]) patchRelationship(ctx context.Context, id types.Resourc
 }
 
 func (t ResourceType[T]) addRelationshipMembers(ctx context.Context, id types.ResourceId, relationshipName string, members []types.ResourceId) (*types.Relationship, *types.Error) {
-	if t.AddRelationshipMembers == nil {
+	if t.Get == nil {
 		return nil, nil
 	}
 
-	resource, err := t.AddRelationshipMembers(ctx, id.Id, relationshipName, members)
+	resource, err := t.Get(ctx, id.Id)
 	if err != nil || isNil(resource) {
 		return nil, err
 	}
 
-	return t.completeRelationship(ctx, id, resource, relationshipName, nil)
+	def, ok := t.Relationships[relationshipName]
+	if !ok {
+		return nil, nil
+	}
+
+	if rel, err := def.Resolver.AddRelationshipMembers(ctx, resource, members); err != nil {
+		return nil, err
+	} else {
+		addStandardRelationshipLinks(id, relationshipName, &rel)
+		return &rel, nil
+	}
 }
 
 func (t ResourceType[T]) removeRelationshipMembers(ctx context.Context, id types.ResourceId, relationshipName string, members []types.ResourceId) (*types.Relationship, *types.Error) {
-	if t.RemoveRelationshipMembers == nil {
+	if t.Get == nil {
 		return nil, nil
 	}
 
-	resource, err := t.RemoveRelationshipMembers(ctx, id.Id, relationshipName, members)
+	resource, err := t.Get(ctx, id.Id)
 	if err != nil || isNil(resource) {
 		return nil, err
 	}
 
-	return t.completeRelationship(ctx, id, resource, relationshipName, nil)
+	def, ok := t.Relationships[relationshipName]
+	if !ok {
+		return nil, nil
+	}
+
+	if rel, err := def.Resolver.RemoveRelationshipMembers(ctx, resource, members); err != nil {
+		return nil, err
+	} else {
+		addStandardRelationshipLinks(id, relationshipName, &rel)
+		return &rel, nil
+	}
 }
 
 func (t ResourceType[T]) validate() error {

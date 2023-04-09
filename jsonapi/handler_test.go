@@ -45,6 +45,32 @@ func init() {
 							Resolve: func(ctx context.Context, resource Article) ([]types.ResourceId, *types.Error) {
 								return resource.Comments, nil
 							},
+							AddMembers: func(ctx context.Context, resource Article, members []types.ResourceId) ([]types.ResourceId, *types.Error) {
+								existing := map[types.ResourceId]struct{}{}
+								for _, comment := range resource.Comments {
+									existing[comment] = struct{}{}
+								}
+								for _, member := range members {
+									if _, ok := existing[member]; !ok {
+										resource.Comments = append(resource.Comments, member)
+										existing[member] = struct{}{}
+									}
+								}
+								return resource.Comments, nil
+							},
+							RemoveMembers: func(ctx context.Context, resource Article, members []types.ResourceId) ([]types.ResourceId, *types.Error) {
+								toRemove := map[types.ResourceId]struct{}{}
+								for _, member := range members {
+									toRemove[member] = struct{}{}
+								}
+								var newComments []types.ResourceId
+								for _, comment := range resource.Comments {
+									if _, ok := toRemove[comment]; !ok {
+										newComments = append(newComments, comment)
+									}
+								}
+								return newComments, nil
+							},
 						},
 					},
 				},
@@ -91,61 +117,6 @@ func init() {
 							ret.Comments = comments
 						case nil:
 							ret.Comments = nil
-						}
-					}
-
-					return ret, nil
-				},
-				AddRelationshipMembers: func(ctx context.Context, id string, relationshipName string, members []types.ResourceId) (Article, *types.Error) {
-					ret, err := testSchema.resourceTypes["articles"].(ResourceType[Article]).Get(ctx, id)
-					if err != nil {
-						return Article{}, err
-					}
-
-					switch relationshipName {
-					case "comments":
-						existing := map[types.ResourceId]struct{}{}
-						for _, comment := range ret.Comments {
-							existing[comment] = struct{}{}
-						}
-						for _, member := range members {
-							if _, ok := existing[member]; !ok {
-								ret.Comments = append(ret.Comments, member)
-								existing[member] = struct{}{}
-							}
-						}
-					default:
-						return Article{}, &types.Error{
-							Title:  "Invalid relationship",
-							Status: "400",
-						}
-					}
-
-					return ret, nil
-				},
-				RemoveRelationshipMembers: func(ctx context.Context, id string, relationshipName string, members []types.ResourceId) (Article, *types.Error) {
-					ret, err := testSchema.resourceTypes["articles"].(ResourceType[Article]).Get(ctx, id)
-					if err != nil {
-						return Article{}, err
-					}
-
-					switch relationshipName {
-					case "comments":
-						toRemove := map[types.ResourceId]struct{}{}
-						for _, member := range members {
-							toRemove[member] = struct{}{}
-						}
-						var newComments []types.ResourceId
-						for _, comment := range ret.Comments {
-							if _, ok := toRemove[comment]; !ok {
-								newComments = append(newComments, comment)
-							}
-						}
-						ret.Comments = newComments
-					default:
-						return Article{}, &types.Error{
-							Title:  "Invalid relationship",
-							Status: "400",
 						}
 					}
 
@@ -546,6 +517,26 @@ func TestPostRelationship(t *testing.T) {
 			  }
 			}`,
 		},
+		"ToOneRelationship": {
+			Path: "/articles/1/relationships/author",
+			Body: `{
+			  "data": [
+				{ "type": "comments", "id": "12" },
+				{ "type": "comments", "id": "13" }
+			  ]
+			}`,
+			ExpectedStatus: http.StatusMethodNotAllowed,
+		},
+		"NonExistentRelationship": {
+			Path: "/articles/1/relationships/foo",
+			Body: `{
+			  "data": [
+				{ "type": "comments", "id": "12" },
+				{ "type": "comments", "id": "13" }
+			  ]
+			}`,
+			ExpectedStatus: http.StatusNotFound,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()
@@ -570,7 +561,7 @@ func TestDeleteRelationship(t *testing.T) {
 		ExpectedStatus   int
 		ExpectedResponse string
 	}{
-		"AddComments": {
+		"RemoveComments": {
 			Path: "/articles/1/relationships/comments",
 			Body: `{
 			  "data": [
@@ -591,6 +582,26 @@ func TestDeleteRelationship(t *testing.T) {
 				"version": "1.1"
 			  }
 			}`,
+		},
+		"ToOneRelationship": {
+			Path: "/articles/1/relationships/author",
+			Body: `{
+			  "data": [
+				{ "type": "comments", "id": "12" },
+				{ "type": "comments", "id": "13" }
+			  ]
+			}`,
+			ExpectedStatus: http.StatusMethodNotAllowed,
+		},
+		"NonExistentRelationship": {
+			Path: "/articles/1/relationships/foo",
+			Body: `{
+			  "data": [
+				{ "type": "comments", "id": "12" },
+				{ "type": "comments", "id": "13" }
+			  ]
+			}`,
+			ExpectedStatus: http.StatusNotFound,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
