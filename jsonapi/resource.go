@@ -27,6 +27,7 @@ func (def *RelationshipDefinition[T]) validate() error {
 type AnyResourceType interface {
 	get(ctx context.Context, id types.ResourceId) (*types.Resource, *types.Error)
 	patch(ctx context.Context, id types.ResourceId, attributes map[string]json.RawMessage, relationships map[string]any) (*types.Resource, *types.Error)
+	create(ctx context.Context, attributes map[string]json.RawMessage, relationships map[string]any) (*types.Resource, *types.Error)
 	delete(ctx context.Context, id types.ResourceId) *types.Error
 	getRelationship(ctx context.Context, id types.ResourceId, relationshipName string, params url.Values) (*types.Relationship, *types.Error)
 	patchRelationship(ctx context.Context, id types.ResourceId, relationshipName string, data any) (*types.Relationship, *types.Error)
@@ -51,6 +52,11 @@ type ResourceType[T any] struct {
 	//
 	// Relationship values are either `nil`, `types.ResourceId`, or `[]types.ResourceId`.
 	Patch func(ctx context.Context, id string, attributes map[string]json.RawMessage, relationships map[string]any) (T, *types.Error)
+
+	// If given, the resource can be created, e.g. via the POST method on the /{type_name} endpoint.
+	//
+	// Relationship values are either `nil`, `types.ResourceId`, or `[]types.ResourceId`.
+	Create func(ctx context.Context, attributes map[string]json.RawMessage, relationships map[string]any) (T, types.ResourceId, *types.Error)
 
 	// If given, the resource can be deleted via the DELETE method on the /{type_name}/{id}
 	// endpoint.
@@ -131,6 +137,20 @@ func (t ResourceType[T]) patch(ctx context.Context, id types.ResourceId, attribu
 	}
 
 	resource, err := t.Patch(ctx, id.Id, attributes, relationships)
+	if err != nil || isNil(resource) {
+		return nil, err
+	}
+
+	return t.complete(ctx, id, resource)
+}
+
+func (t ResourceType[T]) create(ctx context.Context, attributes map[string]json.RawMessage, relationships map[string]any) (*types.Resource, *types.Error) {
+	if t.Create == nil {
+		err := errorForHTTPStatus(http.StatusMethodNotAllowed)
+		return nil, &err
+	}
+
+	resource, id, err := t.Create(ctx, attributes, relationships)
 	if err != nil || isNil(resource) {
 		return nil, err
 	}

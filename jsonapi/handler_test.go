@@ -145,6 +145,9 @@ func init() {
 				Get: func(ctx context.Context, id string) (struct{}, *types.Error) {
 					return struct{}{}, nil
 				},
+				Create: func(ctx context.Context, attributes map[string]json.RawMessage, relationships map[string]any) (struct{}, types.ResourceId, *types.Error) {
+					return struct{}{}, types.ResourceId{Type: "comments", Id: "new-id"}, nil
+				},
 				Delete: func(ctx context.Context, id string) *types.Error {
 					return nil
 				},
@@ -459,7 +462,70 @@ func TestGetRelatedResource(t *testing.T) {
 	})
 }
 
-func TestDelete(t *testing.T) {
+func TestCreateResource(t *testing.T) {
+	for name, tc := range map[string]struct {
+		Path             string
+		Body             string
+		ExpectedStatus   int
+		ExpectedResponse string
+	}{
+		"Okay": {
+			Path:           "/comments",
+			Body:           `{"data": {"type": "comments"}}`,
+			ExpectedStatus: http.StatusCreated,
+			ExpectedResponse: `{
+			  "links": {
+				"self": "/comments/new-id"
+			  },
+			  "data": {
+				"type": "comments",
+				"id": "new-id",
+			    "relationships": {
+				  "author": {
+					"data": {
+					  "type": "people",
+					  "id": "2"
+					},
+					"links": {
+					  "self": "/comments/new-id/relationships/author",
+					  "related": "/comments/new-id/author"
+					}
+				  }
+				}
+			  },
+			  "jsonapi": {
+				"version": "1.1"
+			  }
+			}`,
+		},
+		"TypeMismatch": {
+			Path:           "/comments",
+			Body:           `{"data": {"type": "people"}}`,
+			ExpectedStatus: http.StatusConflict,
+		},
+		"Unsupported": {
+			Path:           "/people",
+			Body:           `{"data": {"type": "people"}}`,
+			ExpectedStatus: http.StatusMethodNotAllowed,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest("POST", tc.Path, strings.NewReader(tc.Body))
+			require.NoError(t, err)
+			r.Header.Set("Accept", "application/vnd.api+json")
+			API{Schema: testSchema}.ServeHTTP(w, r)
+			resp := w.Result()
+			assert.Equal(t, tc.ExpectedStatus, resp.StatusCode)
+			if tc.ExpectedStatus == http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				assert.JSONEq(t, tc.ExpectedResponse, string(body))
+			}
+		})
+	}
+}
+
+func TestDeleteResource(t *testing.T) {
 	for name, tc := range map[string]struct {
 		Path           string
 		ExpectedStatus int

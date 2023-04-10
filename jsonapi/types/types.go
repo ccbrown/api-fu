@@ -159,12 +159,27 @@ type ResourceId struct {
 	Id string `json:"id"`
 }
 
-type PatchRequest struct {
+type PostResourceRequest struct {
 	// The document’s “primary data”.
-	Data PatchRequestData `json:"data"`
+	Data PostResourceRequestData `json:"data"`
 }
 
-type PatchRequestData struct {
+type PostResourceRequestData struct {
+	Type string `json:"type"`
+
+	// An object containing the attributes to be updated.
+	Attributes map[string]json.RawMessage `json:"attributes,omitempty"`
+
+	// An object containing the relationships to be updated.
+	Relationships map[string]RelationshipData `json:"relationships,omitempty"`
+}
+
+type PatchResourceRequest struct {
+	// The document’s “primary data”.
+	Data PatchResourceRequestData `json:"data"`
+}
+
+type PatchResourceRequestData struct {
 	Type string `json:"type"`
 
 	Id string `json:"id"`
@@ -173,15 +188,15 @@ type PatchRequestData struct {
 	Attributes map[string]json.RawMessage `json:"attributes,omitempty"`
 
 	// An object containing the relationships to be updated.
-	Relationships map[string]PatchRequestDataRelationship `json:"relationships,omitempty"`
+	Relationships map[string]RelationshipData `json:"relationships,omitempty"`
 }
 
-type PatchRequestDataRelationship struct {
+type RelationshipData struct {
 	// Either nil, `ResourceId`, or `[]ResourceId`.
 	Data any `json:"data"`
 }
 
-func (r *PatchRequestDataRelationship) UnmarshalJSON(buf []byte) error {
+func (r *RelationshipData) UnmarshalJSON(buf []byte) error {
 	var tmp struct {
 		Data json.RawMessage `json:"data"`
 	}

@@ -14,16 +14,20 @@ import (
 
 func (api API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := api.executeRequest(r)
-	resp.JSONAPI = &types.JSONAPI{
+	resp.Document.JSONAPI = &types.JSONAPI{
 		Version: "1.1",
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.api+json")
 
 	status := http.StatusOK
-	if len(resp.Errors) > 0 {
+	if resp.Status != 0 {
+		status = resp.Status
+	}
+
+	if len(resp.Document.Errors) > 0 {
 		status = http.StatusInternalServerError
-		for _, err := range resp.Errors {
+		for _, err := range resp.Document.Errors {
 			if err.Status != "" {
 				n, _ := strconv.ParseInt(err.Status, 10, 0)
 				status = int(n)
@@ -32,12 +36,16 @@ func (api API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := jsoniter.Marshal(resp)
+	body, err := jsoniter.Marshal(resp.Document)
 	if err != nil {
 		status = http.StatusInternalServerError
 		newErr := errorForHTTPStatus(status)
 		newErr.Detail = err.Error()
 		body, _ = jsoniter.Marshal(newErr)
+	} else {
+		for k, v := range resp.Headers {
+			w.Header().Set(k, v)
+		}
 	}
 
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
@@ -73,8 +81,8 @@ func (api API) getResources(ctx context.Context, ids []types.ResourceId) ([]type
 	return ret, nil
 }
 
-func (api API) handlePatchRequest(ctx context.Context, r *http.Request, resourceType AnyResourceType, resourceId types.ResourceId) *types.ResponseDocument {
-	var patch types.PatchRequest
+func (api API) handlePatchResourceRequest(ctx context.Context, r *http.Request, resourceType AnyResourceType, resourceId types.ResourceId) *types.ResponseDocument {
+	var patch types.PatchResourceRequest
 	if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
 		return &types.ResponseDocument{
 			Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
@@ -112,7 +120,13 @@ func (api API) handlePatchRequest(ctx context.Context, r *http.Request, resource
 	return nil
 }
 
-func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
+type response struct {
+	Document types.ResponseDocument
+	Headers  map[string]string
+	Status   int
+}
+
+func (api API) executeRequest(r *http.Request) *response {
 	// If a request’s Accept header contains an instance of the JSON:API media type, servers MUST
 	// ignore instances of that media type which are modified by a media type parameter other than
 	// ext or profile. If all instances of that media type are modified with a media type parameter
@@ -143,8 +157,10 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 		break
 	}
 	if !isAcceptable {
-		return &types.ResponseDocument{
-			Errors: []types.Error{errorForHTTPStatus(http.StatusNotAcceptable)},
+		return &response{
+			Document: types.ResponseDocument{
+				Errors: []types.Error{errorForHTTPStatus(http.StatusNotAcceptable)},
+			},
 		}
 	}
 
@@ -161,8 +177,10 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 		for _, part := range parts[1:] {
 			if len(part) < 1 || part[len(part)-1] != ']' || validateMemberName(part[:len(part)-1]) != nil {
 				// This is not a valid query parameter.
-				return &types.ResponseDocument{
-					Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+				return &response{
+					Document: types.ResponseDocument{
+						Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+					},
 				}
 			}
 		}
@@ -170,8 +188,10 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 		if validateMemberName(familyName) != nil {
 			// This is either an extension parameter or an invalid family name. Either way, we don't
 			// support it.
-			return &types.ResponseDocument{
-				Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+			return &response{
+				Document: types.ResponseDocument{
+					Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+				},
 			}
 		}
 
@@ -183,8 +203,10 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 			switch familyName {
 			case "page":
 			default:
-				return &types.ResponseDocument{
-					Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+				return &response{
+					Document: types.ResponseDocument{
+						Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+					},
 				}
 			}
 		}
@@ -193,7 +215,49 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 	if len(pathComponents) >= 1 {
 		typeName := pathComponents[0]
 		if resourceType, ok := api.Schema.resourceTypes[typeName]; ok {
-			if len(pathComponents) >= 2 {
+			if len(pathComponents) == 1 && r.Method == "POST" {
+				// new resource request
+				var patch types.PostResourceRequest
+				if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
+					return &response{
+						Document: types.ResponseDocument{
+							Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+						},
+					}
+				} else if patch.Data.Type != typeName {
+					return &response{
+						Document: types.ResponseDocument{
+							Errors: []types.Error{errorForHTTPStatus(http.StatusConflict)},
+						},
+					}
+				} else {
+					relationships := make(map[string]any, len(patch.Data.Relationships))
+					for k, v := range patch.Data.Relationships {
+						relationships[k] = v.Data
+					}
+					if resource, err := resourceType.create(ctx, patch.Data.Attributes, relationships); err != nil {
+						return &response{
+							Document: types.ResponseDocument{
+								Errors: []types.Error{*err},
+							},
+						}
+					} else if resource != nil {
+						var data any = resource
+						return &response{
+							Document: types.ResponseDocument{
+								Data: &data,
+								Links: types.Links{
+									"self": "/" + resource.Type + "/" + resource.Id,
+								},
+							},
+							Headers: map[string]string{
+								"Location": "/" + resource.Type + "/" + resource.Id,
+							},
+							Status: http.StatusCreated,
+						}
+					}
+				}
+			} else if len(pathComponents) >= 2 {
 				resourceId := types.ResourceId{
 					Type: typeName,
 					Id:   pathComponents[1],
@@ -204,34 +268,43 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 					switch r.Method {
 					case "GET":
 						if resource, err := resourceType.get(ctx, resourceId); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{*err},
+								},
 							}
 						} else if resource != nil {
 							var data any = resource
-							return &types.ResponseDocument{
-								Data: &data,
-								Links: types.Links{
-									"self": r.URL.Path,
+							return &response{
+								Document: types.ResponseDocument{
+									Data: &data,
+									Links: types.Links{
+										"self": r.URL.Path,
+									},
 								},
 							}
 						}
 					case "PATCH":
-						if doc := api.handlePatchRequest(ctx, r, resourceType, resourceId); doc != nil {
-							return doc
+						if doc := api.handlePatchResourceRequest(ctx, r, resourceType, resourceId); doc != nil {
+							return &response{
+								Document: *doc}
 						}
 					case "DELETE":
 						if err := resourceType.delete(ctx, resourceId); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{*err},
+								},
 							}
 						}
 
-						return &types.ResponseDocument{}
+						return &response{
+							Document: types.ResponseDocument{}}
 					default:
-						return &types.ResponseDocument{
-							Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
-						}
+						return &response{
+							Document: types.ResponseDocument{
+								Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
+							}}
 					}
 				} else if len(pathComponents) == 3 {
 					// related resource request
@@ -239,9 +312,10 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 					case "GET":
 						relationshipName := pathComponents[2]
 						if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{*err},
+								}}
 						} else if relationship != nil {
 							var data any = nil
 							var err *types.Error
@@ -252,36 +326,41 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 								data, err = api.getResources(ctx, ids)
 							}
 							if err != nil {
-								return &types.ResponseDocument{
-									Errors: []types.Error{*err},
-								}
+								return &response{
+									Document: types.ResponseDocument{
+										Errors: []types.Error{*err},
+									}}
 							}
-							return &types.ResponseDocument{
-								Data: &data,
-								Links: types.Links{
-									"self": r.URL.Path,
-								},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Data: &data,
+									Links: types.Links{
+										"self": r.URL.Path,
+									},
+								}}
 						}
 					case "PATCH":
 						relationshipName := pathComponents[2]
 						if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{*err},
+								}}
 						} else if relationship != nil {
 							if relatedId, ok := (*relationship.Data).(types.ResourceId); ok {
 								if relatedResourceType, ok := api.Schema.resourceTypes[relatedId.Type]; ok {
-									if doc := api.handlePatchRequest(ctx, r, relatedResourceType, relatedId); doc != nil {
-										return doc
+									if doc := api.handlePatchResourceRequest(ctx, r, relatedResourceType, relatedId); doc != nil {
+										return &response{
+											Document: *doc}
 									}
 								}
 							}
 						}
 					default:
-						return &types.ResponseDocument{
-							Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
-						}
+						return &response{
+							Document: types.ResponseDocument{
+								Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
+							}}
 					}
 				} else if len(pathComponents) == 4 && pathComponents[2] == "relationships" {
 					// relationship request
@@ -289,74 +368,87 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 					switch r.Method {
 					case "GET":
 						if relationship, err := resourceType.getRelationship(ctx, resourceId, relationshipName, q); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{*err},
+								}}
 						} else if relationship != nil {
-							return &types.ResponseDocument{
-								Data:  relationship.Data,
-								Links: relationship.Links,
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Data:  relationship.Data,
+									Links: relationship.Links,
+								}}
 						}
 					case "PATCH":
-						var patch types.PatchRequestDataRelationship
+						var patch types.RelationshipData
 						if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+								}}
 						} else if relationship, err := resourceType.patchRelationship(ctx, resourceId, relationshipName, patch.Data); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{*err},
+								}}
 						} else if relationship != nil {
-							return &types.ResponseDocument{
-								Data:  relationship.Data,
-								Links: relationship.Links,
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Data:  relationship.Data,
+									Links: relationship.Links,
+								}}
 						}
 					case "POST":
 						var patch types.PostRelationshipRequest
 						if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+								}}
 						} else if relationship, err := resourceType.addRelationshipMembers(ctx, resourceId, relationshipName, patch.Data); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{*err},
+								}}
 						} else if relationship != nil {
-							return &types.ResponseDocument{
-								Data:  relationship.Data,
-								Links: relationship.Links,
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Data:  relationship.Data,
+									Links: relationship.Links,
+								}}
 						}
 					case "DELETE":
 						var patch types.DeleteRelationshipRequest
 						if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+								}}
 						} else if relationship, err := resourceType.removeRelationshipMembers(ctx, resourceId, relationshipName, patch.Data); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Errors: []types.Error{*err},
+								}}
 						} else if relationship != nil {
-							return &types.ResponseDocument{
-								Data:  relationship.Data,
-								Links: relationship.Links,
-							}
+							return &response{
+								Document: types.ResponseDocument{
+									Data:  relationship.Data,
+									Links: relationship.Links,
+								}}
 						}
 					default:
-						return &types.ResponseDocument{
-							Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
-						}
+						return &response{
+							Document: types.ResponseDocument{
+								Errors: []types.Error{errorForHTTPStatus(http.StatusMethodNotAllowed)},
+							}}
 					}
 				}
 			}
 		}
 	}
 
-	return &types.ResponseDocument{
-		Errors: []types.Error{errorForHTTPStatus(http.StatusNotFound)},
-	}
+	return &response{
+		Document: types.ResponseDocument{
+			Errors: []types.Error{errorForHTTPStatus(http.StatusNotFound)},
+		}}
 }
