@@ -73,6 +73,45 @@ func (api API) getResources(ctx context.Context, ids []types.ResourceId) ([]type
 	return ret, nil
 }
 
+func (api API) handlePatchRequest(ctx context.Context, r *http.Request, resourceType AnyResourceType, resourceId types.ResourceId) *types.ResponseDocument {
+	var patch types.PatchRequest
+	if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
+		return &types.ResponseDocument{
+			Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
+		}
+	}
+
+	if patch.Data.Type != resourceId.Type || patch.Data.Id != resourceId.Id {
+		// A server MUST return 409 Conflict when processing a PATCH request in
+		// which the resource object’s type or id do not match the server’s
+		// endpoint.
+		return &types.ResponseDocument{
+			Errors: []types.Error{errorForHTTPStatus(http.StatusConflict)},
+		}
+	}
+
+	relationships := make(map[string]any, len(patch.Data.Relationships))
+	for k, v := range patch.Data.Relationships {
+		relationships[k] = v.Data
+	}
+
+	if resource, err := resourceType.patch(ctx, resourceId, patch.Data.Attributes, relationships); err != nil {
+		return &types.ResponseDocument{
+			Errors: []types.Error{*err},
+		}
+	} else if resource != nil {
+		var data any = resource
+		return &types.ResponseDocument{
+			Data: &data,
+			Links: types.Links{
+				"self": r.URL.Path,
+			},
+		}
+	}
+
+	return nil
+}
+
 func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 	// If a request’s Accept header contains an instance of the JSON:API media type, servers MUST
 	// ignore instances of that media type which are modified by a media type parameter other than
@@ -178,39 +217,8 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 							}
 						}
 					case "PATCH":
-						var patch types.PatchRequest
-						if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
-							}
-						}
-
-						if patch.Data.Type != resourceId.Type || patch.Data.Id != resourceId.Id {
-							// A server MUST return 409 Conflict when processing a PATCH request in
-							// which the resource object’s type or id do not match the server’s
-							// endpoint.
-							return &types.ResponseDocument{
-								Errors: []types.Error{errorForHTTPStatus(http.StatusConflict)},
-							}
-						}
-
-						relationships := make(map[string]any, len(patch.Data.Relationships))
-						for k, v := range patch.Data.Relationships {
-							relationships[k] = v.Data
-						}
-
-						if resource, err := resourceType.patch(ctx, resourceId, patch.Data.Attributes, relationships); err != nil {
-							return &types.ResponseDocument{
-								Errors: []types.Error{*err},
-							}
-						} else if resource != nil {
-							var data any = resource
-							return &types.ResponseDocument{
-								Data: &data,
-								Links: types.Links{
-									"self": r.URL.Path,
-								},
-							}
+						if doc := api.handlePatchRequest(ctx, r, resourceType, resourceId); doc != nil {
+							return doc
 						}
 					case "DELETE":
 						if err := resourceType.delete(ctx, resourceId); err != nil {
@@ -264,39 +272,8 @@ func (api API) executeRequest(r *http.Request) *types.ResponseDocument {
 						} else if relationship != nil {
 							if relatedId, ok := (*relationship.Data).(types.ResourceId); ok {
 								if relatedResourceType, ok := api.Schema.resourceTypes[relatedId.Type]; ok {
-									var patch types.PatchRequest
-									if err := jsoniter.NewDecoder(r.Body).Decode(&patch); err != nil {
-										return &types.ResponseDocument{
-											Errors: []types.Error{errorForHTTPStatus(http.StatusBadRequest)},
-										}
-									}
-
-									if patch.Data.Type != relatedId.Type || patch.Data.Id != relatedId.Id {
-										// A server MUST return 409 Conflict when processing a PATCH request in
-										// which the resource object’s type or id do not match the server’s
-										// endpoint.
-										return &types.ResponseDocument{
-											Errors: []types.Error{errorForHTTPStatus(http.StatusConflict)},
-										}
-									}
-
-									relationships := make(map[string]any, len(patch.Data.Relationships))
-									for k, v := range patch.Data.Relationships {
-										relationships[k] = v.Data
-									}
-
-									if resource, err := relatedResourceType.patch(ctx, relatedId, patch.Data.Attributes, relationships); err != nil {
-										return &types.ResponseDocument{
-											Errors: []types.Error{*err},
-										}
-									} else if resource != nil {
-										var data any = resource
-										return &types.ResponseDocument{
-											Data: &data,
-											Links: types.Links{
-												"self": r.URL.Path,
-											},
-										}
+									if doc := api.handlePatchRequest(ctx, r, relatedResourceType, relatedId); doc != nil {
+										return doc
 									}
 								}
 							}

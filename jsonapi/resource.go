@@ -175,7 +175,8 @@ func (t ResourceType[T]) getRelationship(ctx context.Context, id types.ResourceI
 
 func (t ResourceType[T]) patchRelationship(ctx context.Context, id types.ResourceId, relationshipName string, value any) (*types.Relationship, *types.Error) {
 	if t.Patch == nil {
-		return nil, nil
+		err := errorForHTTPStatus(http.StatusMethodNotAllowed)
+		return nil, &err
 	}
 
 	resource, err := t.Patch(ctx, id.Id, nil, map[string]any{relationshipName: value})

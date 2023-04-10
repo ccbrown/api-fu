@@ -20,6 +20,7 @@ var testSchema *Schema
 type Article struct {
 	Author   *types.ResourceId
 	Comments []types.ResourceId
+	Tags     []types.ResourceId
 }
 
 func init() {
@@ -70,6 +71,13 @@ func init() {
 									}
 								}
 								return newComments, nil
+							},
+						},
+					},
+					"tags": {
+						Resolver: ToManyRelationshipResolver[Article]{
+							Resolve: func(ctx context.Context, resource Article) ([]types.ResourceId, *types.Error) {
+								return resource.Tags, nil
 							},
 						},
 					},
@@ -124,6 +132,16 @@ func init() {
 				},
 			},
 			"comments": ResourceType[struct{}]{
+				Relationships: map[string]*RelationshipDefinition[struct{}]{
+					"author": {
+						Resolver: ToOneRelationshipResolver[struct{}]{
+							ResolveByDefault: true,
+							Resolve: func(ctx context.Context, resource struct{}) (*types.ResourceId, *types.Error) {
+								return &types.ResourceId{Type: "people", Id: "2"}, nil
+							},
+						},
+					},
+				},
 				Get: func(ctx context.Context, id string) (struct{}, *types.Error) {
 					return struct{}{}, nil
 				},
@@ -148,6 +166,14 @@ func init() {
 				},
 				Patch: func(ctx context.Context, id string, attributes map[string]json.RawMessage, relationships map[string]any) (struct{}, *types.Error) {
 					return struct{}{}, nil
+				},
+			},
+			"tags": ResourceType[*struct{}]{
+				Get: func(ctx context.Context, id string) (*struct{}, *types.Error) {
+					if id == "not-found" {
+						return nil, nil
+					}
+					return &struct{}{}, nil
 				},
 			},
 		},
@@ -227,77 +253,96 @@ func TestQueryParameters(t *testing.T) {
 	}
 }
 
-func TestGetResource_Error(t *testing.T) {
-	w := httptest.NewRecorder()
-	r, err := http.NewRequest("GET", "/articles/make-error", nil)
-	require.NoError(t, err)
-	r.Header.Set("Accept", "application/vnd.api+json")
-	API{Schema: testSchema}.ServeHTTP(w, r)
-	resp := w.Result()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	body, _ := io.ReadAll(resp.Body)
-	assert.JSONEq(t, `{
-	  "errors": [{
-		"title": "Error!",
-		"status": "400"
-	  }],
-	  "jsonapi": {
-	  	"version": "1.1"
-	  }
-	}`, string(body))
-}
-
 func TestGetResource(t *testing.T) {
-	w := httptest.NewRecorder()
-	r, err := http.NewRequest("GET", "/articles/1", nil)
-	require.NoError(t, err)
-	r.Header.Set("Accept", "application/vnd.api+json")
-	API{Schema: testSchema}.ServeHTTP(w, r)
-	resp := w.Result()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	body, _ := io.ReadAll(resp.Body)
-	assert.JSONEq(t, `{
-	  "links": {
-		"self": "/articles/1"
-	  },
-	  "data": {
-		"type": "articles",
-		"id": "1",
-		"attributes": {
-		  "title": "JSON:API paints my bikeshed!"
-		},
-		"relationships": {
-		  "author": {
-			"links": {
-			  "self": "/articles/1/relationships/author",
-			  "related": "/articles/1/author"
-			},
-			"data": { "type": "people", "id": "9" }
+	t.Run("Okay", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("GET", "/articles/1", nil)
+		require.NoError(t, err)
+		r.Header.Set("Accept", "application/vnd.api+json")
+		API{Schema: testSchema}.ServeHTTP(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		assert.JSONEq(t, `{
+		  "links": {
+			"self": "/articles/1"
 		  },
-		  "comments": {
-			"links": {
-			  "self": "/articles/1/relationships/comments",
-			  "related": "/articles/1/comments"
+		  "data": {
+			"type": "articles",
+			"id": "1",
+			"attributes": {
+			  "title": "JSON:API paints my bikeshed!"
+			},
+			"relationships": {
+			  "author": {
+				"links": {
+				  "self": "/articles/1/relationships/author",
+				  "related": "/articles/1/author"
+				},
+				"data": { "type": "people", "id": "9" }
+			  },
+			  "comments": {
+				"links": {
+				  "self": "/articles/1/relationships/comments",
+				  "related": "/articles/1/comments"
+				}
+			  },
+			  "tags": {
+				"links": {
+				  "self": "/articles/1/relationships/tags",
+				  "related": "/articles/1/tags"
+				}
+			  }
 			}
+		  },
+		  "jsonapi": {
+			"version": "1.1"
 		  }
-		}
-	  },
-	  "jsonapi": {
-	  	"version": "1.1"
-	  }
-	}`, string(body))
+		}`, string(body))
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("GET", "/tags/not-found", nil)
+		require.NoError(t, err)
+		r.Header.Set("Accept", "application/vnd.api+json")
+		API{Schema: testSchema}.ServeHTTP(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("GET", "/articles/make-error", nil)
+		require.NoError(t, err)
+		r.Header.Set("Accept", "application/vnd.api+json")
+		API{Schema: testSchema}.ServeHTTP(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		assert.JSONEq(t, `{
+		  "errors": [{
+			"title": "Error!",
+			"status": "400"
+		  }],
+		  "jsonapi": {
+			"version": "1.1"
+		  }
+		}`, string(body))
+	})
 }
 
 func TestGetResourceRelationship(t *testing.T) {
-	w := httptest.NewRecorder()
-	r, err := http.NewRequest("GET", "/articles/1/relationships/author", nil)
-	require.NoError(t, err)
-	r.Header.Set("Accept", "application/vnd.api+json")
-	API{Schema: testSchema}.ServeHTTP(w, r)
-	resp := w.Result()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	body, _ := io.ReadAll(resp.Body)
-	assert.JSONEq(t, `{
+	t.Run("ToOne", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("GET", "/articles/1/relationships/author", nil)
+		require.NoError(t, err)
+		r.Header.Set("Accept", "application/vnd.api+json")
+		API{Schema: testSchema}.ServeHTTP(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		assert.JSONEq(t, `{
 	  "links": {
 		"self": "/articles/1/relationships/author",
 		"related": "/articles/1/author"
@@ -307,34 +352,111 @@ func TestGetResourceRelationship(t *testing.T) {
 	  	"version": "1.1"
 	  }
 	}`, string(body))
+	})
+
+	t.Run("ToMany", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("GET", "/articles/1/relationships/comments", nil)
+		require.NoError(t, err)
+		r.Header.Set("Accept", "application/vnd.api+json")
+		API{Schema: testSchema}.ServeHTTP(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		assert.JSONEq(t, `{
+		  "links": {
+			"self": "/articles/1/relationships/comments",
+			"related": "/articles/1/comments"
+		  },
+		  "data": [
+			{ "type": "comments", "id": "5" },
+			{ "type": "comments", "id": "12" }
+		  ],
+		  "jsonapi": {
+			"version": "1.1"
+		  }
+		}`, string(body))
+	})
 }
 
 func TestGetRelatedResource(t *testing.T) {
-	w := httptest.NewRecorder()
-	r, err := http.NewRequest("GET", "/articles/1/author", nil)
-	require.NoError(t, err)
-	r.Header.Set("Accept", "application/vnd.api+json")
-	API{Schema: testSchema}.ServeHTTP(w, r)
-	resp := w.Result()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	body, _ := io.ReadAll(resp.Body)
-	assert.JSONEq(t, `{
-	  "links": {
-		"self": "/articles/1/author"
-	  },
-	  "data": {
-		"type": "people",
-		"id": "9",
-		"attributes": {
-		  "firstName": "Dan",
-		  "lastName": "Gebhardt",
-		  "twitter": "dgeb"
-		}
-	  },
-	  "jsonapi": {
-	  	"version": "1.1"
-	  }
-	}`, string(body))
+	t.Run("ToOne", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("GET", "/articles/1/author", nil)
+		require.NoError(t, err)
+		r.Header.Set("Accept", "application/vnd.api+json")
+		API{Schema: testSchema}.ServeHTTP(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		assert.JSONEq(t, `{
+		  "links": {
+			"self": "/articles/1/author"
+		  },
+		  "data": {
+			"type": "people",
+			"id": "9",
+			"attributes": {
+			  "firstName": "Dan",
+			  "lastName": "Gebhardt",
+			  "twitter": "dgeb"
+			}
+		  },
+		  "jsonapi": {
+			"version": "1.1"
+		  }
+		}`, string(body))
+	})
+
+	t.Run("ToMany", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest("GET", "/articles/1/comments", nil)
+		require.NoError(t, err)
+		r.Header.Set("Accept", "application/vnd.api+json")
+		API{Schema: testSchema}.ServeHTTP(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		assert.JSONEq(t, `{
+		  "links": {
+			"self": "/articles/1/comments"
+		  },
+		  "data": [{
+			"type": "comments",
+			"id": "5",
+			"relationships": {
+			  "author": {
+				"data": {
+			      "type": "people",
+			      "id": "2"
+				},
+			    "links": {
+				  "self": "/comments/5/relationships/author",
+				  "related": "/comments/5/author"
+			    }
+			  }
+			}
+		  }, {
+			"type": "comments",
+			"id": "12",
+			"relationships": {
+			  "author": {
+				"data": {
+			      "type": "people",
+			      "id": "2"
+				},
+			    "links": {
+				  "self": "/comments/12/relationships/author",
+				  "related": "/comments/12/author"
+			    }
+			  }
+			}
+		  }],
+		  "jsonapi": {
+			"version": "1.1"
+		  }
+		}`, string(body))
+	})
 }
 
 func TestDelete(t *testing.T) {
@@ -374,32 +496,43 @@ func TestDelete(t *testing.T) {
 func TestPatch(t *testing.T) {
 	for name, tc := range map[string]struct {
 		Path           string
+		Body           string
 		ExpectedStatus int
 	}{
 		"Okay": {
 			Path:           "/people/9",
+			Body:           `{"data": {"type": "people", "id": "9", "attributes": {"firstName": "Dan"}}}`,
 			ExpectedStatus: http.StatusOK,
+		},
+		"BadRequest": {
+			Path:           "/people/9",
+			Body:           `{"data": {"type": "people", "id": 1, "attributes": {"firstName": "Dan"}}}`,
+			ExpectedStatus: http.StatusBadRequest,
 		},
 		"OkayRelatedResource": {
 			Path:           "/articles/1/author",
+			Body:           `{"data": {"type": "people", "id": "9", "attributes": {"firstName": "Dan"}}}`,
 			ExpectedStatus: http.StatusOK,
 		},
 		"Mismatch": {
-			Path:           "/comments/1",
+			Path:           "/people/1",
+			Body:           `{"data": {"type": "people", "id": "9", "attributes": {"firstName": "Dan"}}}`,
 			ExpectedStatus: http.StatusConflict,
+		},
+		"MismatchRelatedResource": {
+			Path:           "/articles/1/author",
+			Body:           `{"data": {"type": "people", "id": "10", "attributes": {"firstName": "Dan"}}}`,
+			ExpectedStatus: http.StatusConflict,
+		},
+		"Unsupported": {
+			Path:           "/comments/1",
+			Body:           `{"data": {"type": "comments", "id": "1"}}`,
+			ExpectedStatus: http.StatusMethodNotAllowed,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			r, err := http.NewRequest("PATCH", tc.Path, strings.NewReader(`{
-				"data": {
-					"type": "people",
-					"id": "9",
-					"attributes": {
-						"firstName": "Dan"
-					}
-				}
-			}`))
+			r, err := http.NewRequest("PATCH", tc.Path, strings.NewReader(tc.Body))
 			require.NoError(t, err)
 			r.Header.Set("Accept", "application/vnd.api+json")
 			API{Schema: testSchema}.ServeHTTP(w, r)
@@ -454,6 +587,11 @@ func TestPatchRelationship(t *testing.T) {
 			  }
 			}`,
 		},
+		"BadRequest": {
+			Path:           "/articles/1/relationships/author",
+			Body:           `{"data": {"type": "people", "id": 1, "attributes": {"firstName": "Dan"}}}`,
+			ExpectedStatus: http.StatusBadRequest,
+		},
 		"ClearAuthor": {
 			Path:           "/articles/1/relationships/author",
 			Body:           `{"data": null}`,
@@ -468,6 +606,11 @@ func TestPatchRelationship(t *testing.T) {
 				"version": "1.1"
 			  }
 			}`,
+		},
+		"Unsupported": {
+			Path:           "/comments/1/relationships/author",
+			Body:           `{"data": null}`,
+			ExpectedStatus: http.StatusMethodNotAllowed,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -517,6 +660,11 @@ func TestPostRelationship(t *testing.T) {
 			  }
 			}`,
 		},
+		"BadRequest": {
+			Path:           "/articles/1/relationships/comments",
+			Body:           `{"data": {"type": "people", "id": 1, "attributes": {"firstName": "Dan"}}}`,
+			ExpectedStatus: http.StatusBadRequest,
+		},
 		"ToOneRelationship": {
 			Path: "/articles/1/relationships/author",
 			Body: `{
@@ -536,6 +684,16 @@ func TestPostRelationship(t *testing.T) {
 			  ]
 			}`,
 			ExpectedStatus: http.StatusNotFound,
+		},
+		"UnsupportedUpdate": {
+			Path: "/articles/1/relationships/tags",
+			Body: `{
+			  "data": [
+				{ "type": "tags", "id": "12" },
+				{ "type": "tags", "id": "13" }
+			  ]
+			}`,
+			ExpectedStatus: http.StatusMethodNotAllowed,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -583,6 +741,11 @@ func TestDeleteRelationship(t *testing.T) {
 			  }
 			}`,
 		},
+		"BadRequest": {
+			Path:           "/articles/1/relationships/comments",
+			Body:           `{"data": {"type": "people", "id": 1, "attributes": {"firstName": "Dan"}}}`,
+			ExpectedStatus: http.StatusBadRequest,
+		},
 		"ToOneRelationship": {
 			Path: "/articles/1/relationships/author",
 			Body: `{
@@ -603,6 +766,16 @@ func TestDeleteRelationship(t *testing.T) {
 			}`,
 			ExpectedStatus: http.StatusNotFound,
 		},
+		"UnsupportedUpdate": {
+			Path: "/articles/1/relationships/tags",
+			Body: `{
+			  "data": [
+				{ "type": "tags", "id": "12" },
+				{ "type": "tags", "id": "13" }
+			  ]
+			}`,
+			ExpectedStatus: http.StatusMethodNotAllowed,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()
@@ -616,6 +789,24 @@ func TestDeleteRelationship(t *testing.T) {
 				body, _ := io.ReadAll(resp.Body)
 				assert.JSONEq(t, tc.ExpectedResponse, string(body))
 			}
+		})
+	}
+}
+
+func TestUnsupportedMethod(t *testing.T) {
+	for _, path := range []string{
+		"/articles/1",
+		"/articles/1/author",
+		"/articles/1/relationships/comments",
+	} {
+		t.Run(path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r, err := http.NewRequest("TRACE", path, nil)
+			require.NoError(t, err)
+			r.Header.Set("Accept", "application/vnd.api+json")
+			API{Schema: testSchema}.ServeHTTP(w, r)
+			resp := w.Result()
+			assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 		})
 	}
 }
