@@ -34,6 +34,11 @@ func TestValidateCost(t *testing.T) {
 		"TypeName": {
 			Source: `{__typename t:__typename}`,
 		},
+		"Context": {
+			Source:       `{a: objectWithCostContext(cost: 10) { costFromContext }, b: objectWithCostContext(cost: 100) { costFromContext }}`,
+			ExpectedCost: 110,
+			MaxCost:      1000,
+		},
 		"Multiplier": {
 			Source:       `{objects(first: 10) { int }}`,
 			ExpectedCost: 1 + 10,

@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -72,6 +73,10 @@ var fooBarEnumType = &schema.EnumType{
 		"BAR": {},
 	},
 }
+
+type costContextKeyType int
+
+var costContextKey costContextKeyType
 
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
@@ -196,6 +201,28 @@ func init() {
 				cost, _ := ctx.Arguments["cost"].(int)
 				return schema.FieldCost{
 					Resolver: cost,
+				}
+			},
+		},
+		"objectWithCostContext": {
+			Type: objectType,
+			Arguments: map[string]*schema.InputValueDefinition{
+				"cost": {
+					Type: schema.IntType,
+				},
+			},
+			Cost: func(ctx *schema.FieldCostContext) schema.FieldCost {
+				cost, _ := ctx.Arguments["cost"].(int)
+				return schema.FieldCost{
+					Context: context.WithValue(ctx.Context, costContextKey, cost),
+				}
+			},
+		},
+		"costFromContext": {
+			Type: schema.IntType,
+			Cost: func(ctx *schema.FieldCostContext) schema.FieldCost {
+				return schema.FieldCost{
+					Resolver: ctx.Context.Value(costContextKey).(int),
 				}
 			},
 		},
