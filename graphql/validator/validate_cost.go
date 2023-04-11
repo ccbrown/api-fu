@@ -83,6 +83,7 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 				if node == nil {
 					multipliers = multipliers[:len(multipliers)-1]
 					ctxs = ctxs[:len(ctxs)-1]
+					return true
 				}
 
 				multiplier := multipliers[len(multipliers)-1]
@@ -90,44 +91,40 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 				newMultiplier := multiplier
 				newCtx := ctx
 
-				if selectionSet, ok := node.(*ast.SelectionSet); ok {
-					for _, selection := range selectionSet.Selections {
-						switch selection := selection.(type) {
-						case *ast.Field:
-							if def, ok := typeInfo.FieldDefinitions[selection]; ok && coercedVariableValues != nil {
-								if args, err := CoerceArgumentValues(selection, def.Arguments, selection.Arguments, coercedVariableValues); err != nil {
-									ret = append(ret, newSecondaryError(selection, err.Error()))
-								} else {
-									costContext := schema.FieldCostContext{
-										Context:   ctx,
-										Arguments: args,
-									}
-									fieldCost := defaultCost
-									if def.Cost != nil {
-										fieldCost = def.Cost(&costContext)
-									}
-									cost = checkedNonNegativeAdd(cost, checkedNonNegativeMultiply(multiplier, fieldCost.Resolver))
-									if fieldCost.Multiplier > 1 {
-										newMultiplier = checkedNonNegativeMultiply(multiplier, fieldCost.Multiplier)
-									}
-									if fieldCost.Context != nil {
-										newCtx = fieldCost.Context
-									}
-								}
-							} else if selection.Name.Name != "__typename" {
-								ret = append(ret, newSecondaryError(selection, "unknown field type"))
+				switch selection := node.(type) {
+				case *ast.Field:
+					if def, ok := typeInfo.FieldDefinitions[selection]; ok && coercedVariableValues != nil {
+						if args, err := CoerceArgumentValues(selection, def.Arguments, selection.Arguments, coercedVariableValues); err != nil {
+							ret = append(ret, newSecondaryError(selection, err.Error()))
+						} else {
+							costContext := schema.FieldCostContext{
+								Context:   ctx,
+								Arguments: args,
 							}
-						case *ast.FragmentSpread:
-							if _, ok := fragments[selection.FragmentName.Name]; ok {
-								ret = append(ret, newSecondaryError(selection, "fragment cycle detected"))
-							} else if def, ok := fragmentsByName[selection.FragmentName.Name]; ok {
-								fragments[selection.FragmentName.Name] = struct{}{}
-								visitNode(def)
-								delete(fragments, selection.FragmentName.Name)
-							} else {
-								ret = append(ret, newSecondaryError(selection, "undefined fragment"))
+							fieldCost := defaultCost
+							if def.Cost != nil {
+								fieldCost = def.Cost(&costContext)
+							}
+							cost = checkedNonNegativeAdd(cost, checkedNonNegativeMultiply(multiplier, fieldCost.Resolver))
+							if fieldCost.Multiplier > 1 {
+								newMultiplier = checkedNonNegativeMultiply(multiplier, fieldCost.Multiplier)
+							}
+							if fieldCost.Context != nil {
+								newCtx = fieldCost.Context
 							}
 						}
+					} else if selection.Name.Name != "__typename" {
+						ret = append(ret, newSecondaryError(selection, "unknown field type"))
+					}
+				case *ast.FragmentSpread:
+					if _, ok := fragments[selection.FragmentName.Name]; ok {
+						ret = append(ret, newSecondaryError(selection, "fragment cycle detected"))
+					} else if def, ok := fragmentsByName[selection.FragmentName.Name]; ok {
+						fragments[selection.FragmentName.Name] = struct{}{}
+						visitNode(def)
+						delete(fragments, selection.FragmentName.Name)
+					} else {
+						ret = append(ret, newSecondaryError(selection, "undefined fragment"))
 					}
 				}
 
