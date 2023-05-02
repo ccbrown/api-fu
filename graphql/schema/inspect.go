@@ -25,30 +25,18 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 			Inspect(node, f)
 		}
 	case *UnionType:
-		for _, node := range n.Directives {
-			Inspect(node, f)
-		}
 		for _, node := range n.MemberTypes {
 			Inspect(node, f)
 		}
 	case *InterfaceType:
-		for _, node := range n.Directives {
-			Inspect(node, f)
-		}
 		for _, node := range n.Fields {
 			Inspect(node, f)
 		}
 	case *InputObjectType:
-		for _, node := range n.Directives {
-			Inspect(node, f)
-		}
 		for _, node := range n.Fields {
 			Inspect(node, f)
 		}
 	case *ObjectType:
-		for _, node := range n.Directives {
-			Inspect(node, f)
-		}
 		for _, node := range n.Fields {
 			Inspect(node, f)
 		}
@@ -60,14 +48,10 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 		for _, node := range n.Arguments {
 			Inspect(node, f)
 		}
-		for _, node := range n.Directives {
-			Inspect(node, f)
-		}
 	case *InputValueDefinition:
 		Inspect(n.Type, f)
-		for _, node := range n.Directives {
-			Inspect(node, f)
-		}
+	case *Directive:
+		Inspect(n.Definition, f)
 	case *DirectiveDefinition:
 		for _, node := range n.Arguments {
 			Inspect(node, f)
@@ -76,7 +60,14 @@ func Inspect(node interface{}, f func(interface{}) bool) {
 		Inspect(n.Type, f)
 	case *NonNullType:
 		Inspect(n.Type, f)
-	case *EnumType, *ScalarType:
+	case *EnumType:
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
+	case *ScalarType:
+		for _, node := range n.Directives {
+			Inspect(node, f)
+		}
 	default:
 		panic(fmt.Errorf("unknown node type: %T", n))
 	}

@@ -44,6 +44,11 @@ type Config struct {
 	// implementations that aren't explicitly referenced elsewhere in the schema.
 	AdditionalTypes map[string]graphql.NamedType
 
+	// If given, these function will be executed as the schema is built. It is executed on a clone
+	// of the schema and can be used to make last minute modifications to types, such as injecting
+	// documentation.
+	PreprocessGraphQLSchemaDefinition func(schema *graphql.SchemaDefinition) error
+
 	initOnce              sync.Once
 	nodeObjectTypesByName map[string]*graphql.ObjectType
 	nodeTypesByModel      map[reflect.Type]*NodeType
@@ -121,12 +126,12 @@ func (cfg *Config) init() {
 	})
 }
 
-func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
+func (cfg *Config) graphqlSchemaDefinition() (*graphql.SchemaDefinition, error) {
 	additionalTypes := make([]graphql.NamedType, 0, len(cfg.AdditionalTypes))
 	for _, t := range cfg.AdditionalTypes {
 		additionalTypes = append(additionalTypes, t)
 	}
-	return graphql.NewSchema(&graphql.SchemaDefinition{
+	ret := &graphql.SchemaDefinition{
 		Query:           cfg.query,
 		Mutation:        cfg.mutation,
 		Subscription:    cfg.subscription,
@@ -135,7 +140,22 @@ func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
 			"include": graphql.IncludeDirective,
 			"skip":    graphql.SkipDirective,
 		},
-	})
+	}
+	if cfg.PreprocessGraphQLSchemaDefinition != nil {
+		ret = ret.Clone()
+		if err := cfg.PreprocessGraphQLSchemaDefinition(ret); err != nil {
+			return nil, err
+		}
+	}
+	return ret, nil
+}
+
+func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
+	def, err := cfg.graphqlSchemaDefinition()
+	if err != nil {
+		return nil, err
+	}
+	return graphql.NewSchema(def)
 }
 
 // NodeObjectType returns the object type for a node type previously added via AddNodeType.
@@ -211,19 +231,19 @@ func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
 // When this happens, you should return a pointer to a SubscriptionSourceStream (or an error). For
 // example:
 //
-//     Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
-//         if ctx.IsSubscribe {
-//             ticker := time.NewTicker(time.Second)
-//             return &apifu.SubscriptionSourceStream{
-//                 EventChannel: ticker.C,
-//                 Stop:         ticker.Stop,
-//             }, nil
-//         } else if ctx.Object != nil {
-//             return ctx.Object, nil
-//         } else {
-//             return nil, fmt.Errorf("Subscriptions are not supported using this protocol.")
-//         }
-//     },
+//	Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+//	    if ctx.IsSubscribe {
+//	        ticker := time.NewTicker(time.Second)
+//	        return &apifu.SubscriptionSourceStream{
+//	            EventChannel: ticker.C,
+//	            Stop:         ticker.Stop,
+//	        }, nil
+//	    } else if ctx.Object != nil {
+//	        return ctx.Object, nil
+//	    } else {
+//	        return nil, fmt.Errorf("Subscriptions are not supported using this protocol.")
+//	    }
+//	},
 func (cfg *Config) AddSubscription(name string, def *graphql.FieldDefinition) {
 	cfg.init()
 
