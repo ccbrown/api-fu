@@ -112,6 +112,12 @@ func New(def *SchemaDefinition) (*Schema, error) {
 	return schema, nil
 }
 
+// Creates a deep copy of the given schema definition. This allows you to safely modify descriptions
+// or other attributes of the schema without modifying the original definition.
+func (def *SchemaDefinition) Clone() *SchemaDefinition {
+	return deepCopySchemaDefinition(def)
+}
+
 type SchemaDefinition struct {
 	// Directives to define within the schema. For example, you might want to add IncludeDirective
 	// and SkipDirective here.

@@ -105,6 +105,7 @@ func TestIntrospection(t *testing.T) {
 				Locations: []schema.DirectiveLocation{schema.DirectiveLocationField, schema.DirectiveLocationFragmentSpread, schema.DirectiveLocationInlineFragment},
 			},
 		},
+		AdditionalTypes: []schema.NamedType{dogType},
 	})
 	require.NoError(t, err)
 	require.NoError(t, err)
