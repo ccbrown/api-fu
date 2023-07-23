@@ -93,7 +93,7 @@ func (cfg *Config) init() {
 						},
 					},
 					Cost: graphql.FieldResolverCost(1),
-					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 						// TODO: batching?
 						return ctxAPI(ctx.Context).resolveNodeByGlobalId(ctx.Context, ctx.Arguments["id"].(string))
 					},
@@ -106,14 +106,14 @@ func (cfg *Config) init() {
 							Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(graphql.IDType))),
 						},
 					},
-					Cost: func(ctx *graphql.FieldCostContext) graphql.FieldCost {
+					Cost: func(ctx graphql.FieldCostContext) graphql.FieldCost {
 						ids, _ := ctx.Arguments["ids"].([]interface{})
 						return graphql.FieldCost{
 							Resolver:   1,
 							Multiplier: len(ids),
 						}
 					},
-					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 						var ids []string
 						for _, id := range ctx.Arguments["ids"].([]interface{}) {
 							ids = append(ids, id.(string))
@@ -231,7 +231,7 @@ func (cfg *Config) AddMutation(name string, def *graphql.FieldDefinition) {
 // When this happens, you should return a pointer to a SubscriptionSourceStream (or an error). For
 // example:
 //
-//	Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+//	Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 //	    if ctx.IsSubscribe {
 //	        ticker := time.NewTicker(time.Second)
 //	        return &apifu.SubscriptionSourceStream{

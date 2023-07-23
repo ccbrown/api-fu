@@ -35,7 +35,7 @@ func init() {
 			Fields: map[string]*graphql.FieldDefinition{
 				"message": {
 					Type: graphql.NewNonNullType(messageType),
-					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 						return ctx.Object, nil
 					},
 				},
@@ -62,7 +62,7 @@ func init() {
 				}),
 			},
 		},
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return ctxSession(ctx.Context).CreateMessage(ctx.Arguments["message"].(*model.Message))
 		},
 	})

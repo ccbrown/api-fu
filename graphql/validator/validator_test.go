@@ -197,7 +197,7 @@ func init() {
 					DefaultValue: 10,
 				},
 			},
-			Cost: func(ctx *schema.FieldCostContext) schema.FieldCost {
+			Cost: func(ctx schema.FieldCostContext) schema.FieldCost {
 				cost, _ := ctx.Arguments["cost"].(int)
 				return schema.FieldCost{
 					Resolver: cost,
@@ -211,7 +211,7 @@ func init() {
 					Type: schema.IntType,
 				},
 			},
-			Cost: func(ctx *schema.FieldCostContext) schema.FieldCost {
+			Cost: func(ctx schema.FieldCostContext) schema.FieldCost {
 				cost, _ := ctx.Arguments["cost"].(int)
 				return schema.FieldCost{
 					Context: context.WithValue(ctx.Context, costContextKey, cost),
@@ -220,7 +220,7 @@ func init() {
 		},
 		"costFromContext": {
 			Type: schema.IntType,
-			Cost: func(ctx *schema.FieldCostContext) schema.FieldCost {
+			Cost: func(ctx schema.FieldCostContext) schema.FieldCost {
 				return schema.FieldCost{
 					Resolver: ctx.Context.Value(costContextKey).(int),
 				}
@@ -233,7 +233,7 @@ func init() {
 					Type: schema.IntType,
 				},
 			},
-			Cost: func(ctx *schema.FieldCostContext) schema.FieldCost {
+			Cost: func(ctx schema.FieldCostContext) schema.FieldCost {
 				multiplier, _ := ctx.Arguments["first"].(int)
 				return schema.FieldCost{
 					Resolver:   1,

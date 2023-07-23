@@ -171,7 +171,7 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
 		return nil, err
 	}
 
-	resolveValue, resolveErr := fieldDef.Resolve(&schema.FieldContext{
+	resolveValue, resolveErr := fieldDef.Resolve(schema.FieldContext{
 		Context:     e.Context,
 		Schema:      e.Schema,
 		Object:      initialValue,
@@ -302,7 +302,7 @@ func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fi
 	if err := e.Context.Err(); err != nil {
 		return future.Err[any](newFieldResolveError(fields, err, path))
 	}
-	resolvedValue, err := fieldDef.Resolve(&schema.FieldContext{
+	resolvedValue, err := fieldDef.Resolve(schema.FieldContext{
 		Context:   e.Context,
 		Schema:    e.Schema,
 		Object:    objectValue,

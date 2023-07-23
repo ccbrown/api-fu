@@ -103,7 +103,7 @@ func ValidateCost(operationName string, variableValues map[string]interface{}, m
 							}
 							fieldCost := defaultCost
 							if def.Cost != nil {
-								fieldCost = def.Cost(&costContext)
+								fieldCost = def.Cost(costContext)
 							}
 							cost = checkedNonNegativeAdd(cost, checkedNonNegativeMultiply(multiplier, fieldCost.Resolver))
 							if fieldCost.Multiplier > 1 {

@@ -19,7 +19,7 @@ func OwnID(fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(graphql.IDType),
 		Cost: graphql.FieldResolverCost(0),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			cfg := ctxAPI(ctx.Context).config
 			modelType := normalizeModelType(reflect.TypeOf(ctx.Object))
 			nodeType := cfg.nodeTypesByModel[modelType]
@@ -33,7 +33,7 @@ func NonNullNodeID(modelType reflect.Type, fieldName string) *graphql.FieldDefin
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(graphql.IDType),
 		Cost: graphql.FieldResolverCost(0),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			cfg := ctxAPI(ctx.Context).config
 			modelType = normalizeModelType(modelType)
 			nodeType := cfg.nodeTypesByModel[modelType]
@@ -48,7 +48,7 @@ func NonEmptyString(fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.StringType,
 		Cost: graphql.FieldResolverCost(0),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			if s := fieldValue(ctx.Object, fieldName); s != "" {
 				return s, nil
 			}
@@ -62,7 +62,7 @@ func NonNull(t graphql.Type, fieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(t),
 		Cost: graphql.FieldResolverCost(0),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return fieldValue(ctx.Object, fieldName), nil
 		},
 	}
@@ -73,7 +73,7 @@ func NonNull(t graphql.Type, fieldName string) *graphql.FieldDefinition {
 func Node(nodeType *graphql.ObjectType, idFieldName string) *graphql.FieldDefinition {
 	return &graphql.FieldDefinition{
 		Type: nodeType,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			api := ctxAPI(ctx.Context)
 			nodeType, ok := api.config.nodeTypesByObjectType[nodeType]
 			if !ok {

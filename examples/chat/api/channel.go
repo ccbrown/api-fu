@@ -40,12 +40,12 @@ func init() {
 			EdgeFields: map[string]*graphql.FieldDefinition{
 				"node": {
 					Type: graphql.NewNonNullType(messageType),
-					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 						return ctx.Object, nil
 					},
 				},
 			},
-			EdgeGetter: func(ctx *graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error) {
+			EdgeGetter: func(ctx graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error) {
 				return ctxSession(ctx.Context).GetMessagesByChannelIdAndTimeRange(ctx.Object.(*model.Channel).Id, minTime, maxTime, limit)
 			},
 		}),
@@ -59,7 +59,7 @@ func init() {
 			Fields: map[string]*graphql.FieldDefinition{
 				"channel": {
 					Type: graphql.NewNonNullType(channelType),
-					Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+					Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 						return ctx.Object, nil
 					},
 				},
@@ -82,7 +82,7 @@ func init() {
 				}),
 			},
 		},
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return ctxSession(ctx.Context).CreateChannel(ctx.Arguments["channel"].(*model.Channel))
 		},
 	})
@@ -107,7 +107,7 @@ func init() {
 		EdgeFields: map[string]*graphql.FieldDefinition{
 			"node": {
 				Type: graphql.NewNonNullType(channelType),
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil
 				},
 			},
@@ -115,7 +115,7 @@ func init() {
 		CursorType: reflect.TypeOf(cursor{}),
 		// If we assume the server will always have a relatively small number of channels, we can
 		// keep things simple using ResolveAllEdges.
-		ResolveAllEdges: func(ctx *graphql.FieldContext) (interface{}, func(a, b interface{}) bool, error) {
+		ResolveAllEdges: func(ctx graphql.FieldContext) (interface{}, func(a, b interface{}) bool, error) {
 			channels, err := ctxSession(ctx.Context).GetChannels()
 			return channels, func(a, b interface{}) bool {
 				ac, bc := a.(cursor), b.(cursor)

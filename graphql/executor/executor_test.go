@@ -34,13 +34,13 @@ var dogType = &schema.ObjectType{
 	Fields: map[string]*schema.FieldDefinition{
 		"nickname": {
 			Type: schema.StringType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return "fido", nil
 			},
 		},
 		"barkVolume": {
 			Type: schema.IntType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return 10, nil
 			},
 		},
@@ -57,13 +57,13 @@ var catType = &schema.ObjectType{
 	Fields: map[string]*schema.FieldDefinition{
 		"nickname": {
 			Type: schema.StringType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return "fluffy", nil
 			},
 		},
 		"meowVolume": {
 			Type: schema.IntType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return 10, nil
 			},
 		},
@@ -89,25 +89,25 @@ func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
 		"intOne": {
 			Type: schema.IntType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return 1, nil
 			},
 		},
 		"pet": {
 			Type: petType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return dog{}, nil
 			},
 		},
 		"intTwo": {
 			Type: schema.IntType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return 2, nil
 			},
 		},
 		"asyncString": {
 			Type: schema.StringType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				ch := make(ResolvePromise, 1)
 				stringPromises = append(stringPromises, ch)
 				return ResolvePromise(ch), nil
@@ -115,31 +115,31 @@ func init() {
 		},
 		"stringFoo": {
 			Type: schema.StringType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return "foo", nil
 			},
 		},
 		"object": {
 			Type: objectType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return &object{}, nil
 			},
 		},
 		"nonNullIntListWithNull": {
 			Type: schema.NewListType(schema.NewNonNullType(schema.IntType)),
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return []interface{}{1, nil, 3}, nil
 			},
 		},
 		"objectsWithError": {
 			Type: schema.NewListType(objectType),
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return []*object{{}, {Error: fmt.Errorf("error")}, {}}, nil
 			},
 		},
 		"intOneOrError": {
 			Type: schema.IntType,
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				if err := ctx.Object.(*object).Error; err != nil {
 					return nil, err
 				}
@@ -148,25 +148,25 @@ func init() {
 		},
 		"error": {
 			Type: schema.IntType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return nil, fmt.Errorf("error")
 			},
 		},
 		"nonNullError": {
 			Type: schema.NewNonNullType(schema.IntType),
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return nil, fmt.Errorf("error")
 			},
 		},
 		"badResolveValue": {
 			Type: schema.IntType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return &struct{}{}, nil
 			},
 		},
 		"intListWithBadResolveValue": {
 			Type: schema.NewListType(schema.IntType),
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return []interface{}{1, &struct{}{}, 3}, nil
 			},
 		},
@@ -179,7 +179,7 @@ var mutationType = &schema.ObjectType{
 	Fields: map[string]*schema.FieldDefinition{
 		"asyncString": {
 			Type: schema.StringType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				ch := make(ResolvePromise, 1)
 				stringPromises = append(stringPromises, ch)
 				return ResolvePromise(ch), nil
@@ -191,7 +191,7 @@ var mutationType = &schema.ObjectType{
 				Fields: map[string]*schema.FieldDefinition{
 					"theNumber": {
 						Type: schema.NewNonNullType(schema.IntType),
-						Resolve: func(*schema.FieldContext) (interface{}, error) {
+						Resolve: func(schema.FieldContext) (interface{}, error) {
 							return theNumber, nil
 						},
 					},
@@ -202,7 +202,7 @@ var mutationType = &schema.ObjectType{
 					Type: schema.NewNonNullType(schema.IntType),
 				},
 			},
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				theNumber = ctx.Arguments["newNumber"].(int)
 				return struct{}{}, nil
 			},
@@ -218,7 +218,7 @@ func TestSubscribe(t *testing.T) {
 			Fields: map[string]*schema.FieldDefinition{
 				"int": {
 					Type: schema.NewNonNullType(schema.IntType),
-					Resolve: func(*schema.FieldContext) (interface{}, error) {
+					Resolve: func(schema.FieldContext) (interface{}, error) {
 						return 1, nil
 					},
 				},
@@ -495,7 +495,7 @@ func BenchmarkExecuteRequest(b *testing.B) {
 	objectType.Fields = map[string]*schema.FieldDefinition{
 		"string": {
 			Type: schema.StringType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return "foo", nil
 			},
 		},
@@ -506,7 +506,7 @@ func BenchmarkExecuteRequest(b *testing.B) {
 					Type: schema.NewNonNullType(schema.IntType),
 				},
 			},
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return make([]struct{}, ctx.Arguments["count"].(int)), nil
 			},
 		},
@@ -549,7 +549,7 @@ func TestContextCancelation(t *testing.T) {
 	objectType.Fields = map[string]*schema.FieldDefinition{
 		"slowString": {
 			Type: schema.StringType,
-			Resolve: func(*schema.FieldContext) (interface{}, error) {
+			Resolve: func(schema.FieldContext) (interface{}, error) {
 				time.Sleep(100 * time.Millisecond)
 				return "foo", nil
 			},
@@ -561,7 +561,7 @@ func TestContextCancelation(t *testing.T) {
 					Type: schema.NewNonNullType(schema.IntType),
 				},
 			},
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return make([]struct{}, ctx.Arguments["count"].(int)), nil
 			},
 		},

@@ -189,18 +189,18 @@ func Go(ctx context.Context, f func() (interface{}, error)) graphql.ResolvePromi
 }
 
 type batch struct {
-	resolver func([]*graphql.FieldContext) []graphql.ResolveResult
-	items    []*graphql.FieldContext
+	resolver func([]graphql.FieldContext) []graphql.ResolveResult
+	items    []graphql.FieldContext
 	dests    []chan graphql.ResolveResult
 }
 
 // Batch batches up the resolver invocations into a single call. As queries are executed, whenever
 // resolution gets "stuck", all pending batch resolvers will be triggered concurrently. Batch
 // resolvers must return one result for every field context it receives.
-func Batch(f func([]*graphql.FieldContext) []graphql.ResolveResult) func(*graphql.FieldContext) (interface{}, error) {
+func Batch(f func([]graphql.FieldContext) []graphql.ResolveResult) func(graphql.FieldContext) (interface{}, error) {
 	var x int
 	key := &x
-	return func(ctx *graphql.FieldContext) (interface{}, error) {
+	return func(ctx graphql.FieldContext) (interface{}, error) {
 		apiRequest := ctxAPIRequest(ctx.Context)
 		b, ok := apiRequest.batches[key]
 		if !ok {
