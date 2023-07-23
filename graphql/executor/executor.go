@@ -2,9 +2,9 @@ package executor
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"reflect"
-	"strconv"
 
 	"github.com/ccbrown/api-fu/graphql/ast"
 	"github.com/ccbrown/api-fu/graphql/executor/internal/future"
@@ -427,11 +427,15 @@ func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast
 	// collectFields can be called many times with the same inputs throughout a query's execution,
 	// so we memoize the return value.
 
-	cacheKey := objectType.Name
-	for _, sel := range selections {
+	objectNameLen := len(objectType.Name)
+	cacheKeyBytes := make([]byte, objectNameLen+8*len(selections))
+	copy(cacheKeyBytes, objectType.Name)
+	for i, sel := range selections {
 		pos := sel.Position()
-		cacheKey += ":" + strconv.Itoa(pos.Line) + "," + strconv.Itoa(pos.Column)
+		binary.LittleEndian.PutUint32(cacheKeyBytes[objectNameLen+i*8:], uint32(pos.Line))
+		binary.LittleEndian.PutUint32(cacheKeyBytes[objectNameLen+i*8+4:], uint32(pos.Column))
 	}
+	cacheKey := string(cacheKeyBytes)
 
 	if hit, ok := e.GroupedFieldSetCache[cacheKey]; ok {
 		return hit
