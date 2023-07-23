@@ -33,7 +33,7 @@ func TestGo(t *testing.T) {
 	// If this is not executed asynchronously alongside a matching asyncReceiver, it will deadlock.
 	testCfg.AddQueryField("asyncSender", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return Go(ctx.Context, func() (interface{}, error) {
 				asyncChannel <- struct{}{}
 				return true, nil
@@ -44,7 +44,7 @@ func TestGo(t *testing.T) {
 	// If this is not executed asynchronously alongside a matching asyncSender, it will deadlock.
 	testCfg.AddQueryField("asyncReceiver", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return Go(ctx.Context, func() (interface{}, error) {
 				<-asyncChannel
 				return true, nil
@@ -72,7 +72,7 @@ func TestBatch(t *testing.T) {
 
 	testCfg.AddQueryField("batched1", &graphql.FieldDefinition{
 		Type: graphql.IntType,
-		Resolve: Batch(func(ctx []*graphql.FieldContext) []graphql.ResolveResult {
+		Resolve: Batch(func(ctx []graphql.FieldContext) []graphql.ResolveResult {
 			assert.Len(t, ctx, 1)
 			return []graphql.ResolveResult{
 				{Value: 1, Error: nil},
@@ -82,7 +82,7 @@ func TestBatch(t *testing.T) {
 
 	testCfg.AddQueryField("batched2", &graphql.FieldDefinition{
 		Type: graphql.IntType,
-		Resolve: Batch(func(ctx []*graphql.FieldContext) []graphql.ResolveResult {
+		Resolve: Batch(func(ctx []graphql.FieldContext) []graphql.ResolveResult {
 			assert.Len(t, ctx, 2)
 			return []graphql.ResolveResult{
 				{Value: 1, Error: nil},
@@ -200,7 +200,7 @@ func TestMutation(t *testing.T) {
 
 	testCfg.AddMutation("mut", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return true, nil
 		},
 	})

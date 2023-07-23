@@ -21,7 +21,7 @@ var MetaFields = map[string]*schema.FieldDefinition{
 	"__schema": {
 		Type: schema.NewNonNullType(SchemaType),
 		Cost: schema.FieldResolverCost(0),
-		Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+		Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 			return ctx.Schema, nil
 		},
 	},
@@ -33,7 +33,7 @@ var MetaFields = map[string]*schema.FieldDefinition{
 				Type: schema.NewNonNullType(schema.StringType),
 			},
 		},
-		Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+		Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 			return ctx.Schema.NamedTypes()[ctx.Arguments["name"].(string)], nil
 		},
 	},
@@ -68,7 +68,7 @@ var SchemaType = &schema.ObjectType{
 		"types": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(TypeType))),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				namedTypes := ctx.Schema.NamedTypes()
 				ret := make([]schema.Type, len(namedTypes))
 				i := 0
@@ -82,28 +82,28 @@ var SchemaType = &schema.ObjectType{
 		"queryType": {
 			Type: schema.NewNonNullType(TypeType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Schema.QueryType(), nil
 			},
 		},
 		"mutationType": {
 			Type: TypeType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Schema.MutationType(), nil
 			},
 		},
 		"subscriptionType": {
 			Type: TypeType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Schema.SubscriptionType(), nil
 			},
 		},
 		"directives": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(DirectiveType))),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				directives := ctx.Schema.Directives()
 				ret := make([]directive, len(directives))
 				i := 0
@@ -172,7 +172,7 @@ func init() {
 		"kind": {
 			Type: schema.NewNonNullType(TypeKindType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				switch t := ctx.Object.(type) {
 				case *schema.ScalarType:
 					return typeKindScalar, nil
@@ -198,7 +198,7 @@ func init() {
 		"name": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				if t, ok := ctx.Object.(schema.NamedType); ok {
 					return t.TypeName(), nil
 				}
@@ -208,7 +208,7 @@ func init() {
 		"description": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				description := ""
 				switch t := ctx.Object.(type) {
 				case *schema.ScalarType:
@@ -236,7 +236,7 @@ func init() {
 					DefaultValue: false,
 				},
 			},
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				var fields map[string]*schema.FieldDefinition
 				switch t := ctx.Object.(type) {
 				case *schema.ObjectType:
@@ -262,7 +262,7 @@ func init() {
 		"interfaces": {
 			Type: schema.NewListType(schema.NewNonNullType(TypeType)),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				if t, ok := ctx.Object.(*schema.ObjectType); ok {
 					return t.ImplementedInterfaces, nil
 				}
@@ -272,7 +272,7 @@ func init() {
 		"possibleTypes": {
 			Type: schema.NewListType(schema.NewNonNullType(TypeType)),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				switch t := ctx.Object.(type) {
 				case *schema.InterfaceType:
 					return ctx.Schema.InterfaceImplementations(t.Name), nil
@@ -292,7 +292,7 @@ func init() {
 					DefaultValue: false,
 				},
 			},
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				if t, ok := ctx.Object.(*schema.EnumType); ok {
 					includeDeprecated := ctx.Arguments["includeDeprecated"].(bool)
 					ret := []enumValue{}
@@ -312,7 +312,7 @@ func init() {
 		"inputFields": {
 			Type: schema.NewListType(schema.NewNonNullType(InputValueType)),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				if t, ok := ctx.Object.(*schema.InputObjectType); ok {
 					return inputValues(t.Fields)
 				}
@@ -322,7 +322,7 @@ func init() {
 		"ofType": {
 			Type: TypeType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				switch t := ctx.Object.(type) {
 				case *schema.ListType:
 					return t.Type, nil
@@ -402,28 +402,28 @@ var DirectiveType = &schema.ObjectType{
 		"name": {
 			Type: schema.NewNonNullType(schema.StringType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(directive).Name, nil
 			},
 		},
 		"description": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(directive).Definition.Description)
 			},
 		},
 		"locations": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(DirectiveLocationType))),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(directive).Definition.Locations, nil
 			},
 		},
 		"args": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(InputValueType))),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return inputValues(ctx.Object.(directive).Definition.Arguments)
 			},
 		},
@@ -441,42 +441,42 @@ var FieldType = &schema.ObjectType{
 		"name": {
 			Type: schema.NewNonNullType(schema.StringType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(field).Name, nil
 			},
 		},
 		"description": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(field).Definition.Description)
 			},
 		},
 		"args": {
 			Type: schema.NewNonNullType(schema.NewListType(schema.NewNonNullType(InputValueType))),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return inputValues(ctx.Object.(field).Definition.Arguments)
 			},
 		},
 		"type": {
 			Type: schema.NewNonNullType(TypeType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(field).Definition.Type, nil
 			},
 		},
 		"isDeprecated": {
 			Type: schema.NewNonNullType(schema.BooleanType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(field).Definition.DeprecationReason != "", nil
 			},
 		},
 		"deprecationReason": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(field).Definition.DeprecationReason)
 			},
 		},
@@ -494,28 +494,28 @@ var EnumValueType = &schema.ObjectType{
 		"name": {
 			Type: schema.NewNonNullType(schema.StringType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(enumValue).Name, nil
 			},
 		},
 		"description": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(enumValue).Definition.Description)
 			},
 		},
 		"isDeprecated": {
 			Type: schema.NewNonNullType(schema.BooleanType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(enumValue).Definition.DeprecationReason != "", nil
 			},
 		},
 		"deprecationReason": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(enumValue).Definition.DeprecationReason)
 			},
 		},
@@ -533,28 +533,28 @@ var InputValueType = &schema.ObjectType{
 		"name": {
 			Type: schema.NewNonNullType(schema.StringType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(inputValue).Name, nil
 			},
 		},
 		"description": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return nullableString(ctx.Object.(inputValue).Definition.Description)
 			},
 		},
 		"type": {
 			Type: schema.NewNonNullType(TypeType),
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				return ctx.Object.(inputValue).Definition.Type, nil
 			},
 		},
 		"defaultValue": {
 			Type: schema.StringType,
 			Cost: schema.FieldResolverCost(0),
-			Resolve: func(ctx *schema.FieldContext) (interface{}, error) {
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				def := ctx.Object.(inputValue).Definition
 				if v := def.DefaultValue; v != nil {
 					return marshalValue(def.Type, v)

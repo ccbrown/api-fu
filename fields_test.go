@@ -62,7 +62,7 @@ func TestFields(t *testing.T) {
 				"nid": NonNullNodeID(reflect.TypeOf(node{}), "NodeId"),
 			},
 		},
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return struct {
 				Int    int
 				S0     string

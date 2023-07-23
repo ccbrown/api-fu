@@ -35,8 +35,8 @@ type FieldCost struct {
 }
 
 // Returns a cost function which returns a constant resolver cost with no multiplier.
-func FieldResolverCost(n int) func(*FieldCostContext) FieldCost {
-	return func(*FieldCostContext) FieldCost {
+func FieldResolverCost(n int) func(FieldCostContext) FieldCost {
+	return func(FieldCostContext) FieldCost {
 		return FieldCost{
 			Resolver: n,
 		}
@@ -62,9 +62,9 @@ type FieldDefinition struct {
 	// This function can be used to define the cost of resolving the field. The total cost of an
 	// operation can be calculated before the operation is executed, enabling rate limiting and
 	// metering.
-	Cost func(*FieldCostContext) FieldCost
+	Cost func(FieldCostContext) FieldCost
 
-	Resolve func(*FieldContext) (interface{}, error)
+	Resolve func(FieldContext) (interface{}, error)
 }
 
 func (d *FieldDefinition) shallowValidate() error {

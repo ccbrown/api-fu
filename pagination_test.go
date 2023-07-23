@@ -24,7 +24,7 @@ func TestConnection(t *testing.T) {
 		EdgeFields: map[string]*graphql.FieldDefinition{
 			"node": {
 				Type: graphql.IntType,
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil
 				},
 			},
@@ -34,7 +34,7 @@ func TestConnection(t *testing.T) {
 
 	config.AddQueryField("connection", Connection(&ConnectionConfig{
 		NamePrefix: "Test",
-		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
+		ResolveEdges: func(ctx graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
 			ret := make([]int, limit)
 			for i := range ret {
 				ret[i] = i
@@ -43,7 +43,7 @@ func TestConnection(t *testing.T) {
 				return false
 			}, nil
 		},
-		ResolveTotalCount: func(ctx *graphql.FieldContext) (interface{}, error) {
+		ResolveTotalCount: func(ctx graphql.FieldContext) (interface{}, error) {
 			return 1000, nil
 		},
 		CursorType: reflect.TypeOf(""),
@@ -53,7 +53,7 @@ func TestConnection(t *testing.T) {
 		EdgeFields: map[string]*graphql.FieldDefinition{
 			"node": {
 				Type: graphql.IntType,
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil
 				},
 			},
@@ -175,10 +175,10 @@ func TestConnection_ZeroArg_WithoutPageInfo(t *testing.T) {
 	config := &Config{}
 	config.AddQueryField("connection", Connection(&ConnectionConfig{
 		NamePrefix: "Test",
-		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
+		ResolveEdges: func(ctx graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
 			return nil, nil, fmt.Errorf("the edge resolver should not be invoked")
 		},
-		ResolveTotalCount: func(ctx *graphql.FieldContext) (interface{}, error) {
+		ResolveTotalCount: func(ctx graphql.FieldContext) (interface{}, error) {
 			return 1000, nil
 		},
 		CursorType: reflect.TypeOf(""),
@@ -188,7 +188,7 @@ func TestConnection_ZeroArg_WithoutPageInfo(t *testing.T) {
 		EdgeFields: map[string]*graphql.FieldDefinition{
 			"node": {
 				Type: graphql.IntType,
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil
 				},
 			},
@@ -228,14 +228,14 @@ func TestConnection_ZeroArg_WithPageInfo(t *testing.T) {
 	config := &Config{}
 	config.AddQueryField("connection", Connection(&ConnectionConfig{
 		NamePrefix: "Test",
-		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
+		ResolveEdges: func(ctx graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
 			return Go(ctx.Context, func() (interface{}, error) {
 					return make([]int, limit), nil
 				}), func(a, b interface{}) bool {
 					return false
 				}, nil
 		},
-		ResolveTotalCount: func(ctx *graphql.FieldContext) (interface{}, error) {
+		ResolveTotalCount: func(ctx graphql.FieldContext) (interface{}, error) {
 			return 1000, nil
 		},
 		CursorType: reflect.TypeOf(""),
@@ -245,7 +245,7 @@ func TestConnection_ZeroArg_WithPageInfo(t *testing.T) {
 		EdgeFields: map[string]*graphql.FieldDefinition{
 			"node": {
 				Type: graphql.IntType,
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil
 				},
 			},
@@ -306,7 +306,7 @@ func TestTimeBasedConnection(t *testing.T) {
 				Type: graphql.BooleanType,
 			},
 		},
-		EdgeGetter: func(ctx *graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error) {
+		EdgeGetter: func(ctx graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error) {
 			var ret []time.Time
 			for _, edge := range edges {
 				if !edge.Before(minTime) && !edge.After(maxTime) {
@@ -326,7 +326,7 @@ func TestTimeBasedConnection(t *testing.T) {
 		EdgeFields: map[string]*graphql.FieldDefinition{
 			"node": {
 				Type: DateTimeType,
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object, nil
 				},
 			},

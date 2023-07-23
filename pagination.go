@@ -33,7 +33,7 @@ type ConnectionConfig struct {
 	// If getting all edges for the connection is cheap, you can just provide ResolveAllEdges.
 	// ResolveAllEdges should return a slice value, with one item for each edge, and a function that
 	// can be used to sort the cursors produced by EdgeCursor.
-	ResolveAllEdges func(ctx *graphql.FieldContext) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
+	ResolveAllEdges func(ctx graphql.FieldContext) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
 
 	// If getting all edges for the connection is too expensive for ResolveAllEdges, you can provide
 	// ResolveEdges. ResolveEdges is just like ResolveAllEdges, but is only required to return edges
@@ -49,11 +49,11 @@ type ConnectionConfig struct {
 	// behavior will be fully compliant with the Relay Pagination spec regardless. However,
 	// providing these additional edges will allow hasNextPage and hasPreviousPage to be true in
 	// scenarios where the spec allows them to be false for performance reasons.
-	ResolveEdges func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
+	ResolveEdges func(ctx graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
 
 	// If you use ResolveEdges, you can optionally provide ResolveTotalCount to add a totalCount
 	// field to the connection. If you use ResolveAllEdges, there is no need to provide this.
-	ResolveTotalCount func(ctx *graphql.FieldContext) (interface{}, error)
+	ResolveTotalCount func(ctx graphql.FieldContext) (interface{}, error)
 
 	// CursorType allows the connection to deserialize cursors. It is required for all connections.
 	CursorType reflect.Type
@@ -170,7 +170,7 @@ var defaultConnectionArguments = map[string]*graphql.InputValueDefinition{
 	},
 }
 
-func defaultConnectionCost(ctx *graphql.FieldCostContext) graphql.FieldCost {
+func defaultConnectionCost(ctx graphql.FieldCostContext) graphql.FieldCost {
 	maxCount, _ := ctx.Arguments["first"].(int)
 	if last, ok := ctx.Arguments["last"].(int); ok {
 		maxCount = last
@@ -203,7 +203,7 @@ func ConnectionInterface(config *ConnectionInterfaceConfig) *graphql.InterfaceTy
 		Fields: map[string]*graphql.FieldDefinition{
 			"edges": {
 				Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edge))),
-				Cost: func(ctx *graphql.FieldCostContext) graphql.FieldCost {
+				Cost: func(ctx graphql.FieldCostContext) graphql.FieldCost {
 					return graphql.FieldCost{
 						Resolver:   0,
 						Multiplier: ctx.Context.Value(maxEdgeCountContextKey).(int),
@@ -282,7 +282,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		"cursor": {
 			Type: graphql.NewNonNullType(graphql.StringType),
 			Cost: graphql.FieldResolverCost(0),
-			Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 				s, err := serializeCursor(ctx.Object.(edge).Cursor)
 				if err != nil {
 					return nil, errors.Wrap(err, "error serializing cursor")
@@ -294,10 +294,9 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	for k, v := range config.EdgeFields {
 		def := *v
 		resolve := def.Resolve
-		def.Resolve = func(ctxIn *graphql.FieldContext) (interface{}, error) {
-			ctx := *ctxIn
-			ctx.Object = ctxIn.Object.(edge).Value
-			return resolve(&ctx)
+		def.Resolve = func(ctx graphql.FieldContext) (interface{}, error) {
+			ctx.Object = ctx.Object.(edge).Value
+			return resolve(ctx)
 		}
 		edgeFields[k] = &def
 	}
@@ -324,13 +323,13 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Fields: map[string]*graphql.FieldDefinition{
 			"edges": {
 				Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edgeType))),
-				Cost: func(ctx *graphql.FieldCostContext) graphql.FieldCost {
+				Cost: func(ctx graphql.FieldCostContext) graphql.FieldCost {
 					return graphql.FieldCost{
 						Resolver:   0,
 						Multiplier: ctx.Context.Value(maxEdgeCountContextKey).(int),
 					}
 				},
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object.(*connection).Edges, nil
 				},
 			},
@@ -340,7 +339,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				// ResolvePageInfo will be trivial or 0 edges were requested and all work was
 				// delayed until now.
 				Cost: graphql.FieldResolverCost(0),
-				Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object.(*connection).ResolvePageInfo()
 				},
 			},
@@ -355,7 +354,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	if config.ResolveAllEdges != nil || config.ResolveTotalCount != nil {
 		connectionType.Fields["totalCount"] = &graphql.FieldDefinition{
 			Type: graphql.NewNonNullType(graphql.IntType),
-			Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 				return ctx.Object.(*connection).ResolveTotalCount()
 			},
 		}
@@ -366,7 +365,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Description: config.Description,
 		Arguments:   config.Arguments,
 	})
-	ret.Resolve = func(ctx *graphql.FieldContext) (interface{}, error) {
+	ret.Resolve = func(ctx graphql.FieldContext) (interface{}, error) {
 		if first, ok := ctx.Arguments["first"].(int); ok {
 			if first < 0 {
 				return nil, fmt.Errorf("The `first` argument cannot be negative.")
@@ -443,7 +442,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	return ret
 }
 
-func completeConnection(config *ConnectionConfig, ctx *graphql.FieldContext, beforeCursor, afterCursor interface{}, cursorLess func(a, b interface{}) bool, edgeSlice interface{}) (interface{}, error) {
+func completeConnection(config *ConnectionConfig, ctx graphql.FieldContext, beforeCursor, afterCursor interface{}, cursorLess func(a, b interface{}) bool, edgeSlice interface{}) (interface{}, error) {
 	if edgeSlice, ok := edgeSlice.(graphql.ResolvePromise); ok {
 		return chain(ctx.Context, edgeSlice, func(edgeSlice interface{}) (interface{}, error) {
 			return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
@@ -553,13 +552,13 @@ type TimeBasedConnectionConfig struct {
 	// returned. If limit is greater than zero, up to limit edges at the start of the range should
 	// be returned. If limit is less than zero, up to -limit edge at the end of the range should be
 	// returned.
-	EdgeGetter func(ctx *graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error)
+	EdgeGetter func(ctx graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error)
 
 	// An optional map of additional arguments to add to the connection.
 	Arguments map[string]*graphql.InputValueDefinition
 
 	// To support the "totalCount" connection field, you can provide this method.
-	ResolveTotalCount func(ctx *graphql.FieldContext) (interface{}, error)
+	ResolveTotalCount func(ctx graphql.FieldContext) (interface{}, error)
 
 	// The connection will implement these interfaces. If any of the interfaces define an edge
 	// field as an interface, this connection's edges will also implement that interface.
@@ -599,7 +598,7 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 		EdgeFields:        config.EdgeFields,
 		CursorType:        reflect.TypeOf(TimeBasedCursor{}),
 		ResolveTotalCount: config.ResolveTotalCount,
-		ResolveEdges: func(ctx *graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
+		ResolveEdges: func(ctx graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
 			type Query struct {
 				Min   time.Time
 				Max   time.Time

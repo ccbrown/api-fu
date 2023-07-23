@@ -59,7 +59,7 @@ type FieldCostContext = schema.FieldCostContext
 type FieldCost = schema.FieldCost
 
 // Returns a cost function which returns a constant resolver cost with no multiplier.
-func FieldResolverCost(n int) func(*FieldCostContext) FieldCost {
+func FieldResolverCost(n int) func(FieldCostContext) FieldCost {
 	return schema.FieldResolverCost(n)
 }
 

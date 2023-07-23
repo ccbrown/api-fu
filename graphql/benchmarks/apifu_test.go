@@ -19,7 +19,7 @@ func BenchmarkAPIFu(b *testing.B) {
 	objectType.Fields = map[string]*graphql.FieldDefinition{
 		"string": {
 			Type: graphql.StringType,
-			Resolve: func(*graphql.FieldContext) (interface{}, error) {
+			Resolve: func(graphql.FieldContext) (interface{}, error) {
 				return "foo", nil
 			},
 		},
@@ -30,7 +30,7 @@ func BenchmarkAPIFu(b *testing.B) {
 					Type: graphql.NewNonNullType(graphql.IntType),
 				},
 			},
-			Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 				return make([]struct{}, ctx.Arguments["count"].(int)), nil
 			},
 		},

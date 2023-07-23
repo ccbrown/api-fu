@@ -24,14 +24,14 @@ func TestGraphQLWS(t *testing.T) {
 
 	testCfg.AddQueryField("foo", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return true, nil
 		},
 	})
 
 	testCfg.AddSubscription("time", &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(DateTimeType),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			if ctx.IsSubscribe {
 				ticker := time.NewTicker(time.Second)
 				return &SubscriptionSourceStream{
@@ -144,7 +144,7 @@ func TestGraphQLWS_InitParameters(t *testing.T) {
 
 	testCfg.AddQueryField("whoami", &graphql.FieldDefinition{
 		Type: graphql.StringType,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return ctx.Context.Value("name"), nil
 		},
 	})
@@ -256,14 +256,14 @@ func TestGraphQLWSTransport(t *testing.T) {
 
 	testCfg.AddQueryField("foo", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return true, nil
 		},
 	})
 
 	testCfg.AddSubscription("time", &graphql.FieldDefinition{
 		Type: graphql.NewNonNullType(DateTimeType),
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			if ctx.IsSubscribe {
 				ticker := time.NewTicker(time.Second)
 				return &SubscriptionSourceStream{
@@ -373,7 +373,7 @@ func TestGraphQLTransportWS_InitParameters(t *testing.T) {
 
 	testCfg.AddQueryField("whoami", &graphql.FieldDefinition{
 		Type: graphql.StringType,
-		Resolve: func(ctx *graphql.FieldContext) (interface{}, error) {
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return ctx.Context.Value("name"), nil
 		},
 	})
