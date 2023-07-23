@@ -427,12 +427,13 @@ func (e *executor) collectFields(objectType *schema.ObjectType, selections []ast
 	// collectFields can be called many times with the same inputs throughout a query's execution,
 	// so we memoize the return value.
 
-	cacheKeyBytes := make([]byte, len(objectType.Name)+16*len(selections))
+	objectNameLen := len(objectType.Name)
+	cacheKeyBytes := make([]byte, objectNameLen+8*len(selections))
 	copy(cacheKeyBytes, objectType.Name)
 	for i, sel := range selections {
 		pos := sel.Position()
-		binary.LittleEndian.PutUint64(cacheKeyBytes[len(objectType.Name)+i*16:], uint64(pos.Line))
-		binary.LittleEndian.PutUint64(cacheKeyBytes[len(objectType.Name)+i*16+8:], uint64(pos.Column))
+		binary.LittleEndian.PutUint32(cacheKeyBytes[objectNameLen+i*8:], uint32(pos.Line))
+		binary.LittleEndian.PutUint32(cacheKeyBytes[objectNameLen+i*8+4:], uint32(pos.Column))
 	}
 	cacheKey := string(cacheKeyBytes)
 
