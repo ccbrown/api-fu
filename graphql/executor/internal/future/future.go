@@ -91,6 +91,58 @@ func MapOk[T any, U any](f Future[T], fn func(T) U) Future[U] {
 	}
 }
 
+// MapOk converts a future's value to an `any` type.
+func MapOkToAny[T any](f Future[T]) Future[any] {
+	if f.IsReady() {
+		var r Result[any]
+		if f.result.IsOk() {
+			r.Value = f.result.Value
+		} else {
+			r.Error = f.result.Error
+		}
+		return Future[any]{
+			result: r,
+		}
+	} else {
+		return Future[any]{
+			poll: func() (Result[any], bool) {
+				r, ok := f.poll()
+				var r2 Result[any]
+				if ok && r.IsOk() {
+					r2.Value = r.Value
+				}
+				return r2, ok
+			},
+		}
+	}
+}
+
+// MapOk converts a future's value to a value of a different type.
+func MapOkValue[T any, U any](f Future[T], v U) Future[U] {
+	if f.IsReady() {
+		var r Result[U]
+		if f.result.IsOk() {
+			r.Value = v
+		} else {
+			r.Error = f.result.Error
+		}
+		return Future[U]{
+			result: r,
+		}
+	} else {
+		return Future[U]{
+			poll: func() (Result[U], bool) {
+				r, ok := f.poll()
+				var r2 Result[U]
+				if ok && r.IsOk() {
+					r2.Value = v
+				}
+				return r2, ok
+			},
+		}
+	}
+}
+
 // Then invokes f when the future is resolved and returns a future that resolves when f's return
 // value is resolved.
 func Then[T any, U any](f Future[T], fn func(Result[T]) Future[U]) Future[U] {
