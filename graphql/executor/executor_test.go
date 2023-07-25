@@ -499,6 +499,12 @@ func BenchmarkExecuteRequest(b *testing.B) {
 				return "foo", nil
 			},
 		},
+		"nonNullString": {
+			Type: schema.NewNonNullType(schema.StringType),
+			Resolve: func(schema.FieldContext) (interface{}, error) {
+				return "foo", nil
+			},
+		},
 		"objects": {
 			Type: schema.NewListType(objectType),
 			Arguments: map[string]*schema.InputValueDefinition{
@@ -520,8 +526,10 @@ func BenchmarkExecuteRequest(b *testing.B) {
 		string
 		objects(count: 20) {
 			string
+			nonNullString
 			objects(count: 100) {
 				string
+				nonNullString
 			}
 		}
 	}`))

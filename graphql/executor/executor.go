@@ -230,12 +230,13 @@ func wait[T any](e *executor, f future.Future[T]) (T, error) {
 	return result.Value, result.Error
 }
 
-func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue any, path *path, forceSerial bool) future.Future[*OrderedMap] {
+func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue any, pathIn *path, forceSerial bool) future.Future[*OrderedMap] {
 	groupedFieldSet := e.collectFields(objectType, selections)
 
 	resultMap := NewOrderedMapWithLength(groupedFieldSet.Len())
 
 	var futures []future.Future[any]
+	var recyclablePath *path
 
 	for i, item := range groupedFieldSet.Items() {
 		responseKey := item.Key
@@ -253,13 +254,22 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 
 		if fieldDef != nil {
-			f := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, path.WithStringComponent(responseKey)))
+			itemPath := recyclablePath
+			if itemPath == nil {
+				itemPath = pathIn.WithStringComponent(responseKey)
+			} else {
+				itemPath.StringComponent = responseKey
+				recyclablePath = nil
+			}
+
+			f := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, itemPath))
 			if forceSerial || f.IsReady() {
 				responseValue, err := wait(e, f)
 				if err != nil {
 					return future.Err[*OrderedMap](err)
 				}
 				resultMap.Set(i, responseKey, responseValue)
+				recyclablePath = itemPath
 			} else {
 				i := i
 				responseKey := responseKey
@@ -345,11 +355,19 @@ func (e *executor) catchErrorIfNullable(t schema.Type, f future.Future[any]) fut
 	return future.Map(f, e.CatchError)
 }
 
-func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result any, path *path) future.Future[any] {
+func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result any, pathIn *path) future.Future[any] {
 	if nonNullType, ok := fieldType.(*schema.NonNullType); ok {
-		return future.Map(e.completeValue(nonNullType.Type, fields, result, path), func(r future.Result[any]) future.Result[any] {
+		fut := e.completeValue(nonNullType.Type, fields, result, pathIn)
+		if fut.IsReady() {
+			r := fut.Result()
 			if r.IsOk() && r.Value == nil {
-				r.Error = newErrorWithPath(fields[0], path, "Null result for non-null field.")
+				return future.Err[any](newErrorWithPath(fields[0], pathIn, "Null result for non-null field."))
+			}
+			return future.Ok[any](r.Value)
+		}
+		return future.Map(fut, func(r future.Result[any]) future.Result[any] {
+			if r.IsOk() && r.Value == nil {
+				r.Error = newErrorWithPath(fields[0], pathIn, "Null result for non-null field.")
 			}
 			return r
 		})
@@ -363,24 +381,36 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 	case *schema.ListType:
 		result := reflect.ValueOf(result)
 		if result.Kind() != reflect.Slice {
-			return future.Err[any](newErrorWithPath(fields[0], path, "Result is not a list."))
+			return future.Err[any](newErrorWithPath(fields[0], pathIn, "Result is not a list."))
 		}
 		innerType := fieldType.Type
 		completedResult := make([]future.Future[any], result.Len())
+		var recyclablePath *path
 		for i := range completedResult {
-			completedResult[i] = e.catchErrorIfNullable(innerType, e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithIntComponent(i)))
+			itemPath := recyclablePath
+			if itemPath == nil {
+				itemPath = pathIn.WithIntComponent(i)
+			} else {
+				itemPath.IntComponent = i
+				recyclablePath = nil
+			}
+			fut := e.catchErrorIfNullable(innerType, e.completeValue(innerType, fields, result.Index(i).Interface(), itemPath))
+			if fut.IsReady() {
+				recyclablePath = itemPath
+			}
+			completedResult[i] = fut
 		}
 		return future.MapOkToAny(future.Join(completedResult...))
 	case *schema.ScalarType:
 		coerced, err := fieldType.CoerceResult(result)
 		if err != nil {
-			return future.Err[any](newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
+			return future.Err[any](newErrorWithPath(fields[0], pathIn, "Unexpected result: %v", err))
 		}
 		return future.Ok(coerced)
 	case *schema.EnumType:
 		coerced, err := fieldType.CoerceResult(result)
 		if err != nil {
-			return future.Err[any](newErrorWithPath(fields[0], path, "Unexpected result: %v", err))
+			return future.Err[any](newErrorWithPath(fields[0], pathIn, "Unexpected result: %v", err))
 		}
 		return future.Ok[any](coerced)
 	case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
@@ -404,9 +434,9 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 			}
 		}
 		if objectType == nil {
-			return future.Err[any](newErrorWithPath(fields[0], path, "Unable to determine object type."))
+			return future.Err[any](newErrorWithPath(fields[0], pathIn, "Unable to determine object type."))
 		}
-		return future.MapOkToAny(e.executeSelections(mergeSelectionSets(fields), objectType, result, path, false))
+		return future.MapOkToAny(e.executeSelections(mergeSelectionSets(fields), objectType, result, pathIn, false))
 	}
 	panic(fmt.Sprintf("unexpected field type: %T", fieldType))
 }
