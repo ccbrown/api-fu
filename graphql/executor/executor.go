@@ -256,7 +256,11 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 				}
 				resultMap.Set(i, responseKey, responseValue)
 			} else if f.IsReady() {
-				resultMap.Set(i, responseKey, f.Result().Value)
+				if r := f.Result(); r.IsErr() {
+					return future.Err[*OrderedMap](r.Error)
+				} else {
+					resultMap.Set(i, responseKey, f.Result().Value)
+				}
 			} else {
 				i := i
 				responseKey := responseKey
