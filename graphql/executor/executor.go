@@ -259,7 +259,7 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 				if r := f.Result(); r.IsErr() {
 					return future.Err[*OrderedMap](r.Error)
 				} else {
-					resultMap.Set(i, responseKey, f.Result().Value)
+					resultMap.Set(i, responseKey, r.Value)
 				}
 			} else {
 				i := i
