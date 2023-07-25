@@ -16,7 +16,7 @@ import (
 // ResolveResult represents the result of a field resolver. This type is generally used with
 // ResolvePromise to pass around asynchronous results.
 type ResolveResult struct {
-	Value interface{}
+	Value any
 	Error error
 }
 
@@ -31,8 +31,8 @@ type Request struct {
 	Document       *ast.Document
 	Schema         *schema.Schema
 	OperationName  string
-	VariableValues map[string]interface{}
-	InitialValue   interface{}
+	VariableValues map[string]any
+	InitialValue   any
 	IdleHandler    func()
 }
 
@@ -57,7 +57,7 @@ func IsSubscription(doc *ast.Document, operationName string) bool {
 }
 
 // Subscribe resolves the root subscription field of a request and returns the result.
-func Subscribe(ctx context.Context, r *Request) (interface{}, *Error) {
+func Subscribe(ctx context.Context, r *Request) (any, *Error) {
 	if e, err := newExecutor(ctx, r); err != nil {
 		return nil, err
 	} else if e.Operation.OperationType != nil && e.Operation.OperationType.Value == "subscription" {
@@ -71,7 +71,7 @@ type executor struct {
 	Context             context.Context
 	Schema              *schema.Schema
 	FragmentDefinitions map[string]*ast.FragmentDefinition
-	VariableValues      map[string]interface{}
+	VariableValues      map[string]any
 	Errors              []*Error
 	Operation           *ast.OperationDefinition
 	IdleHandler         func()
@@ -118,7 +118,7 @@ func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 	return e, nil
 }
 
-func (e *executor) executeQuery(initialValue interface{}) (*OrderedMap, []*Error) {
+func (e *executor) executeQuery(initialValue any) (*OrderedMap, []*Error) {
 	queryType := e.Schema.QueryType()
 	if !schema.IsObjectType(queryType) {
 		return nil, []*Error{newError(e.Operation, "This schema cannot perform queries.")}
@@ -132,7 +132,7 @@ func (e *executor) executeQuery(initialValue interface{}) (*OrderedMap, []*Error
 	return nil, nil
 }
 
-func (e *executor) executeMutation(initialValue interface{}) (*OrderedMap, []*Error) {
+func (e *executor) executeMutation(initialValue any) (*OrderedMap, []*Error) {
 	mutationType := e.Schema.MutationType()
 	if !schema.IsObjectType(mutationType) {
 		return nil, []*Error{newError(e.Operation, "This schema cannot perform mutations.")}
@@ -146,7 +146,7 @@ func (e *executor) executeMutation(initialValue interface{}) (*OrderedMap, []*Er
 	return nil, nil
 }
 
-func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
+func (e *executor) subscribe(initialValue any) (any, *Error) {
 	subscriptionType := e.Schema.SubscriptionType()
 	if !schema.IsObjectType(subscriptionType) {
 		return nil, newError(e.Operation, "This schema cannot perform subscriptions.")
@@ -185,14 +185,14 @@ func (e *executor) subscribe(initialValue interface{}) (interface{}, *Error) {
 				Line:   field.Position().Line,
 				Column: field.Position().Column,
 			}},
-			Path:          []interface{}{item.Key},
+			Path:          []any{item.Key},
 			originalError: resolveErr,
 		}
 	}
 	return resolveValue, nil
 }
 
-func (e *executor) executeSubscriptionEvent(initialValue interface{}) (*OrderedMap, []*Error) {
+func (e *executor) executeSubscriptionEvent(initialValue any) (*OrderedMap, []*Error) {
 	subscriptionType := e.Schema.SubscriptionType()
 	if !schema.IsObjectType(subscriptionType) {
 		return nil, []*Error{newError(e.Operation, "This schema cannot perform subscriptions.")}
@@ -225,12 +225,12 @@ func wait[T any](e *executor, f future.Future[T]) (T, error) {
 	return result.Value, result.Error
 }
 
-func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue interface{}, path *path, forceSerial bool) future.Future[*OrderedMap] {
+func (e *executor) executeSelections(selections []ast.Selection, objectType *schema.ObjectType, objectValue any, path *path, forceSerial bool) future.Future[*OrderedMap] {
 	groupedFieldSet := e.collectFields(objectType, selections)
 
 	resultMap := NewOrderedMapWithLength(groupedFieldSet.Len())
 
-	futures := make([]future.Future[any], 0, groupedFieldSet.Len())
+	var futures []future.Future[any]
 
 	for i, item := range groupedFieldSet.Items() {
 		responseKey := item.Key
@@ -255,6 +255,12 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 					return future.Err[*OrderedMap](err)
 				}
 				resultMap.Set(i, responseKey, responseValue)
+			} else if f.IsReady() {
+				if r := f.Result(); r.IsErr() {
+					return future.Err[*OrderedMap](r.Error)
+				} else {
+					resultMap.Set(i, responseKey, r.Value)
+				}
 			} else {
 				i := i
 				responseKey := responseKey
@@ -266,12 +272,10 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 		}
 	}
 
-	return future.MapOk(future.After(futures...), func(struct{}) *OrderedMap {
-		return resultMap
-	})
+	return future.MapOkValue(future.After(futures...), resultMap)
 }
 
-func isNil(v interface{}) bool {
+func isNil(v any) bool {
 	if v == nil {
 		return true
 	}
@@ -293,7 +297,7 @@ func newFieldResolveError(fields []*ast.Field, err error, path *path) *Error {
 	}
 }
 
-func (e *executor) executeField(objectValue interface{}, fields []*ast.Field, fieldDef *schema.FieldDefinition, path *path) future.Future[any] {
+func (e *executor) executeField(objectValue any, fields []*ast.Field, fieldDef *schema.FieldDefinition, path *path) future.Future[any] {
 	field := fields[0]
 	argumentValues, coercionErr := coerceArgumentValues(field, fieldDef.Arguments, field.Arguments, e.VariableValues)
 	if coercionErr != nil {
@@ -342,7 +346,7 @@ func (e *executor) catchErrorIfNullable(t schema.Type, f future.Future[any]) fut
 	return future.Map(f, e.CatchError)
 }
 
-func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result interface{}, path *path) future.Future[any] {
+func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, result any, path *path) future.Future[any] {
 	if nonNullType, ok := fieldType.(*schema.NonNullType); ok {
 		return future.Map(e.completeValue(nonNullType.Type, fields, result, path), func(r future.Result[any]) future.Result[any] {
 			if r.IsOk() && r.Value == nil {
@@ -367,9 +371,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		for i := range completedResult {
 			completedResult[i] = e.catchErrorIfNullable(innerType, e.completeValue(innerType, fields, result.Index(i).Interface(), path.WithIntComponent(i)))
 		}
-		return future.MapOk(future.Join(completedResult...), func(l []interface{}) interface{} {
-			return l
-		})
+		return future.MapOkToAny(future.Join(completedResult...))
 	case *schema.ScalarType:
 		coerced, err := fieldType.CoerceResult(result)
 		if err != nil {
@@ -405,9 +407,7 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 		if objectType == nil {
 			return future.Err[any](newErrorWithPath(fields[0], path, "Unable to determine object type."))
 		}
-		return future.MapOk(e.executeSelections(mergeSelectionSets(fields), objectType, result, path, false), func(m *OrderedMap) interface{} {
-			return m
-		})
+		return future.MapOkToAny(e.executeSelections(mergeSelectionSets(fields), objectType, result, path, false))
 	}
 	panic(fmt.Sprintf("unexpected field type: %T", fieldType))
 }
@@ -572,12 +572,12 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 	return nil
 }
 
-func coerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, variableValues map[string]interface{}) (map[string]interface{}, *Error) {
+func coerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, variableValues map[string]any) (map[string]any, *Error) {
 	ret, err := validator.CoerceVariableValues(s, operation, variableValues)
 	return ret, newErrorWithValidatorError(err)
 }
 
-func coerceArgumentValues(node ast.Node, argumentDefinitions map[string]*schema.InputValueDefinition, arguments []*ast.Argument, variableValues map[string]interface{}) (map[string]interface{}, *Error) {
+func coerceArgumentValues(node ast.Node, argumentDefinitions map[string]*schema.InputValueDefinition, arguments []*ast.Argument, variableValues map[string]any) (map[string]any, *Error) {
 	ret, err := validator.CoerceArgumentValues(node, argumentDefinitions, arguments, variableValues)
 	return ret, newErrorWithValidatorError(err)
 }
