@@ -207,6 +207,11 @@ func (e *executor) executeSubscriptionEvent(initialValue any) (*OrderedMap, []*E
 }
 
 func wait[T any](e *executor, f future.Future[T]) (T, error) {
+	if f.IsReady() {
+		r := f.Result()
+		return r.Value, r.Error
+	}
+
 	var result future.Result[T]
 	done := false
 	f = future.Map(f, func(r future.Result[T]) future.Result[T] {
@@ -249,18 +254,12 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 
 		if fieldDef != nil {
 			f := e.catchErrorIfNullable(fieldDef.Type, e.executeField(objectValue, fields, fieldDef, path.WithStringComponent(responseKey)))
-			if forceSerial {
+			if forceSerial || f.IsReady() {
 				responseValue, err := wait(e, f)
 				if err != nil {
 					return future.Err[*OrderedMap](err)
 				}
 				resultMap.Set(i, responseKey, responseValue)
-			} else if f.IsReady() {
-				if r := f.Result(); r.IsErr() {
-					return future.Err[*OrderedMap](r.Error)
-				} else {
-					resultMap.Set(i, responseKey, r.Value)
-				}
 			} else {
 				i := i
 				responseKey := responseKey
@@ -413,6 +412,11 @@ func (e *executor) completeValue(fieldType schema.Type, fields []*ast.Field, res
 }
 
 func mergeSelectionSets(fields []*ast.Field) []ast.Selection {
+	// In the common case, there's nothing to merge.
+	if len(fields) == 1 && fields[0].SelectionSet != nil {
+		return fields[0].SelectionSet.Selections
+	}
+
 	var selectionSet []ast.Selection
 	for _, field := range fields {
 		if field.SelectionSet == nil {
