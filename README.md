@@ -8,6 +8,13 @@
 * The top level `apifu` package is an opinionated library that aims to make it as easy as possible to build APIs that conform to API-fu's ideals. See the examples directory for example usage.
 * The `graphql` package is an unopinionated library for building GraphQL APIs. If you agree with API-fu's ideals, you should use `apifu` instead, but if you want something lower level, the `graphql` package is still an excellent standalone GraphQL library. It fully supports all features of the [June 2018 spec](https://graphql.github.io/graphql-spec/June2018/).
 * The `graphql/transport` directory contains unopinionated libraries for using various transport protocols. For example, it contains transport implementations that allow you to serve your GraphQL API via WebSockets and provide subscription functionality.
+* The `cmd/gql-client-gen` package provides a CLI tool that can be used to generate types for use by client code. THis allows your client's queries to be type-safe and fully validated at compile time.
+
+### Experimental Packages
+
+The above packages are mature and have been thoroughly proven in real-world, production deployments. The following packages have not yet seen such rigorous real-world testing and are thus considered experimental. They are fully functional and well unit tested, but may change at any time and are not yet subject to any compatibility guarantees.
+
+* The `jsonapi` package is a library for building [JSON:API](https://jsonapi.org) APIs. It's somewhat high level, but is no more opinionated than JSON:API itself is. However, it does hold some of those opinions more strongly (i.e. it doesn't support violating many of the JSON:API spec's recommendations and "SHOULD"s).
 
 ## Usage
 
@@ -161,4 +168,4 @@ The following are guidelines that are recommended for all new GraphQL APIs. API-
 
 ## Versioning and Compatibility Guarantees
 
-This library is not versioned. However, one guarantee is made: Any backwards-incompatible changes made will break your build at compile-time. If your application compiles after updating API-fu, you're good to go.
+This library is not versioned. However, one guarantee is made: Unless otherwise noted, backwards-incompatible changes made will break your build at compile-time. If your application compiles after updating API-fu, you're good to go.
