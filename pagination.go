@@ -645,6 +645,9 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 					promises = append(promises, promise)
 				} else {
 					v := reflect.ValueOf(queryEdges)
+					if v.Kind() == reflect.Invalid || v.IsNil() {
+						continue
+					}
 					for i := 0; i < v.Len(); i++ {
 						edges = append(edges, v.Index(i).Interface())
 					}
