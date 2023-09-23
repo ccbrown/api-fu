@@ -307,6 +307,9 @@ func TestTimeBasedConnection(t *testing.T) {
 			},
 		},
 		EdgeGetter: func(ctx graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error) {
+			if limit == 0 {
+				return nil, nil
+			}
 			var ret []time.Time
 			for _, edge := range edges {
 				if !edge.Before(minTime) && !edge.After(maxTime) {
@@ -472,6 +475,22 @@ func TestTimeBasedConnection(t *testing.T) {
 							{"node":"2020-01-01T00:00:02Z"},
 							{"node":"2020-01-01T00:00:03Z"}
 						]
+					}
+				}
+			}`,
+		},
+		"Empty": {
+			Query: `{
+				connection(last: 0, before: "") {
+					edges {
+						node
+					}
+				}
+			}`,
+			ExpectedJSON: `{
+				"data":{
+					"connection":{
+						"edges":[]
 					}
 				}
 			}`,
