@@ -4,7 +4,6 @@ import (
 	"context"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"testing"
 
 	"github.com/ccbrown/api-fu/graphql"
@@ -14,41 +13,39 @@ import (
 )
 
 func TestFields(t *testing.T) {
-	const nodeTypeId = 10
-
-	testCfg := Config{
-		SerializeNodeId: func(typeId int, id interface{}) string {
-			assert.Equal(t, nodeTypeId, typeId)
-			return id.(string)
-		},
-		DeserializeNodeId: func(id string) (int, interface{}) {
-			return nodeTypeId, id
-		},
-	}
-
 	type node struct {
 		Id string
 	}
 
-	nodeType := testCfg.AddNodeType(&NodeType{
-		Id:    nodeTypeId,
-		Name:  "TestNode",
-		Model: reflect.TypeOf(node{}),
-		GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
-			var ret []*node
-			for _, id := range ids.([]string) {
+	testCfg := Config{
+		ResolveNodesByGlobalIds: func(ctx context.Context, ids []string) ([]interface{}, error) {
+			var ret []interface{}
+			for _, id := range ids {
 				if id == "a" || id == "b" {
-					ret = append(ret, &node{
-						Id: id,
-					})
+					ret = append(ret, &node{Id: id})
 				}
 			}
 			return ret, nil
 		},
+	}
+
+	nodeType := &graphql.ObjectType{
+		Name: "TestNode",
 		Fields: map[string]*graphql.FieldDefinition{
-			"id": OwnID("Id"),
+			"id": {
+				Type: graphql.NewNonNullType(graphql.IDType),
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+					return ctx.Object.(*node).Id, nil
+				},
+			},
 		},
-	})
+		ImplementedInterfaces: []*graphql.InterfaceType{testCfg.NodeInterface()},
+		IsTypeOf: func(value interface{}) bool {
+			_, ok := value.(*node)
+			return ok
+		},
+	}
+	testCfg.AddNamedType(nodeType)
 
 	// If this is not executed asynchronously alongside a matching asyncReceiver, it will deadlock.
 	testCfg.AddQueryField("obj", &graphql.FieldDefinition{
@@ -58,8 +55,6 @@ func TestFields(t *testing.T) {
 				"int": NonNull(graphql.IntType, "Int"),
 				"s0":  NonEmptyString("S0"),
 				"s1":  NonEmptyString("S1"),
-				"n":   Node(nodeType, "NodeId"),
-				"nid": NonNullNodeID(reflect.TypeOf(node{}), "NodeId"),
 			},
 		},
 		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
@@ -69,8 +64,7 @@ func TestFields(t *testing.T) {
 				S1     string
 				NodeId string
 			}{
-				S1:     "foo",
-				NodeId: "foo",
+				S1: "foo",
 			}, nil
 		},
 	})
@@ -83,10 +77,6 @@ func TestFields(t *testing.T) {
 			int
 			s0
 			s1
-			n {
-				id
-			}
-			nid
 		}
 	}`)
 
@@ -94,5 +84,5 @@ func TestFields(t *testing.T) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"data":{"obj":{"int":0,"s0":null,"s1":"foo","n":null,"nid":"foo"}}}`, string(body))
+	assert.JSONEq(t, `{"data":{"obj":{"int":0,"s0":null,"s1":"foo"}}}`, string(body))
 }
