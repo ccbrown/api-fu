@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -108,39 +107,36 @@ func TestBatch(t *testing.T) {
 }
 
 func TestNodes(t *testing.T) {
-	const nodeTypeId = 10
-
-	testCfg := Config{
-		SerializeNodeId: func(typeId int, id interface{}) string {
-			assert.Equal(t, nodeTypeId, typeId)
-			return id.(string)
-		},
-		DeserializeNodeId: func(id string) (int, interface{}) {
-			return nodeTypeId, id
-		},
-	}
-
 	type node struct {
 		Id string
 	}
 
-	testCfg.AddNodeType(&NodeType{
-		Id:    nodeTypeId,
-		Name:  "TestNode",
-		Model: reflect.TypeOf(node{}),
-		GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
-			var ret []*node
-			for _, id := range ids.([]string) {
+	testCfg := Config{
+		ResolveNodesByGlobalIds: func(ctx context.Context, ids []string) ([]interface{}, error) {
+			var ret []interface{}
+			for _, id := range ids {
 				if id == "a" || id == "b" {
-					ret = append(ret, &node{
-						Id: id,
-					})
+					ret = append(ret, &node{Id: id})
 				}
 			}
 			return ret, nil
 		},
+	}
+
+	testCfg.AddNamedType(&graphql.ObjectType{
+		Name: "TestNode",
 		Fields: map[string]*graphql.FieldDefinition{
-			"id": OwnID("Id"),
+			"id": {
+				Type: graphql.NewNonNullType(graphql.IDType),
+				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+					return ctx.Object.(*node).Id, nil
+				},
+			},
+		},
+		ImplementedInterfaces: []*graphql.InterfaceType{testCfg.NodeInterface()},
+		IsTypeOf: func(value interface{}) bool {
+			_, ok := value.(*node)
+			return ok
 		},
 	})
 

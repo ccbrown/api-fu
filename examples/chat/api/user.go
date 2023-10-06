@@ -1,26 +1,28 @@
 package api
 
 import (
-	"context"
-	"reflect"
-
-	"github.com/ccbrown/api-fu"
+	apifu "github.com/ccbrown/api-fu"
 	"github.com/ccbrown/api-fu/examples/chat/model"
 	"github.com/ccbrown/api-fu/graphql"
 )
 
-var userType = fuCfg.AddNodeType(&apifu.NodeType{
-	Id:    1,
-	Name:  "User",
-	Model: reflect.TypeOf(model.User{}),
-	GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
-		return ctxSession(ctx).GetUsersByIds(ids.([]model.Id)...)
-	},
+var userType = &graphql.ObjectType{
+	Name: "User",
 	Fields: map[string]*graphql.FieldDefinition{
-		"id":     apifu.OwnID("Id"),
+		"id": {
+			Type: graphql.NewNonNullType(graphql.IDType),
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+				return SerializeNodeId(UserTypeId, ctx.Object.(*model.User).Id), nil
+			},
+		},
 		"handle": apifu.NonNull(graphql.StringType, "Handle"),
 	},
-})
+	ImplementedInterfaces: []*graphql.InterfaceType{fuCfg.NodeInterface()},
+	IsTypeOf: func(value interface{}) bool {
+		_, ok := value.(*model.User)
+		return ok
+	},
+}
 
 func init() {
 	fuCfg.AddMutation("createUser", &graphql.FieldDefinition{

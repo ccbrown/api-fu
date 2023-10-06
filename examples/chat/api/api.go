@@ -12,28 +12,67 @@ import (
 	"github.com/ccbrown/api-fu/examples/chat/model"
 )
 
-func DeserializeId(id string) model.Id {
+const (
+	UserTypeId    = 1
+	ChannelTypeId = 2
+	MessageTypeId = 3
+)
+
+func SerializeNodeId(typeId int, id model.Id) string {
+	buf := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutVarint(buf, int64(typeId))
+	return base64.RawURLEncoding.EncodeToString(append(buf[:n], id...))
+}
+
+func DeserializeNodeId(id string) (int, model.Id) {
 	if buf, err := base64.RawURLEncoding.DecodeString(id); err == nil {
-		if _, n := binary.Varint(buf); n > 0 {
-			return model.Id(buf[n:])
+		if typeId, n := binary.Varint(buf); n > 0 {
+			return int(typeId), model.Id(buf[n:])
 		}
 	}
-	return nil
+	return 0, nil
 }
 
 var fuCfg = apifu.Config{
-	SerializeNodeId: func(typeId int, id interface{}) string {
-		buf := make([]byte, binary.MaxVarintLen64)
-		n := binary.PutVarint(buf, int64(typeId))
-		return base64.RawURLEncoding.EncodeToString(append(buf[:n], id.(model.Id)...))
-	},
-	DeserializeNodeId: func(id string) (int, interface{}) {
-		if buf, err := base64.RawURLEncoding.DecodeString(id); err == nil {
-			if typeId, n := binary.Varint(buf); n > 0 {
-				return int(typeId), model.Id(buf[n:])
+	ResolveNodesByGlobalIds: func(ctx context.Context, ids []string) ([]interface{}, error) {
+		var userIds []model.Id
+		var channelIds []model.Id
+		var messageIds []model.Id
+		for _, id := range ids {
+			typeId, id := DeserializeNodeId(id)
+			switch typeId {
+			case UserTypeId:
+				userIds = append(userIds, id)
+			case ChannelTypeId:
+				channelIds = append(channelIds, id)
+			case MessageTypeId:
+				messageIds = append(messageIds, id)
 			}
 		}
-		return 0, nil
+		sess := ctxSession(ctx)
+		channels, err := sess.GetChannelsByIds(channelIds...)
+		if err != nil {
+			return nil, err
+		}
+		messages, err := sess.GetMessagesByIds(messageIds...)
+		if err != nil {
+			return nil, err
+		}
+		users, err := sess.GetUsersByIds(userIds...)
+		if err != nil {
+			return nil, err
+		}
+		ret := make([]interface{}, 0, len(ids))
+		for _, channel := range channels {
+			ret = append(ret, channel)
+		}
+		for _, message := range messages {
+			ret = append(ret, message)
+		}
+		for _, user := range users {
+			ret = append(ret, user)
+		}
+		return ret, nil
 	},
 }
 

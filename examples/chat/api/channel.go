@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"reflect"
 	"strings"
 	"time"
@@ -11,14 +10,14 @@ import (
 	"github.com/ccbrown/api-fu/graphql"
 )
 
-var channelType = fuCfg.AddNodeType(&apifu.NodeType{
-	Id:    2,
-	Name:  "Channel",
-	Model: reflect.TypeOf(model.Channel{}),
-	GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
-		return ctxSession(ctx).GetChannelsByIds(ids.([]model.Id)...)
+var channelType = &graphql.ObjectType{
+	Name:                  "Channel",
+	ImplementedInterfaces: []*graphql.InterfaceType{fuCfg.NodeInterface()},
+	IsTypeOf: func(value interface{}) bool {
+		_, ok := value.(*model.Channel)
+		return ok
 	},
-})
+}
 
 func init() {
 	type messageCursor struct {
@@ -27,10 +26,24 @@ func init() {
 	}
 
 	channelType.Fields = map[string]*graphql.FieldDefinition{
-		"id":           apifu.OwnID("Id"),
+		"id": {
+			Type: graphql.NewNonNullType(graphql.IDType),
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+				return SerializeNodeId(ChannelTypeId, ctx.Object.(*model.Channel).Id), nil
+			},
+		},
 		"name":         apifu.NonNull(graphql.StringType, "Name"),
 		"creationTime": apifu.NonNull(apifu.DateTimeType, "CreationTime"),
-		"creator":      apifu.Node(userType, "CreatorUserId"),
+		"creator": {
+			Type: userType,
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+				users, err := ctxSession(ctx.Context).GetUsersByIds(ctx.Object.(*model.Channel).CreatorUserId)
+				if err != nil || len(users) == 0 {
+					return nil, err
+				}
+				return users[0], nil
+			},
+		},
 		"messagesConnection": apifu.TimeBasedConnection(&apifu.TimeBasedConnectionConfig{
 			NamePrefix: "ChannelMessages",
 			EdgeCursor: func(edge interface{}) apifu.TimeBasedCursor {

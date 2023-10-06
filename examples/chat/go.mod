@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.3
 	github.com/sirupsen/logrus v1.4.2
-	github.com/stretchr/testify v1.3.1-0.20190712000136-221dbe5ed467
+	github.com/stretchr/testify v1.8.1
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 )

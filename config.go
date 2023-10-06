@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"reflect"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -16,9 +15,12 @@ import (
 type Config struct {
 	Logger               logrus.FieldLogger
 	WebSocketOriginCheck func(r *http.Request) bool
-	SerializeNodeId      func(typeId int, id interface{}) string
-	DeserializeNodeId    func(string) (typeId int, id interface{})
+
+	// If given, these fields will be added to the Node interface.
 	AdditionalNodeFields map[string]*graphql.FieldDefinition
+
+	// Invoked to get nodes by their global ids.
+	ResolveNodesByGlobalIds func(ctx context.Context, ids []string) ([]interface{}, error)
 
 	// If given, Apollo persisted queries are supported by the API:
 	// https://www.apollographql.com/docs/react/api/link/persisted-queries/
@@ -49,23 +51,15 @@ type Config struct {
 	// documentation.
 	PreprocessGraphQLSchemaDefinition func(schema *graphql.SchemaDefinition) error
 
-	initOnce              sync.Once
-	nodeObjectTypesByName map[string]*graphql.ObjectType
-	nodeTypesByModel      map[reflect.Type]*NodeType
-	nodeTypesById         map[int]*NodeType
-	nodeTypesByObjectType map[*graphql.ObjectType]*NodeType
-	nodeInterface         *graphql.InterfaceType
-	query                 *graphql.ObjectType
-	mutation              *graphql.ObjectType
-	subscription          *graphql.ObjectType
+	initOnce      sync.Once
+	nodeInterface *graphql.InterfaceType
+	query         *graphql.ObjectType
+	mutation      *graphql.ObjectType
+	subscription  *graphql.ObjectType
 }
 
 func (cfg *Config) init() {
 	cfg.initOnce.Do(func() {
-		cfg.nodeObjectTypesByName = make(map[string]*graphql.ObjectType)
-		cfg.nodeTypesByModel = make(map[reflect.Type]*NodeType)
-		cfg.nodeTypesById = make(map[int]*NodeType)
-		cfg.nodeTypesByObjectType = make(map[*graphql.ObjectType]*NodeType)
 		if cfg.AdditionalTypes == nil {
 			cfg.AdditionalTypes = make(map[string]graphql.NamedType)
 		}
@@ -95,7 +89,11 @@ func (cfg *Config) init() {
 					Cost: graphql.FieldResolverCost(1),
 					Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 						// TODO: batching?
-						return ctxAPI(ctx.Context).resolveNodeByGlobalId(ctx.Context, ctx.Arguments["id"].(string))
+						nodes, err := ctxAPI(ctx.Context).config.ResolveNodesByGlobalIds(ctx.Context, []string{ctx.Arguments["id"].(string)})
+						if err != nil || len(nodes) == 0 {
+							return nil, err
+						}
+						return nodes[0], nil
 					},
 				},
 				"nodes": {
@@ -118,7 +116,7 @@ func (cfg *Config) init() {
 						for _, id := range ctx.Arguments["ids"].([]interface{}) {
 							ids = append(ids, id.(string))
 						}
-						return ctxAPI(ctx.Context).resolveNodesByGlobalIds(ctx.Context, ids)
+						return ctxAPI(ctx.Context).config.ResolveNodesByGlobalIds(ctx.Context, ids)
 					},
 				},
 			},
@@ -158,46 +156,17 @@ func (cfg *Config) graphqlSchema() (*graphql.Schema, error) {
 	return graphql.NewSchema(def)
 }
 
-// NodeObjectType returns the object type for a node type previously added via AddNodeType.
-func (cfg *Config) NodeObjectType(name string) *graphql.ObjectType {
-	return cfg.nodeObjectTypesByName[name]
-}
-
-// AddNodeType registers the given node type and returned the object type created for the node.
-func (cfg *Config) AddNodeType(t *NodeType) *graphql.ObjectType {
-	cfg.init()
-
-	model := normalizeModelType(t.Model)
-	if _, ok := cfg.nodeTypesByModel[model]; ok {
-		panic("node type already exists for model")
-	}
-	cfg.nodeTypesByModel[model] = t
-
-	if _, ok := cfg.nodeTypesById[t.Id]; ok {
-		panic("node type already exists for type id")
-	}
-	cfg.nodeTypesById[t.Id] = t
-
-	objectType := &graphql.ObjectType{
-		Name:                  t.Name,
-		Fields:                t.Fields,
-		ImplementedInterfaces: []*graphql.InterfaceType{cfg.nodeInterface},
-		IsTypeOf: func(v interface{}) bool {
-			return normalizeModelType(reflect.TypeOf(v)) == model
-		},
-	}
-	cfg.AdditionalTypes[t.Name] = objectType
-	cfg.nodeTypesByObjectType[objectType] = t
-	cfg.nodeObjectTypesByName[t.Name] = objectType
-
-	return objectType
-}
-
 // AddNamedType adds a named type to the schema. This is generally only required for interface
 // implementations that aren't explicitly referenced elsewhere in the schema.
 func (cfg *Config) AddNamedType(t graphql.NamedType) {
 	cfg.init()
 	cfg.AdditionalTypes[t.TypeName()] = t
+}
+
+// NodeInterface returns the node interface.
+func (cfg *Config) NodeInterface() *graphql.InterfaceType {
+	cfg.init()
+	return cfg.nodeInterface
 }
 
 // MutationType returns the root mutation type.

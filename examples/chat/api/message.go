@@ -1,30 +1,50 @@
 package api
 
 import (
-	"context"
-	"reflect"
-
 	apifu "github.com/ccbrown/api-fu"
 	"github.com/ccbrown/api-fu/examples/chat/model"
 	"github.com/ccbrown/api-fu/graphql"
 )
 
-var messageType = fuCfg.AddNodeType(&apifu.NodeType{
-	Id:    3,
-	Name:  "Message",
-	Model: reflect.TypeOf(model.Message{}),
-	GetByIds: func(ctx context.Context, ids interface{}) (interface{}, error) {
-		return ctxSession(ctx).GetMessagesByIds(ids.([]model.Id)...)
+var messageType = &graphql.ObjectType{
+	Name:                  "Message",
+	ImplementedInterfaces: []*graphql.InterfaceType{fuCfg.NodeInterface()},
+	IsTypeOf: func(value interface{}) bool {
+		_, ok := value.(*model.Message)
+		return ok
 	},
-})
+}
 
 func init() {
 	messageType.Fields = map[string]*graphql.FieldDefinition{
-		"id":      apifu.OwnID("Id"),
-		"time":    apifu.NonNull(apifu.DateTimeType, "Time"),
-		"user":    apifu.Node(userType, "UserId"),
-		"body":    apifu.NonNull(graphql.StringType, "Body"),
-		"channel": apifu.Node(channelType, "ChannelId"),
+		"id": {
+			Type: graphql.NewNonNullType(graphql.IDType),
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+				return SerializeNodeId(MessageTypeId, ctx.Object.(*model.Message).Id), nil
+			},
+		},
+		"time": apifu.NonNull(apifu.DateTimeType, "Time"),
+		"user": {
+			Type: userType,
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+				users, err := ctxSession(ctx.Context).GetUsersByIds(ctx.Object.(*model.Message).UserId)
+				if err != nil || len(users) == 0 {
+					return nil, err
+				}
+				return users[0], nil
+			},
+		},
+		"body": apifu.NonNull(graphql.StringType, "Body"),
+		"channel": {
+			Type: channelType,
+			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+				users, err := ctxSession(ctx.Context).GetChannelsByIds(ctx.Object.(*model.Message).ChannelId)
+				if err != nil || len(users) == 0 {
+					return nil, err
+				}
+				return users[0], nil
+			},
+		},
 	}
 }
 
@@ -54,8 +74,9 @@ func init() {
 						},
 					},
 					InputCoercion: func(input map[string]interface{}) (interface{}, error) {
+						_, channelId := DeserializeNodeId(input["channelId"].(string))
 						return &model.Message{
-							ChannelId: DeserializeId(input["channelId"].(string)),
+							ChannelId: channelId,
 							Body:      input["body"].(string),
 						}, nil
 					},
