@@ -16,6 +16,14 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
+type ConnectionDirection int
+
+const (
+	ConnectionDirectionBidirectional ConnectionDirection = iota
+	ConnectionDirectionForwardOnly
+	ConnectionDirectionBackwardOnly
+)
+
 // ConnectionConfig defines the configuration for a connection that adheres to the GraphQL Cursor
 // Connections Specification.
 type ConnectionConfig struct {
@@ -26,6 +34,10 @@ type ConnectionConfig struct {
 
 	// An optional description for the connection.
 	Description string
+
+	// The direction of the connection. This determines which of the first/last/before/after
+	// arguments are defined on the connection.
+	Direction ConnectionDirection
 
 	// An optional map of additional arguments to add to the connection.
 	Arguments map[string]*graphql.InputValueDefinition
@@ -155,17 +167,20 @@ type ConnectionInterfaceConfig struct {
 	HasTotalCount bool
 }
 
-var defaultConnectionArguments = map[string]*graphql.InputValueDefinition{
+var forwardConnectionArguments = map[string]*graphql.InputValueDefinition{
 	"first": {
 		Type: graphql.IntType,
 	},
+	"after": {
+		Type: graphql.StringType,
+	},
+}
+
+var backwardConnectionArguments = map[string]*graphql.InputValueDefinition{
 	"last": {
 		Type: graphql.IntType,
 	},
 	"before": {
-		Type: graphql.StringType,
-	},
-	"after": {
 		Type: graphql.StringType,
 	},
 }
@@ -234,6 +249,9 @@ type ConnectionFieldDefinitionConfig struct {
 	// The type of the connection.
 	Type graphql.Type
 
+	// The direction of the connection.
+	Direction ConnectionDirection
+
 	// An optional description for the connection field.
 	Description string
 
@@ -249,8 +267,15 @@ func ConnectionFieldDefinition(config *ConnectionFieldDefinitionConfig) *graphql
 		Cost:        defaultConnectionCost,
 		Description: config.Description,
 	}
-	for name, def := range defaultConnectionArguments {
-		ret.Arguments[name] = def
+	if config.Direction == ConnectionDirectionForwardOnly || config.Direction == ConnectionDirectionBidirectional {
+		for name, def := range forwardConnectionArguments {
+			ret.Arguments[name] = def
+		}
+	}
+	if config.Direction == ConnectionDirectionBackwardOnly || config.Direction == ConnectionDirectionBidirectional {
+		for name, def := range backwardConnectionArguments {
+			ret.Arguments[name] = def
+		}
 	}
 	for name, def := range config.Arguments {
 		ret.Arguments[name] = def
@@ -362,6 +387,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 
 	ret := ConnectionFieldDefinition(&ConnectionFieldDefinitionConfig{
 		Type:        connectionType,
+		Direction:   config.Direction,
 		Description: config.Description,
 		Arguments:   config.Arguments,
 	})
@@ -377,7 +403,14 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				return nil, fmt.Errorf("The `last` argument cannot be negative.")
 			}
 		} else {
-			return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
+			switch config.Direction {
+			case ConnectionDirectionForwardOnly:
+				return nil, fmt.Errorf("You must provide the `first` argument.")
+			case ConnectionDirectionBackwardOnly:
+				return nil, fmt.Errorf("You must provide the `last` argument.")
+			default:
+				return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
+			}
 		}
 
 		var afterCursor interface{}
