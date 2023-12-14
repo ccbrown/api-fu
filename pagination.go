@@ -169,7 +169,7 @@ type ConnectionInterfaceConfig struct {
 
 var forwardConnectionArguments = map[string]*graphql.InputValueDefinition{
 	"first": {
-		Type: graphql.IntType,
+		Type: graphql.NewNonNullType(graphql.IntType),
 	},
 	"after": {
 		Type: graphql.StringType,
@@ -177,6 +177,21 @@ var forwardConnectionArguments = map[string]*graphql.InputValueDefinition{
 }
 
 var backwardConnectionArguments = map[string]*graphql.InputValueDefinition{
+	"last": {
+		Type: graphql.NewNonNullType(graphql.IntType),
+	},
+	"before": {
+		Type: graphql.StringType,
+	},
+}
+
+var bidirectionalConnectionArguments = map[string]*graphql.InputValueDefinition{
+	"first": {
+		Type: graphql.IntType,
+	},
+	"after": {
+		Type: graphql.StringType,
+	},
 	"last": {
 		Type: graphql.IntType,
 	},
@@ -267,13 +282,17 @@ func ConnectionFieldDefinition(config *ConnectionFieldDefinitionConfig) *graphql
 		Cost:        defaultConnectionCost,
 		Description: config.Description,
 	}
-	if config.Direction == ConnectionDirectionForwardOnly || config.Direction == ConnectionDirectionBidirectional {
+	switch config.Direction {
+	case ConnectionDirectionForwardOnly:
 		for name, def := range forwardConnectionArguments {
 			ret.Arguments[name] = def
 		}
-	}
-	if config.Direction == ConnectionDirectionBackwardOnly || config.Direction == ConnectionDirectionBidirectional {
+	case ConnectionDirectionBackwardOnly:
 		for name, def := range backwardConnectionArguments {
+			ret.Arguments[name] = def
+		}
+	case ConnectionDirectionBidirectional:
+		for name, def := range bidirectionalConnectionArguments {
 			ret.Arguments[name] = def
 		}
 	}
@@ -403,14 +422,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				return nil, fmt.Errorf("The `last` argument cannot be negative.")
 			}
 		} else {
-			switch config.Direction {
-			case ConnectionDirectionForwardOnly:
-				return nil, fmt.Errorf("You must provide the `first` argument.")
-			case ConnectionDirectionBackwardOnly:
-				return nil, fmt.Errorf("You must provide the `last` argument.")
-			default:
-				return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
-			}
+			return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
 		}
 
 		var afterCursor interface{}
