@@ -35,6 +35,9 @@ type ConnectionConfig struct {
 	// An optional description for the connection.
 	Description string
 
+	// An optional deprecation reason for the connection.
+	DeprecationReason string
+
 	// The direction of the connection. This determines which of the first/last/before/after
 	// arguments are defined on the connection.
 	Direction ConnectionDirection
@@ -270,6 +273,9 @@ type ConnectionFieldDefinitionConfig struct {
 	// An optional description for the connection field.
 	Description string
 
+	// An optional deprecation reason for the connection field.
+	DeprecationReason string
+
 	// An optional map of additional arguments to add to the field.
 	Arguments map[string]*graphql.InputValueDefinition
 }
@@ -277,10 +283,11 @@ type ConnectionFieldDefinitionConfig struct {
 // Returns a minimal connection field definition, with default arguments and cost function defined.
 func ConnectionFieldDefinition(config *ConnectionFieldDefinitionConfig) *graphql.FieldDefinition {
 	ret := &graphql.FieldDefinition{
-		Type:        config.Type,
-		Arguments:   map[string]*graphql.InputValueDefinition{},
-		Cost:        defaultConnectionCost,
-		Description: config.Description,
+		Type:              config.Type,
+		Arguments:         map[string]*graphql.InputValueDefinition{},
+		Cost:              defaultConnectionCost,
+		Description:       config.Description,
+		DeprecationReason: config.DeprecationReason,
 	}
 	switch config.Direction {
 	case ConnectionDirectionForwardOnly:
@@ -405,10 +412,11 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	}
 
 	ret := ConnectionFieldDefinition(&ConnectionFieldDefinitionConfig{
-		Type:        connectionType,
-		Direction:   config.Direction,
-		Description: config.Description,
-		Arguments:   config.Arguments,
+		Type:              connectionType,
+		Direction:         config.Direction,
+		Description:       config.Description,
+		DeprecationReason: config.DeprecationReason,
+		Arguments:         config.Arguments,
 	})
 	ret.Resolve = func(ctx graphql.FieldContext) (interface{}, error) {
 		if first, ok := ctx.Arguments["first"].(int); ok {
@@ -582,6 +590,9 @@ type TimeBasedConnectionConfig struct {
 	// An optional description for the connection.
 	Description string
 
+	// An optional deprecation reason for the connection.
+	DeprecationReason string
+
 	// A required prefix for the type names. For a field named "friendsConnection" on a User type,
 	// the recommended prefix would be "UserFriends". This will result in types named
 	// "UserFriendsConnection" and "UserFriendsEdge".
@@ -634,9 +645,10 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 	}
 
 	return Connection(&ConnectionConfig{
-		NamePrefix:  config.NamePrefix,
-		Arguments:   arguments,
-		Description: description,
+		NamePrefix:        config.NamePrefix,
+		Arguments:         arguments,
+		Description:       description,
+		DeprecationReason: config.DeprecationReason,
 		EdgeCursor: func(edge interface{}) interface{} {
 			return config.EdgeCursor(edge)
 		},
