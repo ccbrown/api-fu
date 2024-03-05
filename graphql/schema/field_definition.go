@@ -59,6 +59,10 @@ type FieldDefinition struct {
 	Directives        []*Directive
 	DeprecationReason string
 
+	// If given, this field will only be visible and usable if the given function returns true. This
+	// can for example be used to build APIs that are gated behind feature flags.
+	IsVisible func(context.Context) bool
+
 	// This function can be used to define the cost of resolving the field. The total cost of an
 	// operation can be calculated before the operation is executed, enabling rate limiting and
 	// metering.

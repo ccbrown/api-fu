@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ccbrown/api-fu/graphql/ast"
@@ -11,6 +12,10 @@ type EnumType struct {
 	Description string
 	Directives  []*Directive
 	Values      map[string]*EnumValueDefinition
+
+	// If given, this type will only be visible via introspection if the given function returns
+	// true. This can for example be used to build APIs that are gated behind feature flags.
+	IsVisible func(context.Context) bool
 }
 
 type EnumValueDefinition struct {
@@ -42,6 +47,13 @@ func (t *EnumType) IsSameType(other Type) bool {
 
 func (t *EnumType) TypeName() string {
 	return t.Name
+}
+
+func (t *EnumType) IsTypeVisible(ctx context.Context) bool {
+	if t.IsVisible == nil {
+		return true
+	}
+	return t.IsVisible(ctx)
 }
 
 func (t *EnumType) shallowValidate() error {

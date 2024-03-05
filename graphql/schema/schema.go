@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -147,6 +148,7 @@ type Type interface {
 type NamedType interface {
 	Type
 	TypeName() string
+	IsTypeVisible(context.Context) bool
 }
 
 type WrappedType interface {

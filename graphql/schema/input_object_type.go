@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -25,6 +26,10 @@ type InputObjectType struct {
 	// For most use-cases, this function is optional. If it is required, but nil, you will get an
 	// error when you attempt to create the schema.
 	ResultCoercion func(interface{}) (map[string]interface{}, error)
+
+	// If given, this type will only be visible via introspection if the given function returns
+	// true. This can for example be used to build APIs that are gated behind feature flags.
+	IsVisible func(context.Context) bool
 }
 
 func (t *InputObjectType) String() string {
@@ -49,6 +54,13 @@ func (t *InputObjectType) IsSameType(other Type) bool {
 
 func (t *InputObjectType) TypeName() string {
 	return t.Name
+}
+
+func (t *InputObjectType) IsTypeVisible(ctx context.Context) bool {
+	if t.IsVisible == nil {
+		return true
+	}
+	return t.IsVisible(ctx)
 }
 
 func (t *InputObjectType) CoerceVariableValue(v interface{}) (interface{}, error) {

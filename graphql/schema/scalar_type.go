@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ccbrown/api-fu/graphql/ast"
@@ -20,6 +21,10 @@ type ScalarType struct {
 	// Should return nil if coercion is impossible. In many cases, this can be the same as
 	// VariableValueCoercion.
 	ResultCoercion func(interface{}) interface{}
+
+	// If given, this type will only be visible via introspection if the given function returns
+	// true. This can for example be used to build APIs that are gated behind feature flags.
+	IsVisible func(context.Context) bool
 }
 
 func (t *ScalarType) String() string {
@@ -44,6 +49,13 @@ func (t *ScalarType) IsSameType(other Type) bool {
 
 func (t *ScalarType) TypeName() string {
 	return t.Name
+}
+
+func (t *ScalarType) IsTypeVisible(ctx context.Context) bool {
+	if t.IsVisible == nil {
+		return true
+	}
+	return t.IsVisible(ctx)
 }
 
 func (t *ScalarType) CoerceVariableValue(v interface{}) (interface{}, error) {

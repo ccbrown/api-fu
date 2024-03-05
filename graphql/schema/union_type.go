@@ -1,12 +1,19 @@
 package schema
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type UnionType struct {
 	Name        string
 	Description string
 	Directives  []*Directive
 	MemberTypes []*ObjectType
+
+	// If given, this type will only be visible via introspection if the given function returns
+	// true. This can for example be used to build APIs that are gated behind feature flags.
+	IsVisible func(context.Context) bool
 }
 
 func (d *UnionType) String() string {
@@ -31,6 +38,13 @@ func (d *UnionType) IsSameType(other Type) bool {
 
 func (d *UnionType) TypeName() string {
 	return d.Name
+}
+
+func (t *UnionType) IsTypeVisible(ctx context.Context) bool {
+	if t.IsVisible == nil {
+		return true
+	}
+	return t.IsVisible(ctx)
 }
 
 func (d *UnionType) shallowValidate() error {

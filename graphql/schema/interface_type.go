@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -10,6 +11,10 @@ type InterfaceType struct {
 	Description string
 	Directives  []*Directive
 	Fields      map[string]*FieldDefinition
+
+	// If given, this type will only be visible via introspection if the given function returns
+	// true. This can for example be used to build APIs that are gated behind feature flags.
+	IsVisible func(context.Context) bool
 }
 
 func (t *InterfaceType) String() string {
@@ -34,6 +39,13 @@ func (t *InterfaceType) IsSameType(other Type) bool {
 
 func (t *InterfaceType) TypeName() string {
 	return t.Name
+}
+
+func (t *InterfaceType) IsTypeVisible(ctx context.Context) bool {
+	if t.IsVisible == nil {
+		return true
+	}
+	return t.IsVisible(ctx)
 }
 
 func (t *InterfaceType) shallowValidate() error {

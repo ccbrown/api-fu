@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -16,6 +17,10 @@ type ObjectType struct {
 	// Objects that implement one or more interfaces must define this. The function should return
 	// true if obj is an object of this type.
 	IsTypeOf func(obj interface{}) bool
+
+	// If given, this type will only be visible via introspection if the given function returns
+	// true. This can for example be used to build APIs that are gated behind feature flags.
+	IsVisible func(context.Context) bool
 }
 
 func (t *ObjectType) String() string {
@@ -55,6 +60,13 @@ func (t *ObjectType) IsSameType(other Type) bool {
 
 func (t *ObjectType) TypeName() string {
 	return t.Name
+}
+
+func (t *ObjectType) IsTypeVisible(ctx context.Context) bool {
+	if t.IsVisible == nil {
+		return true
+	}
+	return t.IsVisible(ctx)
 }
 
 func (t *ObjectType) satisfyInterface(iface *InterfaceType) error {
