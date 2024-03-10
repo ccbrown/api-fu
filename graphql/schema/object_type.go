@@ -11,6 +11,9 @@ type ObjectType struct {
 	Directives  []*Directive
 	Fields      map[string]*FieldDefinition
 
+	// This type is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
+
 	ImplementedInterfaces []*InterfaceType
 
 	// Objects that implement one or more interfaces must define this. The function should return
@@ -60,6 +63,10 @@ func (t *ObjectType) IsSameType(other Type) bool {
 	return t == other
 }
 
+func (t *ObjectType) TypeRequiredFeatures() FeatureSet {
+	return t.RequiredFeatures
+}
+
 func (t *ObjectType) TypeName() string {
 	return t.Name
 }
@@ -99,7 +106,7 @@ func (t *ObjectType) shallowValidate() error {
 		} else if !field.Type.IsOutputType() {
 			return fmt.Errorf("%v field must be an output type", name)
 		}
-		if len(field.RequiredFeatures) == 0 {
+		if field.RequiredFeatures.IsSubsetOf(t.RequiredFeatures) {
 			hasAtLeastOneUnconditionalField = true
 		}
 	}

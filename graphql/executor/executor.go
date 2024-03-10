@@ -91,7 +91,7 @@ func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 	if err != nil {
 		return nil, err
 	}
-	coercedVariableValues, err := coerceVariableValues(r.Schema, operation, r.VariableValues)
+	coercedVariableValues, err := coerceVariableValues(r.Schema, r.Features, operation, r.VariableValues)
 	if err != nil {
 		return nil, err
 	}
@@ -611,8 +611,8 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 	return nil
 }
 
-func coerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, variableValues map[string]any) (map[string]any, *Error) {
-	ret, err := validator.CoerceVariableValues(s, operation, variableValues)
+func coerceVariableValues(s *schema.Schema, features schema.FeatureSet, operation *ast.OperationDefinition, variableValues map[string]any) (map[string]any, *Error) {
+	ret, err := validator.CoerceVariableValues(s, features, operation, variableValues)
 	return ret, newErrorWithValidatorError(err)
 }
 

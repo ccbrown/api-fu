@@ -10,6 +10,9 @@ type InterfaceType struct {
 	Description string
 	Directives  []*Directive
 	Fields      map[string]*FieldDefinition
+
+	// This type is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
 }
 
 func (t *InterfaceType) GetField(name string, features FeatureSet) *FieldDefinition {
@@ -39,6 +42,10 @@ func (t *InterfaceType) IsSameType(other Type) bool {
 	return t == other
 }
 
+func (t *InterfaceType) TypeRequiredFeatures() FeatureSet {
+	return t.RequiredFeatures
+}
+
 func (t *InterfaceType) TypeName() string {
 	return t.Name
 }
@@ -49,7 +56,7 @@ func (t *InterfaceType) shallowValidate() error {
 		if !isName(name) || strings.HasPrefix(name, "__") {
 			return fmt.Errorf("illegal field name: %v", name)
 		}
-		if len(field.RequiredFeatures) == 0 {
+		if field.RequiredFeatures.IsSubsetOf(t.RequiredFeatures) {
 			hasAtLeastOneUnconditionalField = true
 		}
 	}

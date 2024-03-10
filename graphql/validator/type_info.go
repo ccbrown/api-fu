@@ -16,25 +16,25 @@ type TypeInfo struct {
 	DefaultValues           map[ast.Value]interface{}
 }
 
-func namedType(s *schema.Schema, name string) schema.NamedType {
-	if ret := s.NamedTypes()[name]; ret != nil {
+func namedType(s *schema.Schema, features schema.FeatureSet, name string) schema.NamedType {
+	if ret := s.NamedTypes()[name]; ret != nil && ret.TypeRequiredFeatures().IsSubsetOf(features) {
 		return ret
 	}
 	return introspection.NamedTypes[name]
 }
 
-func schemaType(t ast.Type, s *schema.Schema) schema.Type {
+func schemaType(t ast.Type, s *schema.Schema, features schema.FeatureSet) schema.Type {
 	switch t := t.(type) {
 	case *ast.ListType:
-		if inner := schemaType(t.Type, s); inner != nil {
+		if inner := schemaType(t.Type, s, features); inner != nil {
 			return schema.NewListType(inner)
 		}
 	case *ast.NonNullType:
-		if inner := schemaType(t.Type, s); inner != nil {
+		if inner := schemaType(t.Type, s, features); inner != nil {
 			return schema.NewNonNullType(inner)
 		}
 	case *ast.NamedType:
-		return namedType(s, t.Name.Name)
+		return namedType(s, features, t.Name.Name)
 	default:
 		panic(fmt.Sprintf("unsupported ast type: %T", t))
 	}
@@ -124,12 +124,12 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema, features schema.FeatureSet
 			ret.FieldDefinitions[node] = field
 			selectionSetScope = schema.UnwrappedType(field.Type)
 		case *ast.FragmentDefinition:
-			selectionSetScope = namedType(s, node.TypeCondition.Name.Name)
+			selectionSetScope = namedType(s, features, node.TypeCondition.Name.Name)
 		case *ast.InlineFragment:
 			if node.TypeCondition == nil {
 				selectionSetScope = selectionSetScopes[len(selectionSetScopes)-1]
 			} else {
-				selectionSetScope = namedType(s, node.TypeCondition.Name.Name)
+				selectionSetScope = namedType(s, features, node.TypeCondition.Name.Name)
 			}
 		case *ast.OperationDefinition:
 			var t *schema.ObjectType
@@ -149,7 +149,7 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema, features schema.FeatureSet
 				selectionSetScope = t
 			}
 		case *ast.VariableDefinition:
-			if t := schemaType(node.Type, s); t != nil {
+			if t := schemaType(node.Type, s, features); t != nil {
 				ret.VariableDefinitionTypes[node] = t
 				if node.DefaultValue != nil {
 					ret.ExpectedTypes[node.DefaultValue] = t

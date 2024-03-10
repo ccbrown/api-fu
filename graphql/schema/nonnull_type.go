@@ -38,6 +38,10 @@ func (t *NonNullType) IsSameType(other Type) bool {
 	return false
 }
 
+func (t *NonNullType) TypeRequiredFeatures() FeatureSet {
+	return t.Type.TypeRequiredFeatures()
+}
+
 func (t *NonNullType) Unwrap() Type {
 	return t.Type
 }

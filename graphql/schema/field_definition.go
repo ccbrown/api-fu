@@ -76,10 +76,14 @@ func (d *FieldDefinition) shallowValidate() error {
 		return fmt.Errorf("field is missing type")
 	} else if !d.Type.IsOutputType() {
 		return fmt.Errorf("%v cannot be used as a field type", d.Type)
+	} else if !d.Type.TypeRequiredFeatures().IsSubsetOf(d.RequiredFeatures) {
+		return fmt.Errorf("field type requires features that are not required by the field")
 	} else {
-		for name := range d.Arguments {
+		for name, arg := range d.Arguments {
 			if !isName(name) || strings.HasPrefix(name, "__") {
 				return fmt.Errorf("illegal field argument name: %v", name)
+			} else if !arg.Type.TypeRequiredFeatures().IsSubsetOf(d.RequiredFeatures) {
+				return fmt.Errorf("field argument %v requires features that are not required by the field", name)
 			}
 		}
 	}
