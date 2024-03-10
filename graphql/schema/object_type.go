@@ -92,15 +92,19 @@ func (t *ObjectType) satisfyInterface(iface *InterfaceType) error {
 }
 
 func (t *ObjectType) shallowValidate() error {
-	if len(t.Fields) == 0 {
-		return fmt.Errorf("%v must have at least one field", t.Name)
-	}
+	hasAtLeastOneUnconditionalField := false
 	for name, field := range t.Fields {
 		if !isName(name) || strings.HasPrefix(name, "__") {
 			return fmt.Errorf("illegal field name: %v", name)
 		} else if !field.Type.IsOutputType() {
 			return fmt.Errorf("%v field must be an output type", name)
 		}
+		if len(field.RequiredFeatures) == 0 {
+			hasAtLeastOneUnconditionalField = true
+		}
+	}
+	if !hasAtLeastOneUnconditionalField {
+		return fmt.Errorf("%v must have at least one field", t.Name)
 	}
 	for _, iface := range t.ImplementedInterfaces {
 		if err := t.satisfyInterface(iface); err != nil {

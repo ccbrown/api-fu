@@ -44,14 +44,17 @@ func (t *InterfaceType) TypeName() string {
 }
 
 func (t *InterfaceType) shallowValidate() error {
-	if len(t.Fields) == 0 {
-		return fmt.Errorf("%v must have at least one field", t.Name)
-	} else {
-		for name := range t.Fields {
-			if !isName(name) || strings.HasPrefix(name, "__") {
-				return fmt.Errorf("illegal field name: %v", name)
-			}
+	hasAtLeastOneUnconditionalField := false
+	for name, field := range t.Fields {
+		if !isName(name) || strings.HasPrefix(name, "__") {
+			return fmt.Errorf("illegal field name: %v", name)
 		}
+		if len(field.RequiredFeatures) == 0 {
+			hasAtLeastOneUnconditionalField = true
+		}
+	}
+	if !hasAtLeastOneUnconditionalField {
+		return fmt.Errorf("%v must have at least one field", t.Name)
 	}
 	return nil
 }
