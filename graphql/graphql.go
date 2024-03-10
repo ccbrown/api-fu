@@ -180,6 +180,7 @@ func (r *Request) executorRequest(doc *ast.Document) *executor.Request {
 		Schema:         r.Schema,
 		OperationName:  r.OperationName,
 		VariableValues: r.VariableValues,
+		Features:       r.Features,
 		InitialValue:   r.InitialValue,
 		IdleHandler:    r.IdleHandler,
 	}

@@ -60,6 +60,7 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 		Query:          query,
 		Schema:         h.API.schema,
 		IdleHandler:    apiRequest.IdleHandler,
+		Features:       h.features,
 		OperationName:  operationName,
 		VariableValues: variables,
 	}

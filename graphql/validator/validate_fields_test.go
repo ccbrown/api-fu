@@ -63,6 +63,20 @@ func TestFields_FieldSelectionMerging(t *testing.T) {
 	assert.Len(t, validateSource(t, `{objects:object{int} objects{int}}`), 1)
 }
 
+func TestFields_Features(t *testing.T) {
+	t.Run("FeatureDisabled", func(t *testing.T) {
+		assert.Empty(t, validateSource(t, `{pet{... on Cat{age}}}`))
+		assert.Len(t, validateSource(t, `{pet{... on Dog{age}}}`), 1)
+		assert.Len(t, validateSource(t, `{pet{age}}`), 1)
+	})
+
+	t.Run("FeatureEnabled", func(t *testing.T) {
+		assert.Empty(t, validateSource(t, `{pet{... on Cat{age}}}`, "petage"))
+		assert.Empty(t, validateSource(t, `{pet{... on Dog{age}}}`, "petage"))
+		assert.Empty(t, validateSource(t, `{pet{age}}`, "petage"))
+	})
+}
+
 func TestValuesAreIdentical(t *testing.T) {
 	for name, tc := range map[string]struct {
 		A1 ast.Value

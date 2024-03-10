@@ -18,6 +18,10 @@ var petType = &schema.InterfaceType{
 		"nickname": {
 			Type: schema.StringType,
 		},
+		"age": {
+			Type:             schema.IntType,
+			RequiredFeatures: schema.NewFeatureSet("petage"),
+		},
 	},
 }
 
@@ -60,6 +64,10 @@ var dogType = &schema.ObjectType{
 		},
 		"barkVolume": {
 			Type: schema.IntType,
+		},
+		"age": {
+			Type:             schema.IntType,
+			RequiredFeatures: schema.NewFeatureSet("petage"),
 		},
 	},
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
@@ -162,6 +170,9 @@ func init() {
 						Type: schema.StringType,
 					},
 					"meowVolume": {
+						Type: schema.IntType,
+					},
+					"age": {
 						Type: schema.IntType,
 					},
 				},
@@ -328,7 +339,7 @@ func init() {
 	}
 }
 
-func validateSource(t *testing.T, src string) []*Error {
+func validateSource(t *testing.T, src string, features ...string) []*Error {
 	s, err := schema.New(&schema.SchemaDefinition{
 		Query:        objectType,
 		Subscription: objectType,
@@ -338,15 +349,15 @@ func validateSource(t *testing.T, src string) []*Error {
 		},
 	})
 	require.NoError(t, err)
-	return validateSourceWithSchema(t, s, src)
+	return validateSourceWithSchema(t, s, src, features...)
 }
 
-func validateSourceWithSchema(t *testing.T, s *schema.Schema, src string) []*Error {
+func validateSourceWithSchema(t *testing.T, s *schema.Schema, src string, features ...string) []*Error {
 	doc, parseErrs := parser.ParseDocument([]byte(src))
 	require.Empty(t, parseErrs)
 	require.NotNil(t, doc)
 
-	errs := ValidateDocument(doc, s, nil)
+	errs := ValidateDocument(doc, s, schema.NewFeatureSet(features...))
 	for _, err := range errs {
 		assert.NotEmpty(t, err.Message)
 		assert.NotEmpty(t, err.Locations)

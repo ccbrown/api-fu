@@ -2,8 +2,10 @@ package introspection_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ccbrown/api-fu/graphql/executor"
@@ -18,6 +20,10 @@ var petType = &schema.InterfaceType{
 		"nickname": {
 			Type: schema.StringType,
 		},
+		"age": {
+			Type:             schema.IntType,
+			RequiredFeatures: schema.NewFeatureSet("petage"),
+		},
 	},
 }
 
@@ -29,6 +35,10 @@ var dogType = &schema.ObjectType{
 		},
 		"barkVolume": {
 			Type: schema.IntType,
+		},
+		"age": {
+			Type:             schema.IntType,
+			RequiredFeatures: schema.NewFeatureSet("petage"),
 		},
 	},
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
@@ -111,9 +121,27 @@ func TestIntrospection(t *testing.T) {
 	require.NoError(t, err)
 	doc, parseErrs := parser.ParseDocument(introspection.Query)
 	require.Empty(t, parseErrs)
-	_, errs := executor.ExecuteRequest(context.Background(), &executor.Request{
-		Document: doc,
-		Schema:   s,
+
+	t.Run("Features", func(t *testing.T) {
+		data, errs := executor.ExecuteRequest(context.Background(), &executor.Request{
+			Document: doc,
+			Schema:   s,
+			Features: schema.NewFeatureSet("petage"),
+		})
+		require.Empty(t, errs)
+		buf, err := json.Marshal(data)
+		require.NoError(t, err)
+		assert.Contains(t, string(buf), `"name":"age"`)
 	})
-	require.Empty(t, errs)
+
+	t.Run("NoFeatures", func(t *testing.T) {
+		data, errs := executor.ExecuteRequest(context.Background(), &executor.Request{
+			Document: doc,
+			Schema:   s,
+		})
+		require.Empty(t, errs)
+		buf, err := json.Marshal(data)
+		require.NoError(t, err)
+		assert.NotContains(t, string(buf), `"name":"age"`)
+	})
 }

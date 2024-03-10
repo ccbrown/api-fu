@@ -15,15 +15,25 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ccbrown/api-fu/graphql"
+	"github.com/ccbrown/api-fu/graphql/schema"
 	"github.com/ccbrown/api-fu/graphql/transport/graphqltransportws"
 	"github.com/ccbrown/api-fu/graphql/transport/graphqlws"
 )
 
 func TestGraphQLWS(t *testing.T) {
 	var testCfg Config
+	testCfg.Features = featuresFromContext
 
 	testCfg.AddQueryField("foo", &graphql.FieldDefinition{
 		Type: graphql.BooleanType,
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+			return true, nil
+		},
+	})
+
+	testCfg.AddQueryField("bar", &graphql.FieldDefinition{
+		Type:             graphql.BooleanType,
+		RequiredFeatures: schema.NewFeatureSet("bar"),
 		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 			return true, nil
 		},
@@ -51,6 +61,7 @@ func TestGraphQLWS(t *testing.T) {
 	defer api.CloseHijackedConnections()
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(context.WithValue(r.Context(), featuresContextKey, graphql.NewFeatureSet("bar")))
 		api.ServeGraphQLWS(w, r)
 	}))
 	defer ts.Close()
@@ -97,6 +108,7 @@ func TestGraphQLWS(t *testing.T) {
 				"query": `
 					{
 						foo
+						bar
 					}
 				`,
 			},
@@ -105,6 +117,7 @@ func TestGraphQLWS(t *testing.T) {
 		require.NoError(t, conn.ReadJSON(&msg))
 		assert.Equal(t, "query", msg.Id)
 		assert.Equal(t, graphqlws.MessageTypeData, msg.Type)
+		assert.NotContains(t, string(msg.Payload), "errors")
 
 		require.NoError(t, conn.ReadJSON(&msg))
 		assert.Equal(t, "query", msg.Id)
