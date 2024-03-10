@@ -47,6 +47,16 @@ var objectType = &schema.ObjectType{
 	Name: "Object",
 }
 
+var experimentalObjectType = &schema.ObjectType{
+	Name:             "ExperimentalObject",
+	RequiredFeatures: schema.NewFeatureSet("experimentalobject"),
+	Fields: map[string]*schema.FieldDefinition{
+		"foo": {
+			Type: schema.BooleanType,
+		},
+	},
+}
+
 var complexInputType = &schema.InputObjectType{
 	Name: "ComplexInput",
 	Fields: map[string]*schema.InputValueDefinition{
@@ -91,6 +101,10 @@ func init() {
 		"freeBoolean": {
 			Type: schema.BooleanType,
 			Cost: schema.FieldResolverCost(0),
+		},
+		"experimentalObject": {
+			Type:             experimentalObjectType,
+			RequiredFeatures: schema.NewFeatureSet("experimentalobject"),
 		},
 		"booleanArgField": {
 			Type: schema.BooleanType,

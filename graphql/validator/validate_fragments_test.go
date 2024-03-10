@@ -66,4 +66,9 @@ func TestValidateFragmentSpreads(t *testing.T) {
 		assert.Empty(t, validateSource(t, `{union{... on UnionMember{... on Union{... on UnionObjectA{a}}}}}`))
 		assert.Len(t, validateSource(t, `{union{... on UnionMember{... on Node{id}}}}`), 1)
 	})
+
+	t.Run("Features", func(t *testing.T) {
+		assert.Empty(t, validateSource(t, `{experimentalObject{...a}} fragment a on ExperimentalObject { foo }`, "experimentalobject"))
+		assert.Len(t, validateSource(t, `{experimentalObject{...a}} fragment a on ExperimentalObject { foo }`), 2)
+	})
 }
