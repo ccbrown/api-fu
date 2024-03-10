@@ -117,7 +117,7 @@ func TestValidateCost(t *testing.T) {
 			require.NotNil(t, doc)
 
 			var cost int
-			errs := ValidateDocument(doc, s, ValidateCost(tc.OperationName, tc.VariableValues, tc.MaxCost, &cost, schema.FieldCost{Resolver: 1}))
+			errs := ValidateDocument(doc, s, nil, ValidateCost(tc.OperationName, tc.VariableValues, tc.MaxCost, &cost, schema.FieldCost{Resolver: 1}))
 			for _, err := range errs {
 				assert.NotEmpty(t, err.Message)
 				assert.NotEmpty(t, err.Locations)

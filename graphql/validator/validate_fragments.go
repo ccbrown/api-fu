@@ -7,7 +7,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
-func validateFragments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateFragments(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	ret := validateFragmentDeclarations(doc, s, typeInfo)
 	ret = append(ret, validateFragmentSpreads(doc, s, typeInfo)...)
 	return ret

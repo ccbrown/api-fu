@@ -5,7 +5,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
-func validateOperations(doc *ast.Document, schema *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateOperations(doc *ast.Document, schema *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 
 	anonymousOperationCount := 0

@@ -5,7 +5,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
-func validateDocument(doc *ast.Document, schema *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateDocument(doc *ast.Document, schema *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 	for _, def := range doc.Definitions {
 		switch def.(type) {

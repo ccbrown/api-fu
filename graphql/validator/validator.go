@@ -62,10 +62,10 @@ func newSecondaryError(node ast.Node, message string, args ...interface{}) *Erro
 	}
 }
 
-type Rule func(*ast.Document, *schema.Schema, *TypeInfo) []*Error
+type Rule func(*ast.Document, *schema.Schema, schema.FeatureSet, *TypeInfo) []*Error
 
-func ValidateDocument(doc *ast.Document, s *schema.Schema, additionalRules ...Rule) []*Error {
-	typeInfo := NewTypeInfo(doc, s)
+func ValidateDocument(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, additionalRules ...Rule) []*Error {
+	typeInfo := NewTypeInfo(doc, s, features)
 	var errs []*Error
 	for _, f := range append([]Rule{
 		validateDocument,
@@ -77,7 +77,7 @@ func ValidateDocument(doc *ast.Document, s *schema.Schema, additionalRules ...Ru
 		validateDirectives,
 		validateVariables,
 	}, additionalRules...) {
-		errs = append(errs, f(doc, s, typeInfo)...)
+		errs = append(errs, f(doc, s, features, typeInfo)...)
 	}
 	var primary []*Error
 	for _, err := range errs {

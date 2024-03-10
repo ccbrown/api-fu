@@ -12,6 +12,13 @@ type InterfaceType struct {
 	Fields      map[string]*FieldDefinition
 }
 
+func (t *InterfaceType) GetField(name string, features FeatureSet) *FieldDefinition {
+	if field, ok := t.Fields[name]; ok && field.RequiredFeatures.IsSubsetOf(features) {
+		return field
+	}
+	return nil
+}
+
 func (t *InterfaceType) String() string {
 	return t.Name
 }

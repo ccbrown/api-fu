@@ -234,10 +234,13 @@ func (api *API) ServeGraphQL(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Schema = api.schema
 	req.IdleHandler = apiRequest.IdleHandler
+	if api.config.Features != nil {
+		req.Features = api.config.Features(ctx)
+	}
 
 	execute := func(req *graphql.Request) *graphql.Response {
 		var info RequestInfo
-		if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost, api.config.DefaultFieldCost)); len(errs) > 0 {
+		if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.Features, req.ValidateCost(-1, &info.Cost, api.config.DefaultFieldCost)); len(errs) > 0 {
 			return &graphql.Response{
 				Errors: errs,
 			}

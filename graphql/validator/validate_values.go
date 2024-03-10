@@ -7,7 +7,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
-func validateValues(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateValues(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 
 	ast.Inspect(doc, func(node ast.Node) bool {

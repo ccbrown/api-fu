@@ -11,6 +11,7 @@ type FieldContext struct {
 	Context   context.Context
 	Schema    *Schema
 	Object    interface{}
+	Features  FeatureSet
 	Arguments map[string]interface{}
 
 	// IsSubscribe is true if this is a subscription field being invoked for a subscribe operation.
@@ -58,6 +59,9 @@ type FieldDefinition struct {
 	Type              Type
 	Directives        []*Directive
 	DeprecationReason string
+
+	// This field is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
 
 	// This function can be used to define the cost of resolving the field. The total cost of an
 	// operation can be calculated before the operation is executed, enabling rate limiting and

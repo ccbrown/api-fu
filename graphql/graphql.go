@@ -134,6 +134,14 @@ type Schema = schema.Schema
 // SchemaDefinition defines a GraphQL schema.
 type SchemaDefinition = schema.SchemaDefinition
 
+// FeatureSet represents a set of features.
+type FeatureSet = schema.FeatureSet
+
+// NewFeatureSet creates a new feature set with the given features.
+func NewFeatureSet(features ...string) FeatureSet {
+	return schema.NewFeatureSet(features...)
+}
+
 // NewSchema validates a schema definition and builds a Schema from it.
 func NewSchema(def *SchemaDefinition) (*Schema, error) {
 	return schema.New(def)
@@ -152,6 +160,7 @@ type Request struct {
 	Schema         *Schema
 	OperationName  string
 	VariableValues map[string]interface{}
+	Features       FeatureSet
 	Extensions     map[string]interface{}
 	InitialValue   interface{}
 	IdleHandler    func()
@@ -276,7 +285,7 @@ func IsSubscription(doc *ast.Document, operationName string) bool {
 }
 
 // ParseAndValidate parses and validates a query.
-func ParseAndValidate(query string, schema *Schema, additionalRules ...ValidatorRule) (*ast.Document, []*Error) {
+func ParseAndValidate(query string, schema *Schema, features schema.FeatureSet, additionalRules ...ValidatorRule) (*ast.Document, []*Error) {
 	var errors []*Error
 	parsed, parseErrs := parser.ParseDocument([]byte(query))
 	if len(parseErrs) > 0 {
@@ -293,7 +302,7 @@ func ParseAndValidate(query string, schema *Schema, additionalRules ...Validator
 		}
 		return nil, errors
 	}
-	if validationErrs := validator.ValidateDocument(parsed, schema, additionalRules...); len(validationErrs) > 0 {
+	if validationErrs := validator.ValidateDocument(parsed, schema, features, additionalRules...); len(validationErrs) > 0 {
 		for _, err := range validationErrs {
 			locations := make([]Location, len(err.Locations))
 			for i, loc := range err.Locations {
@@ -334,7 +343,7 @@ func Subscribe(r *Request) (interface{}, []*Error) {
 	doc := r.Document
 	if doc == nil {
 		var errors []*Error
-		doc, errors = ParseAndValidate(r.Query, r.Schema)
+		doc, errors = ParseAndValidate(r.Query, r.Schema, r.Features)
 		if len(errors) > 0 {
 			return nil, errors
 		}
@@ -354,7 +363,7 @@ func Execute(r *Request) *Response {
 	doc := r.Document
 	if doc == nil {
 		var errors []*Error
-		doc, errors = ParseAndValidate(r.Query, r.Schema)
+		doc, errors = ParseAndValidate(r.Query, r.Schema, r.Features)
 		if len(errors) > 0 {
 			return &Response{
 				Errors: errors,

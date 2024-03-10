@@ -8,7 +8,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema/introspection"
 )
 
-func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateFields(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 
 	fragmentDefinitions := map[string]*ast.FragmentDefinition{}
@@ -49,12 +49,12 @@ func validateFields(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*
 			if name != "__typename" {
 				switch parent := selectionSetTypes[len(selectionSetTypes)-1].(type) {
 				case *schema.ObjectType:
-					if _, ok := parent.Fields[name]; !ok && (parent != s.QueryType() || introspection.MetaFields[name] == nil) {
+					if parent.GetField(name, features) == nil && (parent != s.QueryType() || introspection.MetaFields[name] == nil) {
 						ret = append(ret, newError(node.Name, "field %v does not exist on %v", name, parent.Name))
 						fieldExists = false
 					}
 				case *schema.InterfaceType:
-					if _, ok := parent.Fields[name]; !ok {
+					if parent.GetField(name, features) == nil {
 						ret = append(ret, newError(node.Name, "field %v does not exist on %v", name, parent.Name))
 						fieldExists = false
 					}

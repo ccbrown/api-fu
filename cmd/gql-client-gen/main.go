@@ -254,7 +254,7 @@ func generateTypeDef(name, original string) string {
 
 func (s *generateState) processQuery(q string) []error {
 	var ret []error
-	doc, errs := graphql.ParseAndValidate(q, s.schema)
+	doc, errs := graphql.ParseAndValidate(q, s.schema, nil)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			ret = append(ret, err)

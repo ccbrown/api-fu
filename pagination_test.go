@@ -86,7 +86,7 @@ func TestConnection(t *testing.T) {
 			}
 			totalCount
 		}
-	`, api.schema, graphql.ValidateCost("", nil, -1, &cost, graphql.FieldCost{Resolver: 1}))
+	`, api.schema, nil, graphql.ValidateCost("", nil, -1, &cost, graphql.FieldCost{Resolver: 1}))
 		require.Empty(t, errs)
 		assert.Equal(t, (1 /*connection*/)+(10 /* edges */)*(1 /* node */)+(1 /*totalCount*/), cost)
 	})

@@ -41,7 +41,7 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 	return nil
 }
 
-func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
+func NewTypeInfo(doc *ast.Document, s *schema.Schema, features schema.FeatureSet) *TypeInfo {
 	ret := &TypeInfo{
 		SelectionSetTypes:       map[*ast.SelectionSet]schema.NamedType{},
 		VariableDefinitionTypes: map[*ast.VariableDefinition]schema.Type{},
@@ -101,9 +101,9 @@ func NewTypeInfo(doc *ast.Document, s *schema.Schema) *TypeInfo {
 			var field *schema.FieldDefinition
 			switch parent := selectionSetScopes[len(selectionSetScopes)-1].(type) {
 			case *schema.InterfaceType:
-				field = parent.Fields[node.Name.Name]
+				field = parent.GetField(node.Name.Name, features)
 			case *schema.ObjectType:
-				field = parent.Fields[node.Name.Name]
+				field = parent.GetField(node.Name.Name, features)
 				if field == nil && parent == s.QueryType() {
 					field = introspection.MetaFields[node.Name.Name]
 				}

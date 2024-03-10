@@ -5,7 +5,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
-func validateDirectives(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateDirectives(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 	ast.Inspect(doc, func(node ast.Node) bool {
 		var directives []*ast.Directive

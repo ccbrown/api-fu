@@ -249,7 +249,7 @@ func init() {
 				includeDeprecated := ctx.Arguments["includeDeprecated"].(bool)
 				ret := []field{}
 				for name, def := range fields {
-					if def.DeprecationReason == "" || includeDeprecated {
+					if (def.DeprecationReason == "" || includeDeprecated) && def.RequiredFeatures.IsSubsetOf(ctx.Features) {
 						ret = append(ret, field{
 							Name:       name,
 							Definition: def,

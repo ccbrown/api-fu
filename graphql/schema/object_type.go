@@ -18,6 +18,13 @@ type ObjectType struct {
 	IsTypeOf func(obj interface{}) bool
 }
 
+func (t *ObjectType) GetField(name string, features FeatureSet) *FieldDefinition {
+	if field, ok := t.Fields[name]; ok && field.RequiredFeatures.IsSubsetOf(features) {
+		return field
+	}
+	return nil
+}
+
 func (t *ObjectType) String() string {
 	return t.Name
 }
@@ -64,6 +71,8 @@ func (t *ObjectType) satisfyInterface(iface *InterfaceType) error {
 			return fmt.Errorf("object is missing field named %v", name)
 		} else if !field.Type.IsSubTypeOf(ifaceField.Type) {
 			return fmt.Errorf("object's %v field is not a subtype of the corresponding interface field", name)
+		} else if !field.RequiredFeatures.IsSubsetOf(ifaceField.RequiredFeatures) {
+			return fmt.Errorf("object's %v field requires features that are not required by the corresponding interface field", name)
 		}
 		for argName, ifaceArg := range ifaceField.Arguments {
 			arg, ok := field.Arguments[argName]

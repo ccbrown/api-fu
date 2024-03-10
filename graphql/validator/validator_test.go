@@ -346,7 +346,7 @@ func validateSourceWithSchema(t *testing.T, s *schema.Schema, src string) []*Err
 	require.Empty(t, parseErrs)
 	require.NotNil(t, doc)
 
-	errs := ValidateDocument(doc, s)
+	errs := ValidateDocument(doc, s, nil)
 	for _, err := range errs {
 		assert.NotEmpty(t, err.Message)
 		assert.NotEmpty(t, err.Locations)

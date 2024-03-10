@@ -40,7 +40,7 @@ func checkedNonNegativeAdd(a, b int) int {
 // Queries with costs that are too high to calculate due to overflows always result in an error when
 // max is non-negative, and actual will be set to the maximum possible value.
 func ValidateCost(operationName string, variableValues map[string]interface{}, max int, actual *int, defaultCost schema.FieldCost) Rule {
-	return func(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
+	return func(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 		var ret []*Error
 
 		var op *ast.OperationDefinition

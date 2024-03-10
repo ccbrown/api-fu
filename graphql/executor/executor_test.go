@@ -229,7 +229,7 @@ func TestSubscribe(t *testing.T) {
 	require.NoError(t, err)
 	doc, parseErrs := parser.ParseDocument([]byte(`subscription {int}`))
 	require.Empty(t, parseErrs)
-	require.Empty(t, validator.ValidateDocument(doc, s))
+	require.Empty(t, validator.ValidateDocument(doc, s, nil))
 
 	assert.True(t, IsSubscription(doc, ""))
 
@@ -262,7 +262,7 @@ func TestExecuteRequest(t *testing.T) {
 	t.Run("IntrospectionQuery", func(t *testing.T) {
 		parsed, parseErrs := parser.ParseDocument(introspection.Query)
 		require.Empty(t, parseErrs)
-		require.Empty(t, validator.ValidateDocument(parsed, s))
+		require.Empty(t, validator.ValidateDocument(parsed, s, nil))
 		_, errs := ExecuteRequest(context.Background(), &Request{
 			Document: parsed,
 			Schema:   s,
@@ -419,7 +419,7 @@ func TestExecuteRequest(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			parsed, parseErrs := parser.ParseDocument([]byte(tc.Document))
 			require.Empty(t, parseErrs)
-			require.Empty(t, validator.ValidateDocument(parsed, s))
+			require.Empty(t, validator.ValidateDocument(parsed, s, nil))
 			data, errs := ExecuteRequest(context.Background(), &Request{
 				Document:       parsed,
 				Schema:         s,
@@ -534,7 +534,7 @@ func BenchmarkExecuteRequest(b *testing.B) {
 		}
 	}`))
 	require.Empty(b, parseErrs)
-	require.Empty(b, validator.ValidateDocument(doc, s))
+	require.Empty(b, validator.ValidateDocument(doc, s, nil))
 
 	r := &Request{
 		Document: doc,
@@ -585,7 +585,7 @@ func TestContextCancelation(t *testing.T) {
 		}
 	}`))
 	require.Empty(t, parseErrs)
-	require.Empty(t, validator.ValidateDocument(doc, s))
+	require.Empty(t, validator.ValidateDocument(doc, s, nil))
 
 	r := &Request{
 		Document: doc,
