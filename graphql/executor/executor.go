@@ -32,6 +32,7 @@ type Request struct {
 	Schema         *schema.Schema
 	OperationName  string
 	VariableValues map[string]any
+	Features       schema.FeatureSet
 	InitialValue   any
 	IdleHandler    func()
 }
@@ -72,6 +73,7 @@ type executor struct {
 	Schema              *schema.Schema
 	FragmentDefinitions map[string]*ast.FragmentDefinition
 	VariableValues      map[string]any
+	Features            schema.FeatureSet
 	Errors              []*Error
 	Operation           *ast.OperationDefinition
 	IdleHandler         func()
@@ -89,7 +91,7 @@ func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 	if err != nil {
 		return nil, err
 	}
-	coercedVariableValues, err := coerceVariableValues(r.Schema, operation, r.VariableValues)
+	coercedVariableValues, err := coerceVariableValues(r.Schema, r.Features, operation, r.VariableValues)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +101,7 @@ func newExecutor(ctx context.Context, r *Request) (*executor, *Error) {
 		Schema:               r.Schema,
 		FragmentDefinitions:  map[string]*ast.FragmentDefinition{},
 		VariableValues:       coercedVariableValues,
+		Features:             r.Features,
 		Operation:            operation,
 		IdleHandler:          r.IdleHandler,
 		GroupedFieldSetCache: map[string]*GroupedFieldSet{},
@@ -162,7 +165,7 @@ func (e *executor) subscribe(initialValue any) (any, *Error) {
 	fields := item.Fields
 	field := fields[0]
 	fieldName := field.Name.Name
-	fieldDef := subscriptionType.Fields[fieldName]
+	fieldDef := subscriptionType.GetField(fieldName, e.Features)
 	if fieldDef == nil {
 		return nil, newError(field, "Undefined root subscription field.")
 	}
@@ -175,6 +178,7 @@ func (e *executor) subscribe(initialValue any) (any, *Error) {
 		Context:     e.Context,
 		Schema:      e.Schema,
 		Object:      initialValue,
+		Features:    e.Features,
 		Arguments:   argumentValues,
 		IsSubscribe: true,
 	})
@@ -248,7 +252,7 @@ func (e *executor) executeSelections(selections []ast.Selection, objectType *sch
 			continue
 		}
 
-		fieldDef := objectType.Fields[fieldName]
+		fieldDef := objectType.GetField(fieldName, e.Features)
 		if fieldDef == nil && objectType == e.Schema.QueryType() {
 			fieldDef = introspection.MetaFields[fieldName]
 		}
@@ -319,6 +323,7 @@ func (e *executor) executeField(objectValue any, fields []*ast.Field, fieldDef *
 		Context:   e.Context,
 		Schema:    e.Schema,
 		Object:    objectValue,
+		Features:  e.Features,
 		Arguments: argumentValues,
 	})
 	if !isNil(err) {
@@ -606,8 +611,8 @@ func schemaType(t ast.Type, s *schema.Schema) schema.Type {
 	return nil
 }
 
-func coerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, variableValues map[string]any) (map[string]any, *Error) {
-	ret, err := validator.CoerceVariableValues(s, operation, variableValues)
+func coerceVariableValues(s *schema.Schema, features schema.FeatureSet, operation *ast.OperationDefinition, variableValues map[string]any) (map[string]any, *Error) {
+	ret, err := validator.CoerceVariableValues(s, features, operation, variableValues)
 	return ret, newErrorWithValidatorError(err)
 }
 

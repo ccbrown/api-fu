@@ -7,6 +7,9 @@ type UnionType struct {
 	Description string
 	Directives  []*Directive
 	MemberTypes []*ObjectType
+
+	// This type is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
 }
 
 func (d *UnionType) String() string {
@@ -29,6 +32,10 @@ func (d *UnionType) IsSameType(other Type) bool {
 	return d == other
 }
 
+func (d *UnionType) TypeRequiredFeatures() FeatureSet {
+	return d.RequiredFeatures
+}
+
 func (d *UnionType) TypeName() string {
 	return d.Name
 }
@@ -39,6 +46,10 @@ func (d *UnionType) shallowValidate() error {
 	}
 	objNames := map[string]struct{}{}
 	for _, member := range d.MemberTypes {
+		if !member.RequiredFeatures.IsSubsetOf(d.RequiredFeatures) {
+			// TODO: support conditional union members?
+			return fmt.Errorf("union member has additional required features, but conditional members are not currently supported")
+		}
 		if _, ok := objNames[member.Name]; ok {
 			return fmt.Errorf("union member types must be unique")
 		}

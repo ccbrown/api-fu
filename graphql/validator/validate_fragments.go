@@ -7,17 +7,17 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
-func validateFragments(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
-	ret := validateFragmentDeclarations(doc, s, typeInfo)
-	ret = append(ret, validateFragmentSpreads(doc, s, typeInfo)...)
+func validateFragments(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
+	ret := validateFragmentDeclarations(doc, s, features, typeInfo)
+	ret = append(ret, validateFragmentSpreads(doc, s, features, typeInfo)...)
 	return ret
 }
 
-func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 
 	validateTypeCondition := func(tc *ast.NamedType) {
-		switch namedType(s, tc.Name.Name).(type) {
+		switch namedType(s, features, tc.Name.Name).(type) {
 		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 		case nil:
 			ret = append(ret, newError(tc.Name, "undefined type"))
@@ -60,7 +60,7 @@ func validateFragmentDeclarations(doc *ast.Document, s *schema.Schema, typeInfo 
 	return ret
 }
 
-func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	var ret []*Error
 
 	fragmentsByName := map[string]*ast.FragmentDefinition{}
@@ -106,7 +106,7 @@ func validateFragmentSpreads(doc *ast.Document, s *schema.Schema, typeInfo *Type
 			ret = append(ret, newSecondaryError(tc, "no type info for fragment spread parent"))
 			return
 		}
-		switch fragmentType := namedType(s, tc.Name.Name).(type) {
+		switch fragmentType := namedType(s, features, tc.Name.Name).(type) {
 		case *schema.ObjectType, *schema.InterfaceType, *schema.UnionType:
 			a := getPossibleTypes(s, fragmentType)
 			b := getPossibleTypes(s, parentType)

@@ -11,6 +11,9 @@ type ScalarType struct {
 	Description string
 	Directives  []*Directive
 
+	// This type is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
+
 	// Should return nil if coercion is impossible.
 	LiteralCoercion func(ast.Value) interface{}
 
@@ -40,6 +43,10 @@ func (t *ScalarType) IsSubTypeOf(other Type) bool {
 
 func (t *ScalarType) IsSameType(other Type) bool {
 	return t == other
+}
+
+func (t *ScalarType) TypeRequiredFeatures() FeatureSet {
+	return t.RequiredFeatures
 }
 
 func (t *ScalarType) TypeName() string {

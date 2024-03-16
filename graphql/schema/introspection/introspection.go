@@ -70,11 +70,11 @@ var SchemaType = &schema.ObjectType{
 			Cost: schema.FieldResolverCost(0),
 			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				namedTypes := ctx.Schema.NamedTypes()
-				ret := make([]schema.Type, len(namedTypes))
-				i := 0
+				ret := make([]schema.Type, 0, len(namedTypes))
 				for _, def := range namedTypes {
-					ret[i] = def
-					i++
+					if def.TypeRequiredFeatures().IsSubsetOf(ctx.Features) {
+						ret = append(ret, def)
+					}
 				}
 				return ret, nil
 			},
@@ -249,7 +249,7 @@ func init() {
 				includeDeprecated := ctx.Arguments["includeDeprecated"].(bool)
 				ret := []field{}
 				for name, def := range fields {
-					if def.DeprecationReason == "" || includeDeprecated {
+					if (def.DeprecationReason == "" || includeDeprecated) && def.RequiredFeatures.IsSubsetOf(ctx.Features) {
 						ret = append(ret, field{
 							Name:       name,
 							Definition: def,

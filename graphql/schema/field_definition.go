@@ -11,6 +11,7 @@ type FieldContext struct {
 	Context   context.Context
 	Schema    *Schema
 	Object    interface{}
+	Features  FeatureSet
 	Arguments map[string]interface{}
 
 	// IsSubscribe is true if this is a subscription field being invoked for a subscribe operation.
@@ -59,6 +60,9 @@ type FieldDefinition struct {
 	Directives        []*Directive
 	DeprecationReason string
 
+	// This field is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
+
 	// This function can be used to define the cost of resolving the field. The total cost of an
 	// operation can be calculated before the operation is executed, enabling rate limiting and
 	// metering.
@@ -72,10 +76,14 @@ func (d *FieldDefinition) shallowValidate() error {
 		return fmt.Errorf("field is missing type")
 	} else if !d.Type.IsOutputType() {
 		return fmt.Errorf("%v cannot be used as a field type", d.Type)
+	} else if !d.Type.TypeRequiredFeatures().IsSubsetOf(d.RequiredFeatures) {
+		return fmt.Errorf("field type requires features that are not required by the field")
 	} else {
-		for name := range d.Arguments {
+		for name, arg := range d.Arguments {
 			if !isName(name) || strings.HasPrefix(name, "__") {
 				return fmt.Errorf("illegal field argument name: %v", name)
+			} else if !arg.Type.TypeRequiredFeatures().IsSubsetOf(d.RequiredFeatures) {
+				return fmt.Errorf("field argument %v requires features that are not required by the field", name)
 			}
 		}
 	}

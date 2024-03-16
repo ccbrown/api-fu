@@ -41,7 +41,7 @@ func TestSchemaData(t *testing.T) {
 			}
 		`
 
-		doc, errs := graphql.ParseAndValidate(query, schema)
+		doc, errs := graphql.ParseAndValidate(query, schema, nil)
 		require.Empty(t, errs)
 		assert.NotNil(t, doc)
 	})
@@ -56,7 +56,7 @@ func TestSchemaData(t *testing.T) {
 			}
 		`
 
-		_, errs := graphql.ParseAndValidate(query, schema)
+		_, errs := graphql.ParseAndValidate(query, schema, nil)
 		assert.NotEmpty(t, errs)
 	})
 
@@ -70,7 +70,7 @@ func TestSchemaData(t *testing.T) {
 			}
 		`
 
-		_, errs := graphql.ParseAndValidate(query, schema)
+		_, errs := graphql.ParseAndValidate(query, schema, nil)
 		assert.Empty(t, errs)
 	})
 }

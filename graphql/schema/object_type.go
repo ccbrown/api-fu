@@ -11,11 +11,21 @@ type ObjectType struct {
 	Directives  []*Directive
 	Fields      map[string]*FieldDefinition
 
+	// This type is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
+
 	ImplementedInterfaces []*InterfaceType
 
 	// Objects that implement one or more interfaces must define this. The function should return
 	// true if obj is an object of this type.
 	IsTypeOf func(obj interface{}) bool
+}
+
+func (t *ObjectType) GetField(name string, features FeatureSet) *FieldDefinition {
+	if field, ok := t.Fields[name]; ok && field.RequiredFeatures.IsSubsetOf(features) {
+		return field
+	}
+	return nil
 }
 
 func (t *ObjectType) String() string {
@@ -53,6 +63,10 @@ func (t *ObjectType) IsSameType(other Type) bool {
 	return t == other
 }
 
+func (t *ObjectType) TypeRequiredFeatures() FeatureSet {
+	return t.RequiredFeatures
+}
+
 func (t *ObjectType) TypeName() string {
 	return t.Name
 }
@@ -64,6 +78,8 @@ func (t *ObjectType) satisfyInterface(iface *InterfaceType) error {
 			return fmt.Errorf("object is missing field named %v", name)
 		} else if !field.Type.IsSubTypeOf(ifaceField.Type) {
 			return fmt.Errorf("object's %v field is not a subtype of the corresponding interface field", name)
+		} else if !field.RequiredFeatures.IsSubsetOf(ifaceField.RequiredFeatures) {
+			return fmt.Errorf("object's %v field requires features that are not required by the corresponding interface field", name)
 		}
 		for argName, ifaceArg := range ifaceField.Arguments {
 			arg, ok := field.Arguments[argName]
@@ -83,15 +99,19 @@ func (t *ObjectType) satisfyInterface(iface *InterfaceType) error {
 }
 
 func (t *ObjectType) shallowValidate() error {
-	if len(t.Fields) == 0 {
-		return fmt.Errorf("%v must have at least one field", t.Name)
-	}
+	hasAtLeastOneUnconditionalField := false
 	for name, field := range t.Fields {
 		if !isName(name) || strings.HasPrefix(name, "__") {
 			return fmt.Errorf("illegal field name: %v", name)
 		} else if !field.Type.IsOutputType() {
 			return fmt.Errorf("%v field must be an output type", name)
 		}
+		if field.RequiredFeatures.IsSubsetOf(t.RequiredFeatures) {
+			hasAtLeastOneUnconditionalField = true
+		}
+	}
+	if !hasAtLeastOneUnconditionalField {
+		return fmt.Errorf("%v must have at least one field", t.Name)
 	}
 	for _, iface := range t.ImplementedInterfaces {
 		if err := t.satisfyInterface(iface); err != nil {

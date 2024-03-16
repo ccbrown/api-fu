@@ -142,6 +142,7 @@ type Type interface {
 	IsOutputType() bool
 	IsSubTypeOf(Type) bool
 	IsSameType(Type) bool
+	TypeRequiredFeatures() FeatureSet
 }
 
 type NamedType interface {

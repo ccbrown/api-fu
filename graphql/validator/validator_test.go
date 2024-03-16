@@ -18,6 +18,10 @@ var petType = &schema.InterfaceType{
 		"nickname": {
 			Type: schema.StringType,
 		},
+		"age": {
+			Type:             schema.IntType,
+			RequiredFeatures: schema.NewFeatureSet("petage"),
+		},
 	},
 }
 
@@ -43,6 +47,16 @@ var objectType = &schema.ObjectType{
 	Name: "Object",
 }
 
+var experimentalObjectType = &schema.ObjectType{
+	Name:             "ExperimentalObject",
+	RequiredFeatures: schema.NewFeatureSet("experimentalobject"),
+	Fields: map[string]*schema.FieldDefinition{
+		"foo": {
+			Type: schema.BooleanType,
+		},
+	},
+}
+
 var complexInputType = &schema.InputObjectType{
 	Name: "ComplexInput",
 	Fields: map[string]*schema.InputValueDefinition{
@@ -60,6 +74,10 @@ var dogType = &schema.ObjectType{
 		},
 		"barkVolume": {
 			Type: schema.IntType,
+		},
+		"age": {
+			Type:             schema.IntType,
+			RequiredFeatures: schema.NewFeatureSet("petage"),
 		},
 	},
 	ImplementedInterfaces: []*schema.InterfaceType{petType},
@@ -83,6 +101,10 @@ func init() {
 		"freeBoolean": {
 			Type: schema.BooleanType,
 			Cost: schema.FieldResolverCost(0),
+		},
+		"experimentalObject": {
+			Type:             experimentalObjectType,
+			RequiredFeatures: schema.NewFeatureSet("experimentalobject"),
 		},
 		"booleanArgField": {
 			Type: schema.BooleanType,
@@ -162,6 +184,9 @@ func init() {
 						Type: schema.StringType,
 					},
 					"meowVolume": {
+						Type: schema.IntType,
+					},
+					"age": {
 						Type: schema.IntType,
 					},
 				},
@@ -328,7 +353,7 @@ func init() {
 	}
 }
 
-func validateSource(t *testing.T, src string) []*Error {
+func validateSource(t *testing.T, src string, features ...string) []*Error {
 	s, err := schema.New(&schema.SchemaDefinition{
 		Query:        objectType,
 		Subscription: objectType,
@@ -338,15 +363,15 @@ func validateSource(t *testing.T, src string) []*Error {
 		},
 	})
 	require.NoError(t, err)
-	return validateSourceWithSchema(t, s, src)
+	return validateSourceWithSchema(t, s, src, features...)
 }
 
-func validateSourceWithSchema(t *testing.T, s *schema.Schema, src string) []*Error {
+func validateSourceWithSchema(t *testing.T, s *schema.Schema, src string, features ...string) []*Error {
 	doc, parseErrs := parser.ParseDocument([]byte(src))
 	require.Empty(t, parseErrs)
 	require.NotNil(t, doc)
 
-	errs := ValidateDocument(doc, s)
+	errs := ValidateDocument(doc, s, schema.NewFeatureSet(features...))
 	for _, err := range errs {
 		assert.NotEmpty(t, err.Message)
 		assert.NotEmpty(t, err.Locations)

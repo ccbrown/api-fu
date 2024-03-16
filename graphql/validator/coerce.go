@@ -5,11 +5,11 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
-func CoerceVariableValues(s *schema.Schema, operation *ast.OperationDefinition, variableValues map[string]interface{}) (map[string]interface{}, *Error) {
+func CoerceVariableValues(s *schema.Schema, features schema.FeatureSet, operation *ast.OperationDefinition, variableValues map[string]interface{}) (map[string]interface{}, *Error) {
 	coercedValues := map[string]interface{}{}
 	for _, def := range operation.VariableDefinitions {
 		variableName := def.Variable.Name.Name
-		variableType := schemaType(def.Type, s)
+		variableType := schemaType(def.Type, s, features)
 		if variableType == nil || !variableType.IsInputType() {
 			return nil, newError(def.Type, "Invalid variable type.")
 		}

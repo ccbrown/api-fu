@@ -11,6 +11,9 @@ type EnumType struct {
 	Description string
 	Directives  []*Directive
 	Values      map[string]*EnumValueDefinition
+
+	// This type is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
 }
 
 type EnumValueDefinition struct {
@@ -38,6 +41,10 @@ func (t *EnumType) IsSubTypeOf(other Type) bool {
 
 func (t *EnumType) IsSameType(other Type) bool {
 	return t == other
+}
+
+func (t *EnumType) TypeRequiredFeatures() FeatureSet {
+	return t.RequiredFeatures
 }
 
 func (t *EnumType) TypeName() string {

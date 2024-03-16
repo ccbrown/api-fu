@@ -13,6 +13,9 @@ type InputObjectType struct {
 	Directives  []*Directive
 	Fields      map[string]*InputValueDefinition
 
+	// This type is only available for introspection and use when the given features are enabled.
+	RequiredFeatures FeatureSet
+
 	// If given, input objects can validated and converted to other types via this function.
 	// Otherwise the objects will remain as maps. This function is called after all fields are fully
 	// coerced.
@@ -45,6 +48,10 @@ func (t *InputObjectType) IsSubTypeOf(other Type) bool {
 
 func (t *InputObjectType) IsSameType(other Type) bool {
 	return t == other
+}
+
+func (t *InputObjectType) TypeRequiredFeatures() FeatureSet {
+	return t.RequiredFeatures
 }
 
 func (t *InputObjectType) TypeName() string {
@@ -135,6 +142,9 @@ func (t *InputObjectType) shallowValidate() error {
 				return fmt.Errorf("illegal field name: %v", name)
 			} else if !field.Type.IsInputType() {
 				return fmt.Errorf("%v field must be an input type", name)
+			} else if !field.Type.TypeRequiredFeatures().IsSubsetOf(t.RequiredFeatures) {
+				// TODO: support conditional input fields?
+				return fmt.Errorf("%v field type has additional required features, but conditional input fields are not currently supported", name)
 			}
 		}
 	}

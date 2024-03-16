@@ -5,7 +5,7 @@ import (
 	"github.com/ccbrown/api-fu/graphql/schema"
 )
 
-func validateVariables(doc *ast.Document, schema *schema.Schema, typeInfo *TypeInfo) []*Error {
+func validateVariables(doc *ast.Document, schema *schema.Schema, features schema.FeatureSet, typeInfo *TypeInfo) []*Error {
 	fragmentDefinitions := map[string]*ast.FragmentDefinition{}
 	for _, def := range doc.Definitions {
 		if def, ok := def.(*ast.FragmentDefinition); ok {

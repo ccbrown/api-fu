@@ -51,6 +51,9 @@ type Config struct {
 	// documentation.
 	PreprocessGraphQLSchemaDefinition func(schema *graphql.SchemaDefinition) error
 
+	// If given, this function will be invoked to get the feature set for a request.
+	Features func(ctx context.Context) graphql.FeatureSet
+
 	initOnce      sync.Once
 	nodeInterface *graphql.InterfaceType
 	query         *graphql.ObjectType

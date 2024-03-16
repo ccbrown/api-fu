@@ -42,6 +42,10 @@ func (t *ListType) IsSameType(other Type) bool {
 	return false
 }
 
+func (t *ListType) TypeRequiredFeatures() FeatureSet {
+	return t.Type.TypeRequiredFeatures()
+}
+
 func (t *ListType) Unwrap() Type {
 	return t.Type
 }

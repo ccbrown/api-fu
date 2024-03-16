@@ -16,8 +16,20 @@ import (
 )
 
 func executeGraphQL(t *testing.T, api *API, query string) *http.Response {
+	return executeGraphQLWithFeatures(t, api, query, nil)
+}
+
+const featuresContextKey = "features"
+
+func featuresFromContext(ctx context.Context) graphql.FeatureSet {
+	features, _ := ctx.Value(featuresContextKey).(graphql.FeatureSet)
+	return features
+}
+
+func executeGraphQLWithFeatures(t *testing.T, api *API, query string, features []string) *http.Response {
 	w := httptest.NewRecorder()
-	r, err := http.NewRequest("POST", "", strings.NewReader(query))
+	ctx := context.WithValue(context.Background(), featuresContextKey, graphql.NewFeatureSet(features...))
+	r, err := http.NewRequestWithContext(ctx, "POST", "", strings.NewReader(query))
 	r.Header.Set("Content-Type", "application/graphql")
 	require.NoError(t, err)
 	api.ServeGraphQL(w, r)
@@ -213,4 +225,62 @@ func TestMutation(t *testing.T) {
 	body, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"data":{"mut":true}}`, string(body))
+}
+
+func TestFeatures(t *testing.T) {
+	var testCfg Config
+	testCfg.Features = featuresFromContext
+
+	testCfg.AddQueryField("foo", &graphql.FieldDefinition{
+		Type: graphql.BooleanType,
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+			return true, nil
+		},
+	})
+
+	testCfg.AddQueryField("bar", &graphql.FieldDefinition{
+		Type:             graphql.BooleanType,
+		RequiredFeatures: graphql.NewFeatureSet("bar"),
+		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+			return true, nil
+		},
+	})
+
+	api, err := NewAPI(&testCfg)
+	require.NoError(t, err)
+
+	t.Run("NoFeatures", func(t *testing.T) {
+		resp := executeGraphQL(t, api, `{
+			foo
+		}`)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"data":{"foo":true}}`, string(body))
+	})
+
+	t.Run("NoFeatures_Error", func(t *testing.T) {
+		resp := executeGraphQL(t, api, `{
+			foo
+			bar
+		}`)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"errors":[{"locations":[{"column":4,"line":3}],"message":"Validation error: field bar does not exist on Query"}]}`, string(body))
+	})
+
+	t.Run("BarFeature", func(t *testing.T) {
+		resp := executeGraphQLWithFeatures(t, api, `{
+			foo
+			bar
+		}`, []string{"bar"})
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		body, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"data":{"foo":true,"bar":true}}`, string(body))
+	})
 }

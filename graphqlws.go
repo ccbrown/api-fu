@@ -32,6 +32,7 @@ type graphqlWSHandler struct {
 
 	cancelContext func()
 	subscriptions map[string]*SubscriptionSourceStream
+	features      graphql.FeatureSet
 }
 
 func (h *graphqlWSHandler) HandleInit(parameters json.RawMessage) error {
@@ -41,6 +42,9 @@ func (h *graphqlWSHandler) HandleInit(parameters json.RawMessage) error {
 		} else {
 			h.Context = ctx
 		}
+	}
+	if h.API.config.Features != nil {
+		h.features = h.API.config.Features(h.Context)
 	}
 	return nil
 }
@@ -56,13 +60,14 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 		Query:          query,
 		Schema:         h.API.schema,
 		IdleHandler:    apiRequest.IdleHandler,
+		Features:       h.features,
 		OperationName:  operationName,
 		VariableValues: variables,
 	}
 
 	var info RequestInfo
 	var resp *graphql.Response
-	if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.ValidateCost(-1, &info.Cost, h.API.config.DefaultFieldCost)); len(errs) > 0 {
+	if doc, errs := graphql.ParseAndValidate(req.Query, req.Schema, req.Features, req.ValidateCost(-1, &info.Cost, h.API.config.DefaultFieldCost)); len(errs) > 0 {
 		resp = &graphql.Response{
 			Errors: errs,
 		}
