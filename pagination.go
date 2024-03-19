@@ -86,6 +86,9 @@ type ConnectionConfig struct {
 	// The connection will implement these interfaces. If any of the interfaces define an edge
 	// field as an interface, this connection's edges will also implement that interface.
 	ImplementedInterfaces []*graphql.InterfaceType
+
+	// This connection is only available for introspection and use when the given features are enabled.
+	RequiredFeatures graphql.FeatureSet
 }
 
 func serializeCursor(cursor interface{}) (string, error) {
@@ -168,6 +171,9 @@ type ConnectionInterfaceConfig struct {
 
 	// If true, implementations must provide the "totalCount" field.
 	HasTotalCount bool
+
+	// This connection is only available for introspection and use when the given features are enabled.
+	RequiredFeatures graphql.FeatureSet
 }
 
 var forwardConnectionArguments = map[string]*graphql.InputValueDefinition{
@@ -227,12 +233,14 @@ func ConnectionInterface(config *ConnectionInterfaceConfig) *graphql.InterfaceTy
 	}
 
 	edge := &graphql.InterfaceType{
-		Name:   config.NamePrefix + "Edge",
-		Fields: edgeFields,
+		Name:             config.NamePrefix + "Edge",
+		Fields:           edgeFields,
+		RequiredFeatures: config.RequiredFeatures,
 	}
 
 	ret := &graphql.InterfaceType{
-		Name: config.NamePrefix + "Connection",
+		Name:             config.NamePrefix + "Connection",
+		RequiredFeatures: config.RequiredFeatures,
 		Fields: map[string]*graphql.FieldDefinition{
 			"edges": {
 				Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edge))),
@@ -278,6 +286,9 @@ type ConnectionFieldDefinitionConfig struct {
 
 	// An optional map of additional arguments to add to the field.
 	Arguments map[string]*graphql.InputValueDefinition
+
+	// This connection is only available for introspection and use when the given features are enabled.
+	RequiredFeatures graphql.FeatureSet
 }
 
 // Returns a minimal connection field definition, with default arguments and cost function defined.
@@ -288,6 +299,7 @@ func ConnectionFieldDefinition(config *ConnectionFieldDefinitionConfig) *graphql
 		Cost:              defaultConnectionCost,
 		Description:       config.Description,
 		DeprecationReason: config.DeprecationReason,
+		RequiredFeatures:  config.RequiredFeatures,
 	}
 	switch config.Direction {
 	case ConnectionDirectionForwardOnly:
@@ -353,8 +365,9 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	}
 
 	edgeType := &graphql.ObjectType{
-		Name:   config.NamePrefix + "Edge",
-		Fields: edgeFields,
+		Name:             config.NamePrefix + "Edge",
+		Fields:           edgeFields,
+		RequiredFeatures: config.RequiredFeatures,
 		IsTypeOf: func(obj interface{}) bool {
 			e, ok := obj.(edge)
 			return ok && e.typeName == config.NamePrefix+"Edge"
@@ -369,8 +382,9 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	}
 
 	connectionType := &graphql.ObjectType{
-		Name:        config.NamePrefix + "Connection",
-		Description: config.Description,
+		Name:             config.NamePrefix + "Connection",
+		Description:      config.Description,
+		RequiredFeatures: config.RequiredFeatures,
 		Fields: map[string]*graphql.FieldDefinition{
 			"edges": {
 				Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edgeType))),
@@ -417,6 +431,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Description:       config.Description,
 		DeprecationReason: config.DeprecationReason,
 		Arguments:         config.Arguments,
+		RequiredFeatures:  config.RequiredFeatures,
 	})
 	ret.Resolve = func(ctx graphql.FieldContext) (interface{}, error) {
 		if first, ok := ctx.Arguments["first"].(int); ok {
@@ -619,6 +634,9 @@ type TimeBasedConnectionConfig struct {
 	// The connection will implement these interfaces. If any of the interfaces define an edge
 	// field as an interface, this connection's edges will also implement that interface.
 	ImplementedInterfaces []*graphql.InterfaceType
+
+	// This connection is only available for introspection and use when the given features are enabled.
+	RequiredFeatures graphql.FeatureSet
 }
 
 var distantFuture = time.Date(3000, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -653,6 +671,7 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 			return config.EdgeCursor(edge)
 		},
 		EdgeFields:        config.EdgeFields,
+		RequiredFeatures:  config.RequiredFeatures,
 		CursorType:        reflect.TypeOf(TimeBasedCursor{}),
 		ResolveTotalCount: config.ResolveTotalCount,
 		ResolveEdges: func(ctx graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
