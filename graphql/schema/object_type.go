@@ -109,6 +109,17 @@ func (t *ObjectType) shallowValidate() error {
 		if field.RequiredFeatures.IsSubsetOf(t.RequiredFeatures) {
 			hasAtLeastOneUnconditionalField = true
 		}
+
+		fieldRequiredFeatures := field.RequiredFeatures.Union(t.RequiredFeatures)
+		if !field.Type.TypeRequiredFeatures().IsSubsetOf(fieldRequiredFeatures) {
+			return fmt.Errorf("field type requires features that are not required by the field")
+		} else {
+			for name, arg := range field.Arguments {
+				if !arg.Type.TypeRequiredFeatures().IsSubsetOf(fieldRequiredFeatures) {
+					return fmt.Errorf("field argument %v requires features that are not required by the field", name)
+				}
+			}
+		}
 	}
 	if !hasAtLeastOneUnconditionalField {
 		return fmt.Errorf("%v must have at least one field", t.Name)

@@ -23,3 +23,14 @@ func (s FeatureSet) IsSubsetOf(other FeatureSet) bool {
 	}
 	return true
 }
+
+func (s FeatureSet) Union(other FeatureSet) FeatureSet {
+	fs := make(FeatureSet, len(s)+len(other))
+	for feature := range s {
+		fs[feature] = struct{}{}
+	}
+	for feature := range other {
+		fs[feature] = struct{}{}
+	}
+	return fs
+}
