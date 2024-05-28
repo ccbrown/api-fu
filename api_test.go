@@ -163,14 +163,18 @@ func TestNodes(t *testing.T) {
 			c: node(id: "c") {
 				id
 			}
+			one: node(id: 1) {
+				id
+			}
 		}`)
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 		var result struct {
 			Data struct {
-				A *node
-				C *node
+				A   *node
+				C   *node
+				One *node
 			}
 			Errors []struct{}
 		}
@@ -179,11 +183,12 @@ func TestNodes(t *testing.T) {
 
 		assert.NotNil(t, result.Data.A)
 		assert.Nil(t, result.Data.C)
+		assert.Nil(t, result.Data.One)
 	})
 
 	t.Run("Multiple", func(t *testing.T) {
 		resp := executeGraphQL(t, api, `{
-			nodes(ids: ["a", "b", "c", "d"]) {
+			nodes(ids: ["a", "b", "c", "d", 1]) {
 				id
 			}
 		}`)
