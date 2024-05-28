@@ -92,11 +92,15 @@ func (cfg *Config) init() {
 					Cost: graphql.FieldResolverCost(1),
 					Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 						// TODO: batching?
-						nodes, err := ctxAPI(ctx.Context).config.ResolveNodesByGlobalIds(ctx.Context, []string{ctx.Arguments["id"].(string)})
-						if err != nil || len(nodes) == 0 {
-							return nil, err
+						if id, ok := ctx.Arguments["id"].(string); ok {
+							nodes, err := ctxAPI(ctx.Context).config.ResolveNodesByGlobalIds(ctx.Context, []string{id})
+							if err != nil || len(nodes) == 0 {
+								return nil, err
+							}
+							return nodes[0], nil
+						} else {
+							return nil, nil
 						}
-						return nodes[0], nil
 					},
 				},
 				"nodes": {
@@ -117,7 +121,9 @@ func (cfg *Config) init() {
 					Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 						var ids []string
 						for _, id := range ctx.Arguments["ids"].([]interface{}) {
-							ids = append(ids, id.(string))
+							if id, ok := id.(string); ok {
+								ids = append(ids, id)
+							}
 						}
 						return ctxAPI(ctx.Context).config.ResolveNodesByGlobalIds(ctx.Context, ids)
 					},
