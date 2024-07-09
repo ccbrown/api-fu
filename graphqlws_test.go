@@ -20,6 +20,42 @@ import (
 	"github.com/ccbrown/api-fu/graphql/transport/graphqlws"
 )
 
+var timeSubscription = &graphql.FieldDefinition{
+	Type: graphql.NewNonNullType(DateTimeType),
+	Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+		if ctx.IsSubscribe {
+			ticker := time.NewTicker(time.Second)
+			return &SubscriptionSourceStream{
+				EventChannel: ticker.C,
+				Stop:         ticker.Stop,
+			}, nil
+		} else if ctx.Object != nil {
+			return ctx.Object, nil
+		} else {
+			return nil, fmt.Errorf("subscriptions are not supported using this protocol")
+		}
+	},
+}
+
+var oneEventSubscription = &graphql.FieldDefinition{
+	Type: graphql.NewNonNullType(graphql.IntType),
+	Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+		if ctx.IsSubscribe {
+			ch := make(chan int, 1)
+			ch <- 1
+			close(ch)
+			return &SubscriptionSourceStream{
+				EventChannel: ch,
+				Stop:         func() {},
+			}, nil
+		} else if ctx.Object != nil {
+			return ctx.Object, nil
+		} else {
+			return nil, fmt.Errorf("subscriptions are not supported using this protocol")
+		}
+	},
+}
+
 func TestGraphQLWS(t *testing.T) {
 	var testCfg Config
 	testCfg.Features = featuresFromContext
@@ -39,22 +75,8 @@ func TestGraphQLWS(t *testing.T) {
 		},
 	})
 
-	testCfg.AddSubscription("time", &graphql.FieldDefinition{
-		Type: graphql.NewNonNullType(DateTimeType),
-		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
-			if ctx.IsSubscribe {
-				ticker := time.NewTicker(time.Second)
-				return &SubscriptionSourceStream{
-					EventChannel: ticker.C,
-					Stop:         ticker.Stop,
-				}, nil
-			} else if ctx.Object != nil {
-				return ctx.Object, nil
-			} else {
-				return nil, fmt.Errorf("subscriptions are not supported using this protocol")
-			}
-		},
-	})
+	testCfg.AddSubscription("time", timeSubscription)
+	testCfg.AddSubscription("oneEvent", oneEventSubscription)
 
 	api, err := NewAPI(&testCfg)
 	require.NoError(t, err)
@@ -145,6 +167,29 @@ func TestGraphQLWS(t *testing.T) {
 			"id":   "sub",
 			"type": "stop",
 		}))
+
+		require.NoError(t, conn.ReadJSON(&msg))
+		assert.Equal(t, "sub", msg.Id)
+		assert.Equal(t, graphqlws.MessageTypeComplete, msg.Type)
+	})
+
+	t.Run("OneEventSubscription", func(t *testing.T) {
+		require.NoError(t, conn.WriteJSON(map[string]interface{}{
+			"id":   "sub",
+			"type": "start",
+			"payload": map[string]interface{}{
+				"query": `
+					subscription {
+						oneEvent
+					}
+				`,
+			},
+		}))
+
+		require.NoError(t, conn.ReadJSON(&msg))
+		assert.Equal(t, "sub", msg.Id)
+		assert.Equal(t, graphqlws.MessageTypeData, msg.Type)
+		assert.JSONEq(t, `{"data":{"oneEvent":1}}`, string(msg.Payload))
 
 		require.NoError(t, conn.ReadJSON(&msg))
 		assert.Equal(t, "sub", msg.Id)
@@ -274,22 +319,8 @@ func TestGraphQLWSTransport(t *testing.T) {
 		},
 	})
 
-	testCfg.AddSubscription("time", &graphql.FieldDefinition{
-		Type: graphql.NewNonNullType(DateTimeType),
-		Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
-			if ctx.IsSubscribe {
-				ticker := time.NewTicker(time.Second)
-				return &SubscriptionSourceStream{
-					EventChannel: ticker.C,
-					Stop:         ticker.Stop,
-				}, nil
-			} else if ctx.Object != nil {
-				return ctx.Object, nil
-			} else {
-				return nil, fmt.Errorf("subscriptions are not supported using this protocol")
-			}
-		},
-	})
+	testCfg.AddSubscription("time", timeSubscription)
+	testCfg.AddSubscription("oneEvent", oneEventSubscription)
 
 	api, err := NewAPI(&testCfg)
 	require.NoError(t, err)
@@ -374,6 +405,29 @@ func TestGraphQLWSTransport(t *testing.T) {
 			"id":   "sub",
 			"type": "complete",
 		}))
+
+		require.NoError(t, conn.ReadJSON(&msg))
+		assert.Equal(t, "sub", msg.Id)
+		assert.Equal(t, graphqltransportws.MessageTypeComplete, msg.Type)
+	})
+
+	t.Run("OneEventSubscription", func(t *testing.T) {
+		require.NoError(t, conn.WriteJSON(map[string]interface{}{
+			"id":   "sub",
+			"type": "subscribe",
+			"payload": map[string]interface{}{
+				"query": `
+					subscription {
+						oneEvent
+					}
+				`,
+			},
+		}))
+
+		require.NoError(t, conn.ReadJSON(&msg))
+		assert.Equal(t, "sub", msg.Id)
+		assert.Equal(t, graphqltransportws.MessageTypeNext, msg.Type)
+		assert.JSONEq(t, `{"data":{"oneEvent":1}}`, string(msg.Payload))
 
 		require.NoError(t, conn.ReadJSON(&msg))
 		assert.Equal(t, "sub", msg.Id)
