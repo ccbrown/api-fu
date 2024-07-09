@@ -8,7 +8,7 @@ import (
 // SubscriptionSourceStream defines the source stream for a subscription.
 type SubscriptionSourceStream struct {
 	// A channel of events. The channel can be of any type.
-	EventChannel interface{}
+	EventChannel any
 
 	// Stop is invoked when the subscription should be stopped and the event channel should be
 	// closed.

@@ -31,7 +31,7 @@ type graphqlWSHandler struct {
 	Logger     logrus.FieldLogger
 
 	cancelContext func()
-	subscriptions map[string]*SubscriptionSourceStream
+	subscriptions map[string]SubscriptionSourceStream
 	features      graphql.FeatureSet
 }
 
@@ -49,7 +49,7 @@ func (h *graphqlWSHandler) HandleInit(parameters json.RawMessage) error {
 	return nil
 }
 
-func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[string]interface{}, operationName string) {
+func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[string]any, operationName string) {
 	ctx := context.WithValue(h.Context, apiContextKey, h.API)
 
 	apiRequest := &apiRequest{}
@@ -86,14 +86,20 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 				}
 			} else {
 				if h.subscriptions == nil {
-					h.subscriptions = map[string]*SubscriptionSourceStream{}
+					h.subscriptions = map[string]SubscriptionSourceStream{}
 				}
-				sourceStream := sourceStream.(*SubscriptionSourceStream)
+				sourceStreamIn := sourceStream.(*SubscriptionSourceStream)
+				// Note we can't use the request context here, because the Go http package closes it
+				// after a hijacked connection's handler returns.
+				ctx, cancel := context.WithCancel(context.Background())
+				sourceStream := *sourceStreamIn
+				sourceStream.Stop = func() {
+					sourceStreamIn.Stop()
+					cancel()
+				}
 				h.subscriptions[id] = sourceStream
 				go func() {
-					// Note we can't use ctx here, because the Go http package closes it after a
-					// hijacked connection's handler returns.
-					if err := sourceStream.Run(context.Background(), func(event interface{}) {
+					if err := sourceStream.Run(ctx, func(event any) {
 						req := *req
 						req.InitialValue = event
 						if err := h.Connection.SendData(context.Background(), id, h.API.execute(&req, &info)); err != nil {

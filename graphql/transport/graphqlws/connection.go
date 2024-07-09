@@ -208,12 +208,6 @@ func (c *Connection) handleMessage(ctx context.Context, data []byte) {
 		}
 
 		c.Handler.HandleStop(msg.Id)
-		if err := c.sendMessage(context.Background(), &Message{
-			Id:   msg.Id,
-			Type: MessageTypeComplete,
-		}); err != nil {
-			c.Handler.LogError(errors.Wrap(err, "unable to send graphql-ws stop response"))
-		}
 	case MessageTypeConnectionTerminate:
 		c.beginClosing(websocket.CloseNormalClosure, "terminate requested by client")
 	default:
