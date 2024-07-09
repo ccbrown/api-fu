@@ -102,6 +102,9 @@ func (h *graphqlWSHandler) HandleStart(id string, query string, variables map[st
 					}); err != nil && err != context.Canceled {
 						h.Logger.Error(errors.Wrap(err, "error running source stream"))
 					}
+					if err := h.Connection.SendComplete(context.Background(), id); err != nil {
+						h.Logger.Warn(errors.Wrap(err, "error sending graphql-ws complete"))
+					}
 				}()
 			}
 		} else {
