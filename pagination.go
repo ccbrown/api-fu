@@ -151,10 +151,38 @@ type PageInfo struct {
 var PageInfoType = &graphql.ObjectType{
 	Name: "PageInfo",
 	Fields: map[string]*graphql.FieldDefinition{
-		"hasPreviousPage": NonNull(graphql.BooleanType, "HasPreviousPage"),
-		"hasNextPage":     NonNull(graphql.BooleanType, "HasNextPage"),
-		"startCursor":     NonNull(graphql.StringType, "StartCursor"),
-		"endCursor":       NonNull(graphql.StringType, "EndCursor"),
+		"hasPreviousPage": {
+			Type:        graphql.NewNonNullType(graphql.BooleanType),
+			Cost:        graphql.FieldResolverCost(0),
+			Description: "When paginating backwards, this field indicates whether there are additional pages before the current one.",
+			Resolve: func(ctx graphql.FieldContext) (any, error) {
+				return ctx.Object.(*PageInfo).HasPreviousPage, nil
+			},
+		},
+		"hasNextPage": {
+			Type:        graphql.NewNonNullType(graphql.BooleanType),
+			Cost:        graphql.FieldResolverCost(0),
+			Description: "When paginating forwards, this field indicates whether there are additional pages after the current one.",
+			Resolve: func(ctx graphql.FieldContext) (any, error) {
+				return ctx.Object.(*PageInfo).HasNextPage, nil
+			},
+		},
+		"startCursor": {
+			Type:        graphql.NewNonNullType(graphql.StringType),
+			Cost:        graphql.FieldResolverCost(0),
+			Description: "This is the cursor of the first edge in the current page.",
+			Resolve: func(ctx graphql.FieldContext) (any, error) {
+				return ctx.Object.(*PageInfo).StartCursor, nil
+			},
+		},
+		"endCursor": {
+			Type:        graphql.NewNonNullType(graphql.StringType),
+			Cost:        graphql.FieldResolverCost(0),
+			Description: "This is the cursor of the last edge in the current page.",
+			Resolve: func(ctx graphql.FieldContext) (any, error) {
+				return ctx.Object.(*PageInfo).EndCursor, nil
+			},
+		},
 	},
 }
 
@@ -220,12 +248,18 @@ func defaultConnectionCost(ctx graphql.FieldCostContext) graphql.FieldCost {
 	}
 }
 
+const cursorDesc = "A cursor for pagination via a connection's `before` and `after` arguments. Cursors are opaque strings and are not meant to be used by clients except to paginate through a result set."
+const pageInfoDesc = "Information about the current page of results."
+const totalCountDesc = "The total count of existing items, including those not returned in the current page."
+const edgesDesc = `A list of edges. An edge represents a relationship with a "node", and may include additional fields describing that relationship.`
+
 // Returns an interface for a connection.
 func ConnectionInterface(config *ConnectionInterfaceConfig) *graphql.InterfaceType {
 	edgeFields := map[string]*graphql.FieldDefinition{
 		"cursor": &graphql.FieldDefinition{
-			Type: graphql.NewNonNullType(graphql.StringType),
-			Cost: graphql.FieldResolverCost(0),
+			Type:        graphql.NewNonNullType(graphql.StringType),
+			Cost:        graphql.FieldResolverCost(0),
+			Description: cursorDesc,
 		},
 	}
 	for k, v := range config.EdgeFields {
@@ -243,7 +277,8 @@ func ConnectionInterface(config *ConnectionInterfaceConfig) *graphql.InterfaceTy
 		RequiredFeatures: config.RequiredFeatures,
 		Fields: map[string]*graphql.FieldDefinition{
 			"edges": {
-				Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edge))),
+				Type:        graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(edge))),
+				Description: edgesDesc,
 				Cost: func(ctx graphql.FieldCostContext) graphql.FieldCost {
 					return graphql.FieldCost{
 						Resolver:   0,
@@ -256,14 +291,16 @@ func ConnectionInterface(config *ConnectionInterfaceConfig) *graphql.InterfaceTy
 				// The cost is already accounted for by the connection itself. Either
 				// ResolvePageInfo will be trivial or 0 edges were requested and all work was
 				// delayed until now.
-				Cost: graphql.FieldResolverCost(0),
+				Cost:        graphql.FieldResolverCost(0),
+				Description: pageInfoDesc,
 			},
 		},
 	}
 
 	if config.HasTotalCount {
 		ret.Fields["totalCount"] = &graphql.FieldDefinition{
-			Type: graphql.NewNonNullType(graphql.IntType),
+			Type:        graphql.NewNonNullType(graphql.IntType),
+			Description: totalCountDesc,
 		}
 	}
 
@@ -343,8 +380,9 @@ var maxEdgeCountContextKey maxEdgeCountContextKeyType
 func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	edgeFields := map[string]*graphql.FieldDefinition{
 		"cursor": {
-			Type: graphql.NewNonNullType(graphql.StringType),
-			Cost: graphql.FieldResolverCost(0),
+			Type:        graphql.NewNonNullType(graphql.StringType),
+			Cost:        graphql.FieldResolverCost(0),
+			Description: cursorDesc,
 			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 				s, err := serializeCursor(ctx.Object.(edge).Cursor)
 				if err != nil {
@@ -394,6 +432,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 						Multiplier: ctx.Context.Value(maxEdgeCountContextKey).(int),
 					}
 				},
+				Description: edgesDesc,
 				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object.(*connection).Edges, nil
 				},
@@ -403,7 +442,8 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				// The cost is already accounted for by the connection itself. Either
 				// ResolvePageInfo will be trivial or 0 edges were requested and all work was
 				// delayed until now.
-				Cost: graphql.FieldResolverCost(0),
+				Cost:        graphql.FieldResolverCost(0),
+				Description: pageInfoDesc,
 				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 					return ctx.Object.(*connection).ResolvePageInfo()
 				},
@@ -418,7 +458,8 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 
 	if config.ResolveAllEdges != nil || config.ResolveTotalCount != nil {
 		connectionType.Fields["totalCount"] = &graphql.FieldDefinition{
-			Type: graphql.NewNonNullType(graphql.IntType),
+			Type:        graphql.NewNonNullType(graphql.IntType),
+			Description: totalCountDesc,
 			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
 				return ctx.Object.(*connection).ResolveTotalCount()
 			},
