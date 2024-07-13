@@ -71,7 +71,8 @@ func (cfg *Config) init() {
 			Name: "Node",
 			Fields: map[string]*graphql.FieldDefinition{
 				"id": {
-					Type: graphql.NewNonNullType(graphql.IDType),
+					Type:        graphql.NewNonNullType(graphql.IDType),
+					Description: "The global id of the node.",
 				},
 			},
 		}
@@ -83,7 +84,8 @@ func (cfg *Config) init() {
 			Name: "Query",
 			Fields: map[string]*graphql.FieldDefinition{
 				"node": {
-					Type: cfg.nodeInterface,
+					Type:        cfg.nodeInterface,
+					Description: "Gets a node by its global id.",
 					Arguments: map[string]*graphql.InputValueDefinition{
 						"id": {
 							Type: graphql.NewNonNullType(graphql.IDType),
