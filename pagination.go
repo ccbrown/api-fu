@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 
 	"github.com/ccbrown/api-fu/graphql"
 	"github.com/ccbrown/api-fu/graphql/schema"
+	"github.com/ccbrown/api-fu/pagination"
 )
 
 type ConnectionDirection int
@@ -48,7 +48,7 @@ type ConnectionConfig struct {
 	// If getting all edges for the connection is cheap, you can just provide ResolveAllEdges.
 	// ResolveAllEdges should return a slice value, with one item for each edge, and a function that
 	// can be used to sort the cursors produced by EdgeCursor.
-	ResolveAllEdges func(ctx graphql.FieldContext) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
+	ResolveAllEdges func(ctx graphql.FieldContext) (edgeSlice any, cursorLess func(a, b any) bool, err error)
 
 	// If getting all edges for the connection is too expensive for ResolveAllEdges, you can provide
 	// ResolveEdges. ResolveEdges is just like ResolveAllEdges, but is only required to return edges
@@ -64,11 +64,11 @@ type ConnectionConfig struct {
 	// behavior will be fully compliant with the Relay Pagination spec regardless. However,
 	// providing these additional edges will allow hasNextPage and hasPreviousPage to be true in
 	// scenarios where the spec allows them to be false for performance reasons.
-	ResolveEdges func(ctx graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error)
+	ResolveEdges func(ctx graphql.FieldContext, after, before any, limit int) (edgeSlice any, cursorLess func(a, b any) bool, err error)
 
 	// If you use ResolveEdges, you can optionally provide ResolveTotalCount to add a totalCount
 	// field to the connection. If you use ResolveAllEdges, there is no need to provide this.
-	ResolveTotalCount func(ctx graphql.FieldContext) (interface{}, error)
+	ResolveTotalCount func(ctx graphql.FieldContext) (any, error)
 
 	// CursorType allows the connection to deserialize cursors. It is required for all connections.
 	CursorType reflect.Type
@@ -77,7 +77,7 @@ type ConnectionConfig struct {
 	// For example, this might be a struct with a name and id for a connection whose edges are
 	// sorted by name. The value must be able to be marshaled to and from binary. This function
 	// should return the type of cursor assigned to CursorType.
-	EdgeCursor func(edge interface{}) interface{}
+	EdgeCursor func(edge any) any
 
 	// EdgeFields should provide definitions for the fields of each node. You must provide the
 	// "node" field, but the "cursor" field will be provided for you.
@@ -91,7 +91,8 @@ type ConnectionConfig struct {
 	RequiredFeatures graphql.FeatureSet
 }
 
-func serializeCursor(cursor interface{}) (string, error) {
+// SerializeCursor serializes a cursor to a string that can be used in a response.
+func SerializeCursor(cursor any) (string, error) {
 	b, err := msgpack.Marshal(cursor)
 	if err != nil {
 		return "", err
@@ -99,7 +100,9 @@ func serializeCursor(cursor interface{}) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func deserializeCursor(t reflect.Type, s string) interface{} {
+// DeserializeCursor deserializes a cursor that was previously serialized with SerializeCursor or
+// returns nil if the cursor is invalid.
+func DeserializeCursor(t reflect.Type, s string) any {
 	ret := reflect.New(t)
 	if b, err := base64.RawURLEncoding.DecodeString(s); err == nil {
 		if err := msgpack.Unmarshal(b, ret.Interface()); err == nil {
@@ -107,36 +110,6 @@ func deserializeCursor(t reflect.Type, s string) interface{} {
 		}
 	}
 	return nil
-}
-
-func (cfg *ConnectionConfig) applyCursorsToEdges(allEdges []interface{}, before, after interface{}, cursorLess func(a, b interface{}) bool) (edges []edge, hasPreviousPage, hasNextPage bool) {
-	edges = []edge{}
-
-	if len(allEdges) == 0 {
-		return edges, false, false
-	}
-
-	for _, e := range allEdges {
-		cursor := cfg.EdgeCursor(e)
-		if after != nil && !cursorLess(after, cursor) {
-			hasPreviousPage = true
-			continue
-		}
-		if before != nil && !cursorLess(cursor, before) {
-			hasNextPage = true
-			continue
-		}
-		edges = append(edges, edge{
-			Value:  e,
-			Cursor: cursor,
-		})
-	}
-
-	sort.Slice(edges, func(i, j int) bool {
-		return cursorLess(edges[i].Cursor, edges[j].Cursor)
-	})
-
-	return
 }
 
 // PageInfo represents the page info of a GraphQL Cursor Connection.
@@ -168,6 +141,10 @@ var PageInfoType = &graphql.ObjectType{
 			},
 		},
 		"startCursor": {
+			// XXX: In the latest Relay spec, this is nullable
+			// (https://github.com/facebook/relay/pull/2655). However, it would technically be a
+			// breaking change to make it nullable here now.
+			// TODO: Update them if there's an opportunity to safely do so.
 			Type:        graphql.NewNonNullType(graphql.StringType),
 			Cost:        graphql.FieldResolverCost(0),
 			Description: "This is the cursor of the first edge in the current page.",
@@ -176,6 +153,7 @@ var PageInfoType = &graphql.ObjectType{
 			},
 		},
 		"endCursor": {
+			// XXX: See note on startCursor.
 			Type:        graphql.NewNonNullType(graphql.StringType),
 			Cost:        graphql.FieldResolverCost(0),
 			Description: "This is the cursor of the last edge in the current page.",
@@ -359,15 +337,28 @@ func ConnectionFieldDefinition(config *ConnectionFieldDefinitionConfig) *graphql
 }
 
 type edge struct {
-	Value    interface{}
-	Cursor   interface{}
+	value    any
+	cursor   userCursor
 	typeName string
 }
 
+func (e edge) Cursor() userCursor {
+	return e.cursor
+}
+
+type userCursor struct {
+	value      any
+	cursorLess func(a, b any) bool
+}
+
+func (c userCursor) LessThan(other userCursor) bool {
+	return c.cursorLess(c.value, other.value)
+}
+
 type connection struct {
-	ResolveTotalCount func() (interface{}, error)
+	ResolveTotalCount func() (any, error)
 	Edges             []edge
-	ResolvePageInfo   func() (interface{}, error)
+	ResolvePageInfo   func() (any, error)
 	typeName          string
 }
 
@@ -383,8 +374,8 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			Type:        graphql.NewNonNullType(graphql.StringType),
 			Cost:        graphql.FieldResolverCost(0),
 			Description: cursorDesc,
-			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
-				s, err := serializeCursor(ctx.Object.(edge).Cursor)
+			Resolve: func(ctx graphql.FieldContext) (any, error) {
+				s, err := SerializeCursor(ctx.Object.(edge).cursor.value)
 				if err != nil {
 					return nil, errors.Wrap(err, "error serializing cursor")
 				}
@@ -395,8 +386,8 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	for k, v := range config.EdgeFields {
 		def := *v
 		resolve := def.Resolve
-		def.Resolve = func(ctx graphql.FieldContext) (interface{}, error) {
-			ctx.Object = ctx.Object.(edge).Value
+		def.Resolve = func(ctx graphql.FieldContext) (any, error) {
+			ctx.Object = ctx.Object.(edge).value
 			return resolve(ctx)
 		}
 		edgeFields[k] = &def
@@ -406,7 +397,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Name:             config.NamePrefix + "Edge",
 		Fields:           edgeFields,
 		RequiredFeatures: config.RequiredFeatures,
-		IsTypeOf: func(obj interface{}) bool {
+		IsTypeOf: func(obj any) bool {
 			e, ok := obj.(edge)
 			return ok && e.typeName == config.NamePrefix+"Edge"
 		},
@@ -433,7 +424,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 					}
 				},
 				Description: edgesDesc,
-				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (any, error) {
 					return ctx.Object.(*connection).Edges, nil
 				},
 			},
@@ -444,13 +435,13 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 				// delayed until now.
 				Cost:        graphql.FieldResolverCost(0),
 				Description: pageInfoDesc,
-				Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+				Resolve: func(ctx graphql.FieldContext) (any, error) {
 					return ctx.Object.(*connection).ResolvePageInfo()
 				},
 			},
 		},
 		ImplementedInterfaces: config.ImplementedInterfaces,
-		IsTypeOf: func(obj interface{}) bool {
+		IsTypeOf: func(obj any) bool {
 			c, ok := obj.(*connection)
 			return ok && c.typeName == config.NamePrefix+"Connection"
 		},
@@ -460,7 +451,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		connectionType.Fields["totalCount"] = &graphql.FieldDefinition{
 			Type:        graphql.NewNonNullType(graphql.IntType),
 			Description: totalCountDesc,
-			Resolve: func(ctx graphql.FieldContext) (interface{}, error) {
+			Resolve: func(ctx graphql.FieldContext) (any, error) {
 				return ctx.Object.(*connection).ResolveTotalCount()
 			},
 		}
@@ -474,7 +465,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		Arguments:         config.Arguments,
 		RequiredFeatures:  config.RequiredFeatures,
 	})
-	ret.Resolve = func(ctx graphql.FieldContext) (interface{}, error) {
+	ret.Resolve = func(ctx graphql.FieldContext) (any, error) {
 		if first, ok := ctx.Arguments["first"].(int); ok {
 			if first < 0 {
 				return nil, fmt.Errorf("The `first` argument cannot be negative.")
@@ -489,17 +480,21 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
 		}
 
-		var afterCursor interface{}
+		var afterCursor, beforeCursor *any
+
 		if after, _ := ctx.Arguments["after"].(string); after != "" {
-			if afterCursor = deserializeCursor(config.CursorType, after); afterCursor == nil {
+			if value := DeserializeCursor(config.CursorType, after); value == nil {
 				return nil, fmt.Errorf("Invalid after cursor.")
+			} else {
+				afterCursor = &value
 			}
 		}
 
-		var beforeCursor interface{}
 		if before, _ := ctx.Arguments["before"].(string); before != "" {
-			if beforeCursor = deserializeCursor(config.CursorType, before); beforeCursor == nil {
+			if value := DeserializeCursor(config.CursorType, before); value == nil {
 				return nil, fmt.Errorf("Invalid before cursor.")
+			} else {
+				beforeCursor = &value
 			}
 		}
 
@@ -509,22 +504,22 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 		} else {
 			limit = -(ctx.Arguments["last"].(int) + 1)
 		}
-		resolve := func() (interface{}, func(a, b interface{}) bool, error) {
+		resolve := func() (any, func(a, b any) bool, error) {
 			return config.ResolveAllEdges(ctx)
 		}
 		if config.ResolveAllEdges == nil {
-			resolve = func() (interface{}, func(a, b interface{}) bool, error) {
+			resolve = func() (any, func(a, b any) bool, error) {
 				return config.ResolveEdges(ctx, afterCursor, beforeCursor, limit)
 			}
 		}
 		if limit == 1 || limit == -1 {
 			// no edges. don't do anything unless pageInfo is requested
 			return &connection{
-				ResolveTotalCount: func() (interface{}, error) {
+				ResolveTotalCount: func() (any, error) {
 					return config.ResolveTotalCount(ctx)
 				},
 				Edges: []edge{},
-				ResolvePageInfo: func() (interface{}, error) {
+				ResolvePageInfo: func() (any, error) {
 					edgeSlice, cursorLess, err := resolve()
 					if !isNil(err) {
 						return nil, err
@@ -534,7 +529,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 						return nil, err
 					}
 					if promise, ok := conn.(graphql.ResolvePromise); ok {
-						return chain(ctx.Context, promise, func(conn interface{}) (interface{}, error) {
+						return chain(ctx.Context, promise, func(conn any) (any, error) {
 							return conn.(*connection).ResolvePageInfo()
 						}), nil
 					}
@@ -551,10 +546,10 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	return ret
 }
 
-func completeConnection(config *ConnectionConfig, ctx graphql.FieldContext, beforeCursor, afterCursor interface{}, cursorLess func(a, b interface{}) bool, edgeSlice interface{}) (interface{}, error) {
+func completeConnection(config *ConnectionConfig, ctx graphql.FieldContext, beforeCursorValue, afterCursorValue *any, cursorLess func(a, b any) bool, edgeSlice any) (any, error) {
 	if edgeSlice, ok := edgeSlice.(graphql.ResolvePromise); ok {
-		return chain(ctx.Context, edgeSlice, func(edgeSlice interface{}) (interface{}, error) {
-			return completeConnection(config, ctx, beforeCursor, afterCursor, cursorLess, edgeSlice)
+		return chain(ctx.Context, edgeSlice, func(edgeSlice any) (any, error) {
+			return completeConnection(config, ctx, beforeCursorValue, afterCursorValue, cursorLess, edgeSlice)
 		}), nil
 	}
 
@@ -563,51 +558,63 @@ func completeConnection(config *ConnectionConfig, ctx graphql.FieldContext, befo
 		return nil, fmt.Errorf("unexpected non-slice type %T for edges", edgeSlice)
 	}
 
-	resolveTotalCount := func() (interface{}, error) {
+	resolveTotalCount := func() (any, error) {
 		return edgeSliceValue.Len(), nil
 	}
 	if config.ResolveTotalCount != nil {
-		resolveTotalCount = func() (interface{}, error) {
+		resolveTotalCount = func() (any, error) {
 			return config.ResolveTotalCount(ctx)
 		}
 	}
 
-	ifaces := make([]interface{}, edgeSliceValue.Len())
-	for i := range ifaces {
-		ifaces[i] = edgeSliceValue.Index(i).Interface()
-	}
-
-	edges, hasPreviousPage, hasNextPage := config.applyCursorsToEdges(ifaces, beforeCursor, afterCursor, cursorLess)
-
-	if first, ok := ctx.Arguments["first"].(int); ok {
-		if len(edges) > first {
-			edges = edges[:first]
-			hasNextPage = true
-		} else {
-			hasNextPage = false
+	edgesWithCursors := make([]edge, edgeSliceValue.Len())
+	for i := range edgesWithCursors {
+		value := edgeSliceValue.Index(i).Interface()
+		edgesWithCursors[i] = edge{
+			value: value,
+			cursor: userCursor{
+				value:      config.EdgeCursor(value),
+				cursorLess: cursorLess,
+			},
+			typeName: config.NamePrefix + "Edge",
 		}
 	}
 
-	if last, ok := ctx.Arguments["last"].(int); ok {
-		if len(edges) > last {
-			edges = edges[len(edges)-last:]
-			hasPreviousPage = true
-		} else {
-			hasPreviousPage = false
+	var afterCursor, beforeCursor *userCursor
+	if afterCursorValue != nil {
+		afterCursor = &userCursor{
+			value:      *afterCursorValue,
+			cursorLess: cursorLess,
+		}
+	}
+	if beforeCursorValue != nil {
+		beforeCursor = &userCursor{
+			value:      *beforeCursorValue,
+			cursorLess: cursorLess,
 		}
 	}
 
-	pageInfo := &PageInfo{
-		HasPreviousPage: hasPreviousPage,
-		HasNextPage:     hasNextPage,
+	var first, last *int
+	if f, ok := ctx.Arguments["first"].(int); ok {
+		first = &f
+	}
+	if l, ok := ctx.Arguments["last"].(int); ok {
+		last = &l
+	}
+
+	edges, pageInfo := pagination.EdgesToReturn(edgesWithCursors, afterCursor, beforeCursor, first, last)
+
+	serializedPageInfo := &PageInfo{
+		HasPreviousPage: pageInfo.HasPreviousPage,
+		HasNextPage:     pageInfo.HasNextPage,
 	}
 	if len(edges) > 0 {
 		var err error
-		pageInfo.StartCursor, err = serializeCursor(edges[0].Cursor)
+		serializedPageInfo.StartCursor, err = SerializeCursor(pageInfo.StartCursor.value)
 		if err != nil {
 			return nil, errors.Wrap(err, "error serializing start cursor")
 		}
-		pageInfo.EndCursor, err = serializeCursor(edges[len(edges)-1].Cursor)
+		serializedPageInfo.EndCursor, err = SerializeCursor(pageInfo.EndCursor.value)
 		if err != nil {
 			return nil, errors.Wrap(err, "error serializing end cursor")
 		}
@@ -615,8 +622,8 @@ func completeConnection(config *ConnectionConfig, ctx graphql.FieldContext, befo
 	return &connection{
 		ResolveTotalCount: resolveTotalCount,
 		Edges:             edges,
-		ResolvePageInfo: func() (interface{}, error) {
-			return pageInfo, nil
+		ResolvePageInfo: func() (any, error) {
+			return serializedPageInfo, nil
 		},
 	}, nil
 }
@@ -635,9 +642,16 @@ func NewTimeBasedCursor(t time.Time, id string) TimeBasedCursor {
 	}
 }
 
-func timeBasedCursorLess(a, b interface{}) bool {
-	ac, bc := a.(TimeBasedCursor), b.(TimeBasedCursor)
-	return ac.Nano < bc.Nano || (ac.Nano == bc.Nano && strings.Compare(ac.Id, bc.Id) < 0)
+func (c TimeBasedCursor) Time() time.Time {
+	return time.Unix(0, c.Nano)
+}
+
+func (c TimeBasedCursor) LessThan(other TimeBasedCursor) bool {
+	return c.Nano < other.Nano || (c.Nano == other.Nano && strings.Compare(c.Id, other.Id) < 0)
+}
+
+func timeBasedCursorLess(a, b any) bool {
+	return a.(TimeBasedCursor).LessThan(b.(TimeBasedCursor))
 }
 
 // TimeBasedConnectionConfig defines the configuration for a time-based connection that adheres to
@@ -655,7 +669,7 @@ type TimeBasedConnectionConfig struct {
 	NamePrefix string
 
 	// This function should return a TimeBasedCursor for the given edge.
-	EdgeCursor func(edge interface{}) TimeBasedCursor
+	EdgeCursor func(edge any) TimeBasedCursor
 
 	// Returns the fields for the edge. This should always at least include a "node" field.
 	EdgeFields map[string]*graphql.FieldDefinition
@@ -664,13 +678,13 @@ type TimeBasedConnectionConfig struct {
 	// returned. If limit is greater than zero, up to limit edges at the start of the range should
 	// be returned. If limit is less than zero, up to -limit edge at the end of the range should be
 	// returned.
-	EdgeGetter func(ctx graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (interface{}, error)
+	EdgeGetter func(ctx graphql.FieldContext, minTime time.Time, maxTime time.Time, limit int) (any, error)
 
 	// An optional map of additional arguments to add to the connection.
 	Arguments map[string]*graphql.InputValueDefinition
 
 	// To support the "totalCount" connection field, you can provide this method.
-	ResolveTotalCount func(ctx graphql.FieldContext) (interface{}, error)
+	ResolveTotalCount func(ctx graphql.FieldContext) (any, error)
 
 	// The connection will implement these interfaces. If any of the interfaces define an edge
 	// field as an interface, this connection's edges will also implement that interface.
@@ -679,8 +693,6 @@ type TimeBasedConnectionConfig struct {
 	// This connection is only available for introspection and use when the given features are enabled.
 	RequiredFeatures graphql.FeatureSet
 }
-
-var distantFuture = time.Date(3000, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // TimeBasedConnection creates a new connection for edges sorted by time. In addition to the
 // standard first, last, after, and before fields, the connection will have atOrAfterTime and
@@ -708,55 +720,36 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 		Arguments:         arguments,
 		Description:       description,
 		DeprecationReason: config.DeprecationReason,
-		EdgeCursor: func(edge interface{}) interface{} {
+		EdgeCursor: func(edge any) any {
 			return config.EdgeCursor(edge)
 		},
 		EdgeFields:        config.EdgeFields,
 		RequiredFeatures:  config.RequiredFeatures,
 		CursorType:        reflect.TypeOf(TimeBasedCursor{}),
 		ResolveTotalCount: config.ResolveTotalCount,
-		ResolveEdges: func(ctx graphql.FieldContext, after, before interface{}, limit int) (edgeSlice interface{}, cursorLess func(a, b interface{}) bool, err error) {
-			type Query struct {
-				Min   time.Time
-				Max   time.Time
-				Limit int
-			}
-			var queries []Query
-
-			atOrAfterTime := time.Time{}
+		ResolveEdges: func(ctx graphql.FieldContext, after, before any, limit int) (edgeSlice any, cursorLess func(a, b any) bool, err error) {
+			var atOrAfterTime, beforeTime *time.Time
 			if t, ok := ctx.Arguments["atOrAfterTime"].(time.Time); ok {
-				atOrAfterTime = t
+				atOrAfterTime = &t
 			}
-
-			beforeTime := distantFuture
 			if t, ok := ctx.Arguments["beforeTime"].(time.Time); ok {
-				beforeTime = t
+				beforeTime = &t
 			}
 
-			middle := Query{atOrAfterTime, beforeTime.Add(-time.Nanosecond), limit}
-
-			if after, ok := after.(TimeBasedCursor); ok {
-				queries = append(queries, Query{time.Unix(0, after.Nano), time.Unix(0, after.Nano), 0})
-				if t := time.Unix(0, after.Nano+1); t.After(middle.Min) {
-					middle.Min = t
-				}
+			var afterPtr, beforePtr *TimeBasedCursor
+			if c, ok := after.(TimeBasedCursor); ok {
+				afterPtr = &c
+			}
+			if c, ok := before.(TimeBasedCursor); ok {
+				beforePtr = &c
 			}
 
-			if before, ok := before.(TimeBasedCursor); ok {
-				if after, ok := after.(TimeBasedCursor); !ok || after.Nano != before.Nano {
-					queries = append(queries, Query{time.Unix(0, before.Nano), time.Unix(0, before.Nano), 0})
-				}
-				if t := time.Unix(0, before.Nano-1); t.Before(middle.Max) {
-					middle.Max = t
-				}
-			}
+			queries := pagination.TimeBasedRangeQueries(afterPtr, beforePtr, atOrAfterTime, beforeTime, limit)
 
-			queries = append(queries, middle)
-
-			var edges []interface{}
+			var edges []any
 			var promises []graphql.ResolvePromise
 			for _, q := range queries {
-				if queryEdges, err := config.EdgeGetter(ctx, q.Min, q.Max, q.Limit); err != nil {
+				if queryEdges, err := config.EdgeGetter(ctx, q.MinTime, q.MaxTime, q.Limit); err != nil {
 					return nil, nil, err
 				} else if promise, ok := queryEdges.(graphql.ResolvePromise); ok {
 					promises = append(promises, promise)
@@ -771,7 +764,7 @@ func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefini
 				}
 			}
 			if len(promises) > 0 {
-				return join(ctx.Context, promises, func(v []interface{}) (interface{}, error) {
+				return join(ctx.Context, promises, func(v []any) (any, error) {
 					for _, queryEdges := range v {
 						v := reflect.ValueOf(queryEdges)
 						for i := 0; i < v.Len(); i++ {
