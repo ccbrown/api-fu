@@ -480,13 +480,13 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			return nil, fmt.Errorf("You must provide either the `first` or `last` argument.")
 		}
 
-		var afterCursor, beforeCursor *any
+		var afterCursor, beforeCursor any
 
 		if after, _ := ctx.Arguments["after"].(string); after != "" {
 			if value := DeserializeCursor(config.CursorType, after); value == nil {
 				return nil, fmt.Errorf("Invalid after cursor.")
 			} else {
-				afterCursor = &value
+				afterCursor = value
 			}
 		}
 
@@ -494,7 +494,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			if value := DeserializeCursor(config.CursorType, before); value == nil {
 				return nil, fmt.Errorf("Invalid before cursor.")
 			} else {
-				beforeCursor = &value
+				beforeCursor = value
 			}
 		}
 
@@ -546,7 +546,7 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 	return ret
 }
 
-func completeConnection(config *ConnectionConfig, ctx graphql.FieldContext, beforeCursorValue, afterCursorValue *any, cursorLess func(a, b any) bool, edgeSlice any) (any, error) {
+func completeConnection(config *ConnectionConfig, ctx graphql.FieldContext, beforeCursorValue, afterCursorValue any, cursorLess func(a, b any) bool, edgeSlice any) (any, error) {
 	if edgeSlice, ok := edgeSlice.(graphql.ResolvePromise); ok {
 		return chain(ctx.Context, edgeSlice, func(edgeSlice any) (any, error) {
 			return completeConnection(config, ctx, beforeCursorValue, afterCursorValue, cursorLess, edgeSlice)
@@ -583,13 +583,13 @@ func completeConnection(config *ConnectionConfig, ctx graphql.FieldContext, befo
 	var afterCursor, beforeCursor *userCursor
 	if afterCursorValue != nil {
 		afterCursor = &userCursor{
-			value:      *afterCursorValue,
+			value:      afterCursorValue,
 			cursorLess: cursorLess,
 		}
 	}
 	if beforeCursorValue != nil {
 		beforeCursor = &userCursor{
-			value:      *beforeCursorValue,
+			value:      beforeCursorValue,
 			cursorLess: cursorLess,
 		}
 	}
