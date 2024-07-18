@@ -184,34 +184,42 @@ type ConnectionInterfaceConfig struct {
 
 var forwardConnectionArguments = map[string]*graphql.InputValueDefinition{
 	"first": {
-		Type: graphql.NewNonNullType(graphql.IntType),
+		Type:        graphql.NewNonNullType(graphql.IntType),
+		Description: "Indicates that up to the first N results should be returned.",
 	},
 	"after": {
-		Type: graphql.StringType,
+		Type:        graphql.StringType,
+		Description: "Returns only results that come after the given cursor.",
 	},
 }
 
 var backwardConnectionArguments = map[string]*graphql.InputValueDefinition{
 	"last": {
-		Type: graphql.NewNonNullType(graphql.IntType),
+		Type:        graphql.NewNonNullType(graphql.IntType),
+		Description: "Indicates that up to the last N results should be returned.",
 	},
 	"before": {
-		Type: graphql.StringType,
+		Type:        graphql.StringType,
+		Description: "Returns only results that come before the given cursor.",
 	},
 }
 
 var bidirectionalConnectionArguments = map[string]*graphql.InputValueDefinition{
 	"first": {
-		Type: graphql.IntType,
+		Type:        graphql.IntType,
+		Description: "Indicates that up to the first N results should be returned. You must provide either `first` or `last`.",
 	},
 	"after": {
-		Type: graphql.StringType,
+		Type:        graphql.StringType,
+		Description: "Returns only results that come after the given cursor.",
 	},
 	"last": {
-		Type: graphql.IntType,
+		Type:        graphql.IntType,
+		Description: "Indicates that up to the last N results should be returned. You must provide either `first` or `last`.",
 	},
 	"before": {
-		Type: graphql.StringType,
+		Type:        graphql.StringType,
+		Description: "Returns only results that come before the given cursor.",
 	},
 }
 
@@ -700,10 +708,12 @@ type TimeBasedConnectionConfig struct {
 func TimeBasedConnection(config *TimeBasedConnectionConfig) *graphql.FieldDefinition {
 	arguments := map[string]*graphql.InputValueDefinition{
 		"atOrAfterTime": {
-			Type: DateTimeType,
+			Type:        DateTimeType,
+			Description: "Filters results such that only those that occurred at or after this time are returned.",
 		},
 		"beforeTime": {
-			Type: DateTimeType,
+			Type:        DateTimeType,
+			Description: "Filters results such that only those that occurred before this time are returned.",
 		},
 	}
 	for name, def := range config.Arguments {

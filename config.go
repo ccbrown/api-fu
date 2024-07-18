@@ -88,7 +88,8 @@ func (cfg *Config) init() {
 					Description: "Gets a node by its global id.",
 					Arguments: map[string]*graphql.InputValueDefinition{
 						"id": {
-							Type: graphql.NewNonNullType(graphql.IDType),
+							Type:        graphql.NewNonNullType(graphql.IDType),
+							Description: "The global id of the node to get.",
 						},
 					},
 					Cost: graphql.FieldResolverCost(1),
@@ -110,7 +111,8 @@ func (cfg *Config) init() {
 					Description: "Gets nodes for multiple ids. Non-existent nodes are not returned and the order of the returned nodes is arbitrary, so clients should check their ids.",
 					Arguments: map[string]*graphql.InputValueDefinition{
 						"ids": {
-							Type: graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(graphql.IDType))),
+							Type:        graphql.NewNonNullType(graphql.NewListType(graphql.NewNonNullType(graphql.IDType))),
+							Description: "The global ids of the nodes to get.",
 						},
 					},
 					Cost: func(ctx graphql.FieldCostContext) graphql.FieldCost {
