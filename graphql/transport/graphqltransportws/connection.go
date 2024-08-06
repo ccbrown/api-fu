@@ -258,9 +258,7 @@ func (c *Connection) writeLoop() {
 			return
 		case <-c.closeReceived:
 			// the client initiated the close handshake
-			if err := c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "close requested by client")); err != nil {
-				c.Handler.LogError(errors.Wrap(err, "websocket control write error"))
-			}
+			c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "close requested by client"))
 			return
 		}
 
