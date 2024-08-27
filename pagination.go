@@ -374,6 +374,14 @@ type maxEdgeCountContextKeyType int
 
 var maxEdgeCountContextKey maxEdgeCountContextKeyType
 
+func resolveEdgeSliceLen(edgeSlice any) (any, error) {
+	edgeSliceValue := reflect.ValueOf(edgeSlice)
+	if edgeSliceValue.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("unexpected non-slice type %T for edges", edgeSlice)
+	}
+	return edgeSliceValue.Len(), nil
+}
+
 // Connection is used to create a connection field that adheres to the GraphQL Cursor Connections
 // Specification.
 func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
@@ -524,7 +532,19 @@ func Connection(config *ConnectionConfig) *graphql.FieldDefinition {
 			// no edges. don't do anything unless pageInfo is requested
 			return &connection{
 				ResolveTotalCount: func() (any, error) {
-					return config.ResolveTotalCount(ctx)
+					if config.ResolveTotalCount != nil {
+						return config.ResolveTotalCount(ctx)
+					} else if config.ResolveAllEdges != nil {
+						edgeSlice, _, err := config.ResolveAllEdges(ctx)
+						if err != nil {
+							return nil, err
+						}
+						if edgeSlice, ok := edgeSlice.(graphql.ResolvePromise); ok {
+							return chain(ctx.Context, edgeSlice, resolveEdgeSliceLen), nil
+						}
+						return resolveEdgeSliceLen(edgeSlice)
+					}
+					return 0, fmt.Errorf("totalCount is not supported for this connection.")
 				},
 				Edges: []edge{},
 				ResolvePageInfo: func() (any, error) {
