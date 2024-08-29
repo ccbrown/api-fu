@@ -80,10 +80,17 @@ var objectType = &schema.ObjectType{
 }
 
 type object struct {
-	Error error
+	Error            error
+	AsyncStringError error
 }
 
-var stringPromises []ResolvePromise
+type futureResult struct {
+	WaitTicks int
+	Channel   ResolvePromise
+	Result    ResolveResult
+}
+
+var stringPromises []futureResult
 
 func init() {
 	objectType.Fields = map[string]*schema.FieldDefinition{
@@ -107,9 +114,29 @@ func init() {
 		},
 		"asyncString": {
 			Type: schema.StringType,
-			Resolve: func(schema.FieldContext) (interface{}, error) {
+			Arguments: map[string]*schema.InputValueDefinition{
+				"waitTicksForSuccess": {
+					Type: schema.IntType,
+				},
+			},
+			Resolve: func(ctx schema.FieldContext) (interface{}, error) {
 				ch := make(ResolvePromise, 1)
-				stringPromises = append(stringPromises, ch)
+				result := ResolveResult{Value: "s"}
+				if obj, ok := ctx.Object.(*object); ok {
+					if err := obj.AsyncStringError; err != nil {
+						result.Value = nil
+						result.Error = err
+					}
+				}
+				waitTicks := 0
+				if result.Error == nil {
+					waitTicks, _ = ctx.Arguments["waitTicksForSuccess"].(int)
+				}
+				stringPromises = append(stringPromises, futureResult{
+					WaitTicks: waitTicks,
+					Channel:   ch,
+					Result:    result,
+				})
 				return ResolvePromise(ch), nil
 			},
 		},
@@ -135,6 +162,12 @@ func init() {
 			Type: schema.NewListType(objectType),
 			Resolve: func(schema.FieldContext) (interface{}, error) {
 				return []*object{{}, {Error: fmt.Errorf("error")}, {}}, nil
+			},
+		},
+		"objectsWithAsyncStringError": {
+			Type: schema.NewListType(objectType),
+			Resolve: func(schema.FieldContext) (interface{}, error) {
+				return []*object{{}, {AsyncStringError: fmt.Errorf("error")}, {}}, nil
 			},
 		},
 		"intOneOrError": {
@@ -181,7 +214,10 @@ var mutationType = &schema.ObjectType{
 			Type: schema.StringType,
 			Resolve: func(schema.FieldContext) (interface{}, error) {
 				ch := make(ResolvePromise, 1)
-				stringPromises = append(stringPromises, ch)
+				stringPromises = append(stringPromises, futureResult{
+					Channel: ch,
+					Result:  ResolveResult{Value: "s"},
+				})
 				return ResolvePromise(ch), nil
 			},
 		},
@@ -330,6 +366,17 @@ func TestExecuteRequest(t *testing.T) {
 			ExpectedData:         `{"a":"s","b":"s"}`,
 			ExpectedIdlePromises: []int{2},
 		},
+		"AsyncQueryNestedInListWithErrors": {
+			Document:     `{objectsWithAsyncStringError{asyncString(waitTicksForSuccess: 1)}}`,
+			ExpectedData: `{"objectsWithAsyncStringError":[{"asyncString":"s"},{"asyncString":null},{"asyncString":"s"}]}`,
+			ExpectedErrors: []*Error{
+				{
+					Locations: []Location{{1, 30}},
+					Path:      []interface{}{"objectsWithAsyncStringError", 1, "asyncString"},
+				},
+			},
+			ExpectedIdlePromises: []int{3, 2},
+		},
 		"AsyncQueryNested": {
 			Document:             `{a:asyncString object{b:asyncString}}`,
 			ExpectedData:         `{"a":"s","object":{"b":"s"}}`,
@@ -426,14 +473,18 @@ func TestExecuteRequest(t *testing.T) {
 				VariableValues: tc.VariableValues,
 				IdleHandler: func() {
 					require.NotEmpty(t, tc.ExpectedIdlePromises)
-					assert.Len(t, stringPromises, tc.ExpectedIdlePromises[len(tc.ExpectedIdlePromises)-1])
+					assert.Len(t, stringPromises, tc.ExpectedIdlePromises[0])
+					var newStringPromises []futureResult
 					for _, p := range stringPromises {
-						p <- ResolveResult{
-							Value: "s",
+						if p.WaitTicks == 0 {
+							p.Channel <- p.Result
+						} else {
+							p.WaitTicks--
+							newStringPromises = append(newStringPromises, p)
 						}
 					}
-					stringPromises = nil
-					tc.ExpectedIdlePromises = tc.ExpectedIdlePromises[:len(tc.ExpectedIdlePromises)-1]
+					stringPromises = newStringPromises
+					tc.ExpectedIdlePromises = tc.ExpectedIdlePromises[1:]
 				},
 			})
 			serializedData, err := json.Marshal(data)
