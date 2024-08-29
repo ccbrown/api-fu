@@ -223,7 +223,8 @@ func Join[T any](fs ...Future[T]) Future[[]T] {
 	return New(func() (Result[[]T], bool) {
 		ok := true
 
-		for i, f := range fs {
+		for i := range fs {
+			f := &fs[i]
 			f.Poll()
 			if f.IsReady() {
 				if !f.Result().IsOk() {
